@@ -78,6 +78,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_sessions_date ON class_sessions(date);
 `);
 
+// Columns added after the first release. SQLite has no ADD COLUMN IF NOT EXISTS.
+const userColumns = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
+if (!userColumns.includes('bio')) db.exec("ALTER TABLE users ADD COLUMN bio TEXT NOT NULL DEFAULT ''");
+
 function getSetting(key, fallback = null) {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
   if (!row) return fallback;

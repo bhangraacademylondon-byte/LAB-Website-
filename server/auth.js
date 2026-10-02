@@ -90,7 +90,7 @@ function loadUser(req, _res, next) {
   if (token) {
     const row = db
       .prepare(
-        `SELECT u.id, u.member_id, u.name, u.email, u.phone, u.role, u.active
+        `SELECT u.id, u.member_id, u.name, u.email, u.phone, u.bio, u.role, u.active
            FROM auth_sessions s JOIN users u ON u.id = s.user_id
           WHERE s.token_hash = ? AND s.expires_at > ?`
       )

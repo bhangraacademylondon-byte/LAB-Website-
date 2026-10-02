@@ -10,6 +10,18 @@ const main = () => document.getElementById('main');
 
 // ---------- theme & layout ----------
 
+const FONTS = ['Poppins', 'Montserrat', 'Lato', 'Open Sans', 'Raleway', 'Nunito', 'Playfair Display', 'Merriweather', 'Oswald', 'Bebas Neue'];
+const loadedFonts = new Set(['Poppins']);
+
+function loadFont(name) {
+  if (!FONTS.includes(name) || loadedFonts.has(name)) return;
+  loadedFonts.add(name);
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(name)}:wght@400;500;600;700;800&display=swap`;
+  document.head.appendChild(link);
+}
+
 function shade(hex, amount) {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
   if (!m) return null;
@@ -29,6 +41,11 @@ function applyTheme() {
     root.setProperty('--accent', site.accentColor);
     root.setProperty('--accent-light', shade(site.accentColor, 0.28));
   }
+  for (const [prop, font] of [['--font-heading', site.headingFont], ['--font-body', site.bodyFont]]) {
+    const name = FONTS.includes(font) ? font : 'Poppins';
+    loadFont(name);
+    root.setProperty(prop, `'${name}'`);
+  }
   const logo = safeImg(site.logo) || '/img/logo.png';
   document.getElementById('brand-logo').src = logo;
   document.getElementById('brand-name').textContent = site.name;
@@ -40,8 +57,20 @@ function pageHref(id) {
   return `/${id}`;
 }
 
+const BUTTON_STYLES = { Gold: 'btn-accent', Navy: 'btn-primary', White: 'btn-light', Outline: 'btn-outline' };
+
+function buttons(list, extraClass = '') {
+  const items = (list || []).filter((b) => b && b.label);
+  if (!items.length) return '';
+  return html`<div class="btn-row ${extraClass}">${items.map((b) => {
+    const href = safeUrl(b.link);
+    const external = /^https?:/i.test(href);
+    return html`<a class="btn ${BUTTON_STYLES[b.style] || 'btn-primary'}" href="${href}"${raw(external ? ' target="_blank" rel="noopener"' : '')}>${b.label}</a>`;
+  })}</div>`;
+}
+
 function renderHeader() {
-  const { nav, home } = state.content;
+  const { nav, home, site } = state.content;
   const path = location.pathname;
   mount('#nav-list', nav.filter((n) => n.visible).map((n) => {
     const href = pageHref(n.id);
@@ -53,8 +82,8 @@ function renderHeader() {
   mount('#nav-account', u
     ? html`
         ${u.role !== 'member' ? html`<a class="btn btn-sm btn-outline" href="/admin">${u.role === 'admin' ? 'Admin' : 'Instructor'}</a>` : ''}
-        <a class="btn btn-sm btn-primary" href="/account">My account</a>`
-    : html`<a class="btn btn-sm btn-primary" href="/login">Member login</a>`);
+        <a class="btn btn-sm btn-primary" href="/account">${site.accountButtonLabel || 'My account'}</a>`
+    : html`<a class="btn btn-sm btn-primary" href="/login">${site.loginButtonLabel || 'Member login'}</a>`);
 
   const bar = document.getElementById('announcement');
   if (home.announcement?.enabled && home.announcement.text) {
@@ -76,14 +105,14 @@ function renderFooter() {
       ${socialLinks(site, true)}
     </div>
     <div>
-      <h4>Explore</h4>
+      <h4>${site.footerExploreTitle}</h4>
       <ul>
         ${nav.filter((n) => n.visible).map((n) => html`<li><a href="${pageHref(n.id)}">${n.label}</a></li>`)}
-        <li><a href="/login">Member login</a></li>
+        <li><a href="/login">${site.loginButtonLabel || 'Member login'}</a></li>
       </ul>
     </div>
     <div>
-      <h4>Get in touch</h4>
+      <h4>${site.footerContactTitle}</h4>
       <ul>
         ${site.address ? html`<li>📍 ${site.address}</li>` : ''}
         ${(site.phones || []).filter(Boolean).map((p) => html`<li>📞 <a href="tel:${p.replace(/\s+/g, '')}">${p}</a></li>`)}
@@ -91,7 +120,7 @@ function renderFooter() {
       </ul>
     </div>
     <div class="footer-bottom">
-      <span>© ${year} ${site.name}</span>
+      <span>${site.copyrightText || `© ${year} ${site.name}`}</span>
     </div>`);
 }
 
@@ -156,22 +185,19 @@ function renderHome() {
   const heroImg = safeImg(home.heroImage);
   const groups = groupByDay(timetable.classes);
   mount(main(), html`
-    <section class="hero ${heroImg ? 'has-image' : ''}" ${raw(heroImg ? `style="background-image:url('${esc(heroImg)}')"` : '')}>
+    <section class="hero ${heroImg ? 'has-image' : ''} ${home.showHeroLogo ? '' : 'no-logo'}" ${raw(heroImg ? `style="background-image:url('${esc(heroImg)}')"` : '')}>
       <div class="container hero-inner">
         <div>
-          <span class="eyebrow">${site.shortName || 'Bhangra'} · East London</span>
+          ${home.heroEyebrow ? html`<span class="eyebrow">${home.heroEyebrow}</span>` : ''}
           <h1>${home.heroTitle}</h1>
           <p>${home.heroSubtitle}</p>
-          <div class="btn-row">
-            ${home.ctaPrimary?.label ? html`<a class="btn btn-accent" href="${safeUrl(home.ctaPrimary.link)}">${home.ctaPrimary.label}</a>` : ''}
-            ${home.ctaSecondary?.label ? html`<a class="btn btn-light" href="${safeUrl(home.ctaSecondary.link)}">${home.ctaSecondary.label}</a>` : ''}
-          </div>
+          ${buttons(home.heroButtons)}
         </div>
-        <div class="hero-logo"><img src="${safeImg(site.logo) || '/img/logo.png'}" alt="${site.name} logo"></div>
+        ${home.showHeroLogo ? html`<div class="hero-logo"><img src="${safeImg(site.logo) || '/img/logo.png'}" alt="${site.name} logo"></div>` : ''}
       </div>
     </section>
 
-    ${home.highlights?.length ? html`
+    ${home.showHighlights && home.highlights?.length ? html`
     <section class="section">
       <div class="container grid grid-4">
         ${home.highlights.map((h) => html`
@@ -183,86 +209,86 @@ function renderHome() {
       </div>
     </section>` : ''}
 
+    ${home.showIntro ? html`
     <section class="section section-soft">
       <div class="container split">
         <div>
-          <span class="eyebrow">Welcome</span>
+          ${home.introEyebrow ? html`<span class="eyebrow">${home.introEyebrow}</span>` : ''}
           <h2>${home.introTitle}</h2>
           <div class="rich">${formatText(home.introText)}</div>
-          <div class="btn-row" style="margin-top:20px">
-            <a class="btn btn-primary" href="/about">About the academy</a>
-            <a class="btn btn-outline" href="/pricing">See pricing</a>
-          </div>
+          ${buttons(home.introButtons, 'mt-20')}
         </div>
         <div>
           ${safeImg(home.introImage)
             ? html`<img src="${safeImg(home.introImage)}" alt="" loading="lazy">`
             : html`
               <div class="card">
-                <h3>Weekly classes</h3>
+                <h3>${home.classesCardTitle}</h3>
                 ${[...groups].map(([day, list]) => html`
                   <div class="list-item">
                     <div><strong>${day}</strong><div class="meta">${list.map((c) => c.name).join(' · ')}</div></div>
                     <span class="tag">${formatTime(list[0].start)}</span>
                   </div>`)}
-                <a class="btn btn-sm btn-accent" href="/timetable" style="margin-top:12px">Full timetable</a>
+                ${home.classesCardButton ? html`<a class="btn btn-sm btn-accent" href="/timetable" style="margin-top:12px">${home.classesCardButton}</a>` : ''}
               </div>`}
         </div>
       </div>
-    </section>
+    </section>` : ''}
 
+    ${home.showInstagram ? html`
     <section class="section" id="home-insta" hidden>
       <div class="container">
-        <div class="section-title"><span class="eyebrow">Instagram</span><h2>Latest from the academy</h2></div>
+        <div class="section-title">${home.instagramEyebrow ? html`<span class="eyebrow">${home.instagramEyebrow}</span>` : ''}<h2>${home.instagramTitle}</h2></div>
         <div class="gallery-grid" id="home-insta-grid"></div>
-        <div class="center" style="margin-top:24px"><a class="btn btn-outline" href="/gallery">View gallery</a></div>
+        ${home.instagramButton ? html`<div class="center" style="margin-top:24px"><a class="btn btn-outline" href="/gallery">${home.instagramButton}</a></div>` : ''}
       </div>
-    </section>
+    </section>` : ''}
 
+    ${home.showCta ? html`
     <section class="cta-band">
       <div class="container">
-        <h2>Ready to dance?</h2>
-        <p>Come along to a class. Beginners are always welcome.</p>
-        <div class="btn-row" style="justify-content:center">
-          <a class="btn btn-light" href="/timetable">Find a class</a>
-          <a class="btn btn-primary" href="/contact">Contact us</a>
-        </div>
+        <h2>${home.ctaTitle}</h2>
+        ${home.ctaText ? html`<p>${home.ctaText}</p>` : ''}
+        ${buttons(home.ctaButtons, 'justify-center')}
       </div>
-    </section>`);
+    </section>` : ''}`);
 
+  if (!home.showInstagram) return;
   api('/api/instagram').then((feed) => {
-    const posts = (feed.posts || []).slice(0, 6);
-    if (!posts.length) return;
-    mount('#home-insta-grid', posts.map(instaItem));
-    document.getElementById('home-insta').hidden = false;
+    const posts = (feed.posts || []).slice(0, Math.max(1, Number(home.instagramPostCount) || 6));
+    const section = document.getElementById('home-insta');
+    if (!posts.length || !section) return;
+    mountInstaGrid(document.getElementById('home-insta-grid'), posts);
+    section.hidden = false;
   }).catch(() => {});
 }
 
 function renderAbout() {
   const { about } = state.content;
   setTitle(about.title);
+  const img = safeImg(about.image);
   mount(main(), html`
     ${pageHero(about.title, about.intro)}
     <section class="section">
-      <div class="container ${safeImg(about.image) ? 'split' : ''}">
-        <div class="rich" style="max-width:760px;${safeImg(about.image) ? '' : 'margin:0 auto'}">
-          <span class="eyebrow">Our story</span>
+      <div class="container ${img ? 'split' : ''}">
+        <div class="rich" style="max-width:760px;${img ? '' : 'margin:0 auto'}">
+          ${about.storyEyebrow ? html`<span class="eyebrow">${about.storyEyebrow}</span>` : ''}
           ${formatText(about.story)}
         </div>
-        ${safeImg(about.image) ? html`<img src="${safeImg(about.image)}" alt="" loading="lazy">` : ''}
+        ${img ? html`<img src="${img}" alt="" loading="lazy">` : ''}
       </div>
     </section>
     ${about.values?.length ? html`
     <section class="section section-soft">
       <div class="container">
-        <div class="section-title"><h2>What we stand for</h2></div>
+        <div class="section-title"><h2>${about.valuesTitle}</h2></div>
         <div class="grid grid-3">${about.values.map((v) => html`<div class="card"><h3>${v.title}</h3><p class="muted">${v.text}</p></div>`)}</div>
       </div>
     </section>` : ''}
     ${about.founders?.length ? html`
     <section class="section">
       <div class="container">
-        <div class="section-title"><span class="eyebrow">The team</span><h2>Meet the team</h2></div>
+        <div class="section-title">${about.teamEyebrow ? html`<span class="eyebrow">${about.teamEyebrow}</span>` : ''}<h2>${about.teamTitle}</h2></div>
         <div class="grid grid-3">
           ${about.founders.map((f) => html`
             <div class="card person">
@@ -280,6 +306,7 @@ function renderTimetable() {
   const { timetable, site } = state.content;
   setTitle(timetable.title);
   const groups = groupByDay(timetable.classes);
+  const showMap = timetable.showMap && site.mapQuery;
   mount(main(), html`
     ${pageHero(timetable.title, timetable.intro)}
     <section class="section">
@@ -288,20 +315,21 @@ function renderTimetable() {
           <div class="day-group">
             <h3>${day}</h3>
             ${list.map(classCard)}
-          </div>`) : html`<div class="empty">The timetable will be published soon.</div>`}
+          </div>`) : html`<div class="empty">${timetable.emptyText}</div>`}
         ${timetable.notes ? html`<div class="notice">${formatText(timetable.notes)}</div>` : ''}
       </div>
     </section>
+    ${timetable.venueTitle || timetable.venueText || showMap ? html`
     <section class="section section-soft">
-      <div class="container split">
+      <div class="container ${showMap ? 'split' : ''}">
         <div>
           <h2>${timetable.venueTitle}</h2>
           <div class="rich">${formatText(timetable.venueText)}</div>
-          <a class="btn btn-primary" href="/contact">Questions? Contact us</a>
+          ${timetable.venueButton?.label ? html`<a class="btn btn-primary" href="${safeUrl(timetable.venueButton.link)}">${timetable.venueButton.label}</a>` : ''}
         </div>
-        ${mapEmbed(site.mapQuery)}
+        ${showMap ? mapEmbed(site.mapQuery) : ''}
       </div>
-    </section>`);
+    </section>` : ''}`);
 }
 
 function renderPricing() {
@@ -314,7 +342,7 @@ function renderPricing() {
         <div class="grid grid-3" style="align-items:stretch">
           ${pricing.plans.map((p) => html`
             <div class="card plan ${p.highlight ? 'highlight' : ''}">
-              ${p.highlight ? html`<span class="badge">Most popular</span>` : ''}
+              ${p.highlight && pricing.highlightBadge ? html`<span class="badge">${pricing.highlightBadge}</span>` : ''}
               <h3>${p.name}</h3>
               <div class="plan-price">${p.price}</div>
               <div class="plan-period">${p.period}</div>
@@ -323,19 +351,103 @@ function renderPricing() {
             </div>`)}
         </div>
         ${pricing.notes ? html`<div class="notice" style="margin-top:32px">${formatText(pricing.notes)}</div>` : ''}
-        <div class="center" style="margin-top:24px"><a class="btn btn-accent" href="/contact">Ask about private lessons</a></div>
+        ${pricing.ctaButton?.label ? html`<div class="center" style="margin-top:24px"><a class="btn btn-accent" href="${safeUrl(pricing.ctaButton.link)}">${pricing.ctaButton.label}</a></div>` : ''}
       </div>
     </section>`);
 }
 
-function instaItem(p) {
+// ----- Instagram grid & lightbox -----
+
+function instaItem(p, i) {
   const icon = p.type === 'VIDEO' ? '▶' : p.type === 'CAROUSEL_ALBUM' ? '❐' : '';
   return html`
-    <a class="gallery-item" href="${safeUrl(p.permalink)}" target="_blank" rel="noopener" aria-label="${p.caption ? p.caption.slice(0, 80) : 'Instagram post'}">
+    <a class="gallery-item" href="${safeUrl(p.permalink)}" target="_blank" rel="noopener" data-post="${i}" aria-label="${p.caption ? p.caption.slice(0, 80) : 'Instagram post'}">
       <img src="${safeImg(p.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">
       ${icon ? html`<span class="gi-type">${icon}</span>` : ''}
       ${p.caption ? html`<span class="gi-caption">${p.caption}</span>` : ''}
     </a>`;
+}
+
+function mountInstaGrid(grid, posts) {
+  mount(grid, posts.map(instaItem));
+  grid.addEventListener('click', (e) => {
+    const a = e.target.closest('[data-post]');
+    if (!a || e.metaKey || e.ctrlKey) return;
+    e.preventDefault();
+    openLightbox(posts, Number(a.dataset.post));
+  });
+}
+
+function openLightbox(posts, index) {
+  let i = index;
+  let slide = 0;
+  const dialog = document.createElement('dialog');
+  dialog.className = 'lightbox';
+  document.body.appendChild(dialog);
+
+  const draw = () => {
+    const p = posts[i];
+    const media = p.children?.length ? p.children : [p];
+    slide = Math.min(slide, media.length - 1);
+    const m = media[slide];
+    const date = p.timestamp ? new Date(p.timestamp).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+    mount(dialog, html`
+      <div class="lb-inner">
+        <button class="lb-close" data-act="close" aria-label="Close">✕</button>
+        <div class="lb-media">
+          ${m.video && safeImg(m.video)
+            ? html`<video src="${safeImg(m.video)}" poster="${safeImg(m.image)}" controls autoplay playsinline></video>`
+            : html`<img src="${safeImg(m.image)}" alt="" referrerpolicy="no-referrer">`}
+          ${media.length > 1 ? html`
+            <button class="lb-slide prev" data-act="slide-prev" aria-label="Previous photo" ${raw(slide === 0 ? 'disabled' : '')}>‹</button>
+            <button class="lb-slide next" data-act="slide-next" aria-label="Next photo" ${raw(slide === media.length - 1 ? 'disabled' : '')}>›</button>
+            <div class="lb-dots">${media.map((_, k) => html`<span class="${k === slide ? 'on' : ''}"></span>`)}</div>` : ''}
+        </div>
+        <div class="lb-side">
+          ${date ? html`<div class="muted small">${date}</div>` : ''}
+          ${p.caption ? html`<p class="lb-caption">${p.caption}</p>` : ''}
+          ${p.permalink ? html`<div class="btn-row">
+            <a class="btn btn-sm btn-insta" href="${safeUrl(p.permalink)}" target="_blank" rel="noopener">View on Instagram</a>
+          </div>` : ''}
+          <div class="lb-nav">
+            <button class="btn btn-sm btn-outline" data-act="prev" ${raw(i === 0 ? 'disabled' : '')}>← Previous</button>
+            <button class="btn btn-sm btn-outline" data-act="next" ${raw(i === posts.length - 1 ? 'disabled' : '')}>Next →</button>
+          </div>
+        </div>
+      </div>`);
+  };
+
+  const go = (act) => {
+    if (act === 'close') return dialog.close();
+    if (act === 'prev' && i > 0) { i--; slide = 0; }
+    if (act === 'next' && i < posts.length - 1) { i++; slide = 0; }
+    if (act === 'slide-prev') slide = Math.max(0, slide - 1);
+    if (act === 'slide-next') slide++;
+    draw();
+  };
+
+  dialog.addEventListener('click', (e) => {
+    if (e.target === dialog) return dialog.close();
+    const btn = e.target.closest('[data-act]');
+    if (btn && !btn.disabled) go(btn.dataset.act);
+  });
+  dialog.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight') go(posts[i].children?.length > 1 ? 'slide-next' : 'next');
+    if (e.key === 'ArrowLeft') go(posts[i].children?.length > 1 ? 'slide-prev' : 'prev');
+  });
+  let touchX = null;
+  dialog.addEventListener('touchstart', (e) => { touchX = e.touches[0].clientX; }, { passive: true });
+  dialog.addEventListener('touchend', (e) => {
+    if (touchX === null) return;
+    const dx = e.changedTouches[0].clientX - touchX;
+    touchX = null;
+    if (Math.abs(dx) < 50) return;
+    const multi = posts[i].children?.length > 1;
+    go(dx < 0 ? (multi ? 'slide-next' : 'next') : (multi ? 'slide-prev' : 'prev'));
+  });
+  dialog.addEventListener('close', () => dialog.remove());
+  draw();
+  dialog.showModal();
 }
 
 async function renderGallery() {
@@ -350,9 +462,9 @@ async function renderGallery() {
         <div class="insta-head">
           <div class="insta-handle">
             <img src="${safeImg(site.logo) || '/img/logo.png'}" alt="">
-            <div>@${username}<div class="muted small">Instagram</div></div>
+            <div>@${username}<div class="muted small" id="insta-updated">Instagram</div></div>
           </div>
-          <a class="btn btn-insta" href="${profileUrl}" target="_blank" rel="noopener">Follow on Instagram</a>
+          <a class="btn btn-insta" href="${profileUrl}" target="_blank" rel="noopener">${gallery.followButton}</a>
         </div>
         <div id="insta-grid" class="gallery-grid"><div class="page-loading" style="grid-column:1/-1;min-height:200px"><div class="spinner"></div></div></div>
       </div>
@@ -360,30 +472,44 @@ async function renderGallery() {
     ${gallery.extraImages?.length ? html`
     <section class="section section-soft">
       <div class="container">
-        <div class="section-title"><h2>More photos</h2></div>
-        <div class="gallery-grid">
-          ${gallery.extraImages.filter((i) => safeImg(i.url)).map((i) => html`
-            <figure class="gallery-item" style="margin:0">
-              <img src="${safeImg(i.url)}" alt="${i.caption || ''}" loading="lazy">
-              ${i.caption ? html`<figcaption class="gi-caption">${i.caption}</figcaption>` : ''}
-            </figure>`)}
+        <div class="section-title"><h2>${gallery.extraTitle}</h2></div>
+        <div class="gallery-grid" id="extra-grid">
+          ${gallery.extraImages.filter((img) => safeImg(img.url)).map((img, k) => html`
+            <a class="gallery-item" href="${safeImg(img.url)}" data-post="${k}">
+              <img src="${safeImg(img.url)}" alt="${img.caption || ''}" loading="lazy">
+              ${img.caption ? html`<span class="gi-caption">${img.caption}</span>` : ''}
+            </a>`)}
         </div>
       </div>
     </section>` : ''}`);
 
+  const extra = document.getElementById('extra-grid');
+  if (extra) {
+    const photos = gallery.extraImages.filter((img) => safeImg(img.url)).map((img) => ({ image: img.url, caption: img.caption || '' }));
+    extra.addEventListener('click', (e) => {
+      const a = e.target.closest('[data-post]');
+      if (!a) return;
+      e.preventDefault();
+      openLightbox(photos, Number(a.dataset.post));
+    });
+  }
+
   const grid = document.getElementById('insta-grid');
+  const empty = html`
+    <div class="empty" style="grid-column:1/-1">
+      <p>${gallery.emptyText}</p>
+      <a class="btn btn-insta" href="${profileUrl}" target="_blank" rel="noopener">Open @${username}</a>
+    </div>`;
   try {
     const feed = await api('/api/instagram');
-    if (feed.posts?.length) mount(grid, feed.posts.map(instaItem));
-    else {
-      mount(grid, html`
-        <div class="empty" style="grid-column:1/-1">
-          <p>See our latest photos and videos on Instagram.</p>
-          <a class="btn btn-insta" href="${profileUrl}" target="_blank" rel="noopener">Open @${username}</a>
-        </div>`);
-    }
+    const posts = (feed.posts || []).slice(0, Math.max(1, Number(gallery.maxPosts) || 12));
+    if (posts.length) {
+      mountInstaGrid(grid, posts);
+      const newest = posts[0].timestamp ? new Date(posts[0].timestamp) : null;
+      if (newest) document.getElementById('insta-updated').textContent = `Latest post ${newest.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
+    } else mount(grid, empty);
   } catch {
-    mount(grid, html`<div class="empty" style="grid-column:1/-1">Could not load Instagram posts. <a href="${profileUrl}" target="_blank" rel="noopener">View them on Instagram</a>.</div>`);
+    mount(grid, empty);
   }
 }
 
@@ -393,20 +519,20 @@ function renderContact() {
   mount(main(), html`
     ${pageHero(contact.title, contact.intro)}
     <section class="section">
-      <div class="container grid grid-2" style="gap:40px">
+      <div class="container grid ${contact.formEnabled ? 'grid-2' : ''}" style="gap:40px">
         <div>
-          <h2>Find us</h2>
+          <h2>${contact.detailsTitle}</h2>
           <ul class="contact-list">
             ${site.address ? html`<li><span class="ci">📍</span><div><strong>Address</strong><br>${site.address}</div></li>` : ''}
             ${(site.phones || []).filter(Boolean).length ? html`<li><span class="ci">📞</span><div><strong>Phone</strong><br>${site.phones.filter(Boolean).map((p, i) => html`${i ? raw('<br>') : ''}<a href="tel:${p.replace(/\s+/g, '')}">${p}</a>`)}</div></li>` : ''}
             ${site.email ? html`<li><span class="ci">✉️</span><div><strong>Email</strong><br><a href="mailto:${site.email}">${site.email}</a></div></li>` : ''}
           </ul>
           ${socialLinks(site)}
-          <div style="margin-top:24px">${mapEmbed(site.mapQuery)}</div>
+          ${contact.showMap ? html`<div style="margin-top:24px">${mapEmbed(site.mapQuery)}</div>` : ''}
         </div>
         ${contact.formEnabled ? html`
         <div class="card">
-          <h2>Send a message</h2>
+          <h2>${contact.formTitle}</h2>
           <p class="muted">${contact.formIntro}</p>
           <form class="form" id="contact-form" novalidate>
             <div class="form-row">
@@ -418,7 +544,7 @@ function renderContact() {
             <label class="field"><span>Message</span><textarea name="message" required rows="5"></textarea></label>
             <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
             <div class="form-error" role="alert"></div>
-            <button class="btn btn-primary" type="submit">Send message</button>
+            <button class="btn btn-primary" type="submit">${contact.submitLabel || 'Send message'}</button>
           </form>
         </div>` : ''}
       </div>
@@ -432,7 +558,7 @@ function renderContact() {
       try {
         await api('/api/contact', { method: 'POST', body: formData(form) });
         form.reset();
-        toast('Thanks! Your message has been sent.', 'success');
+        toast(contact.successMessage || 'Message sent', 'success', 5000);
       } catch (err) {
         formError(form, err.message);
       }
@@ -442,7 +568,8 @@ function renderContact() {
 
 function renderCustomPage(slug) {
   const page = state.content.customPages.find((p) => p.slug === slug);
-  if (!page) return renderNotFound();
+  const nav = state.content.nav.find((n) => n.id === `page:${slug}`);
+  if (!page || (nav && !nav.visible)) return renderNotFound();
   setTitle(page.title);
   const img = safeImg(page.image);
   mount(main(), html`
@@ -486,18 +613,18 @@ function nextPath() {
 
 function renderLogin() {
   if (state.user) return navigate(nextPath(), { replace: true });
-  setTitle('Member login');
-  const { site } = state.content;
-  mount(main(), authShell('Member login', html`
-    <p class="center muted">Log in to see your member QR code and class attendance.</p>
+  const { members } = state.content;
+  setTitle(members.loginTitle);
+  mount(main(), authShell(members.loginTitle, html`
+    <p class="center muted">${members.loginIntro}</p>
     <form class="form" id="login-form" novalidate>
       <label class="field"><span>Email or member ID</span><input name="identifier" required autocomplete="username" autocapitalize="none"></label>
       <label class="field"><span>Password</span><input name="password" type="password" required autocomplete="current-password"></label>
       <div class="form-error" role="alert"></div>
       <button class="btn btn-primary btn-block" type="submit">Log in</button>
     </form>
-    <p class="center small muted" style="margin-top:16px">Forgotten your password? Ask an instructor at your next class to reset it.</p>
-    ${site.allowRegistration ? html`<p class="center" style="margin:0">New member? <a href="/register">Create an account</a></p>` : ''}`));
+    <p class="center small muted" style="margin-top:16px">${members.forgotPasswordText}</p>
+    ${members.allowRegistration ? html`<p class="center" style="margin:0">New member? <a href="/register">Create an account</a></p>` : ''}`));
 
   const form = document.getElementById('login-form');
   form.addEventListener('submit', async (e) => {
@@ -517,19 +644,21 @@ function renderLogin() {
 
 function renderRegister() {
   if (state.user) return navigate('/account', { replace: true });
-  setTitle('Join');
-  if (!state.content.site.allowRegistration) {
-    mount(main(), authShell('Join the academy', html`
-      <p class="center">Online registration is currently closed. Please speak to an instructor at your next class and they will set up your account.</p>
+  const { members } = state.content;
+  setTitle(members.registerTitle);
+  if (!members.allowRegistration) {
+    mount(main(), authShell(members.registerTitle, html`
+      <p class="center">${members.registrationClosedText}</p>
       <a class="btn btn-primary btn-block" href="/login">Back to login</a>`));
     return;
   }
-  mount(main(), authShell('Create your account', html`
-    <p class="center muted">You will get a unique member ID and QR code to scan in at every class.</p>
+  mount(main(), authShell(members.registerTitle, html`
+    <p class="center muted">${members.registerIntro}</p>
     <form class="form" id="register-form" novalidate>
       <label class="field"><span>Full name</span><input name="name" required autocomplete="name"></label>
       <label class="field"><span>Email</span><input name="email" type="email" required autocomplete="email"></label>
       <label class="field"><span>Phone (optional)</span><input name="phone" type="tel" autocomplete="tel"></label>
+      <label class="field"><span>About you (optional)</span><textarea name="bio" rows="3" maxlength="1000" placeholder="${members.bioPrompt}"></textarea></label>
       <label class="field"><span>Password</span><input name="password" type="password" required minlength="8" autocomplete="new-password"><small>At least 8 characters.</small></label>
       <div class="form-error" role="alert"></div>
       <button class="btn btn-primary btn-block" type="submit">Create account</button>
@@ -544,7 +673,7 @@ function renderRegister() {
       try {
         const { user } = await api('/api/auth/register', { method: 'POST', body: formData(form) });
         state.user = user;
-        toast(`Welcome! Your member ID is ${user.memberId}`, 'success', 6000);
+        toast(`${members.welcomeMessage} (${user.memberId})`, 'success', 6000);
         navigate('/account', { replace: true });
       } catch (err) {
         formError(form, err.message);
@@ -553,9 +682,28 @@ function renderRegister() {
   });
 }
 
+export function monthlyChart(monthly) {
+  if (!monthly?.length) return '';
+  const max = Math.max(1, ...monthly.map((m) => m.count));
+  return html`
+    <div class="month-chart" role="img" aria-label="Classes attended per month">
+      ${monthly.map((m) => {
+        const [y, mo] = m.month.split('-').map(Number);
+        const label = new Date(Date.UTC(y, mo - 1, 1)).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
+        return html`
+          <div class="mc-col" title="${label}: ${m.count} ${m.count === 1 ? 'class' : 'classes'}">
+            <span class="mc-count">${m.count}</span>
+            <div class="mc-bar" style="height:${Math.round((m.count / max) * 100)}%"></div>
+            <span class="mc-label">${label}</span>
+          </div>`;
+      })}
+    </div>`;
+}
+
 async function renderAccount() {
   if (!state.user) return navigate('/login?next=/account', { replace: true });
   setTitle('My account');
+  const { members, site } = state.content;
   const { attendance, stats } = await api('/api/me/attendance');
   const u = state.user;
   mount(main(), html`
@@ -571,11 +719,11 @@ async function renderAccount() {
         <div class="account-grid">
           <div>
             <div class="member-card">
-              <div class="small" style="opacity:.8;position:relative;z-index:1">${state.content.site.name}</div>
+              <div class="small" style="opacity:.8;position:relative;z-index:1">${site.name}</div>
               <h2>${u.name}</h2>
               <div class="mid">${u.memberId}</div>
               <div class="qr-box"><img src="/api/me/qr.svg?v=${encodeURIComponent(u.memberId)}" alt="QR code for member ID ${u.memberId}" width="256" height="256"></div>
-              <div class="small" style="opacity:.85;position:relative;z-index:1">Show this code to your instructor at the start of each class.</div>
+              <div class="small" style="opacity:.85;position:relative;z-index:1">${members.qrHint}</div>
             </div>
             <div class="btn-row no-print" style="margin-top:16px;justify-content:center">
               <button class="btn btn-sm btn-outline" id="print-card">Print card</button>
@@ -589,6 +737,10 @@ async function renderAccount() {
               <div class="stat"><div class="stat-value" style="font-size:1.1rem;padding:8px 0">${stats.lastAttended ? formatDate(stats.lastAttended, { day: 'numeric', month: 'short' }) : '-'}</div><div class="stat-label">Last class</div></div>
             </div>
             <div class="card" style="margin-top:20px">
+              <h3>Last 6 months</h3>
+              ${monthlyChart(stats.monthly)}
+            </div>
+            <div class="card" style="margin-top:20px">
               <h3>Attendance history</h3>
               ${attendance.length ? html`<ul class="list">${attendance.map((a) => html`
                 <li class="list-item">
@@ -597,13 +749,14 @@ async function renderAccount() {
                 </li>`)}</ul>` : html`<p class="muted">No classes yet. Your attendance will appear here once an instructor scans your QR code.</p>`}
             </div>
             <div class="card" style="margin-top:20px">
-              <h3>My details</h3>
+              <h3>My profile</h3>
               <form class="form" id="profile-form">
                 <label class="field"><span>Name</span><input name="name" value="${u.name}" required></label>
                 <label class="field"><span>Phone</span><input name="phone" type="tel" value="${u.phone}"></label>
+                <label class="field"><span>Bio</span><textarea name="bio" rows="4" maxlength="1000" placeholder="${members.bioPrompt}">${u.bio}</textarea><small>Your instructors can see this.</small></label>
                 <label class="field"><span>Email</span><input value="${u.email}" disabled><small>Ask an instructor to change your email.</small></label>
                 <div class="form-error" role="alert"></div>
-                <div><button class="btn btn-primary" type="submit">Save details</button></div>
+                <div><button class="btn btn-primary" type="submit">Save profile</button></div>
               </form>
             </div>
             <div class="card" style="margin-top:20px">
@@ -629,7 +782,7 @@ async function renderAccount() {
     try {
       const { user } = await api('/api/me', { method: 'PATCH', body: formData(profile) });
       state.user = user;
-      toast('Details saved', 'success');
+      toast('Profile saved', 'success');
     } catch (err) {
       formError(profile, err.message);
     }

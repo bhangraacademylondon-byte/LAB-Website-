@@ -4,9 +4,9 @@ A mobile-friendly website and members' app for the London Academy of Bhangra (LA
 
 - **Public site:** Home, About, Timetable, Pricing, Gallery and Contact tabs, plus any extra pages you create.
 - **Instagram gallery:** shows the latest posts from @londonacademyofbhangra automatically.
-- **Member accounts:** each member gets a unique member ID (e.g. `LAB-7K3Q9X`) and a QR code, and can see their attendance history.
+- **Member accounts:** members sign up online, write a short bio, and get a unique member ID (e.g. `LAB-7K3Q9X`) and QR code. They can track their attendance: totals, a 6-month chart and a full history.
 - **QR scanner for instructors:** scan members' QR codes with a phone camera to record attendance for each class. Manual check-in by name or ID is also available.
-- **Admin page:** edit all of the site's text, images, colours, menu tabs, timetable, prices and contact details. Also manage members, sessions, CSV exports and contact-form messages.
+- **Admin page:** edit every part of the website: all text, headings and buttons, images, logo, colours, fonts, menu tabs, home page sections (show or hide), timetable, prices, contact details, member page wording and extra pages. Also manage members, sessions, CSV exports and contact-form messages.
 
 ## Running it
 
@@ -49,18 +49,18 @@ Make someone an instructor in **Admin → Members → (person) → Role**.
 
 Members can log in with their email **or** member ID. If someone loses their card, **Issue new member ID** in their admin page cancels the old QR code.
 
-Online sign-up can be switched off in **Admin → Site & branding**. Admins and instructors can always add members themselves. A one-time password is shown to pass on to the member.
+Online sign-up can be switched off in **Admin → Member pages**. Admins and instructors can always add members themselves. A one-time password is shown to pass on to the member.
 
 ## Connecting Instagram
 
-Instagram only lets websites show posts through its official API, so a one-time setup is needed:
+Instagram only lets websites show posts through its official API, so a one-time setup is needed. The Instagram account must be a **Professional** account (Business or Creator). You can switch in the Instagram app under Settings → Account type and tools.
 
-1. Switch @londonacademyofbhangra to a **Professional** account (Business or Creator) in the Instagram app.
-2. At [developers.facebook.com/apps](https://developers.facebook.com/apps), create an app and add the **Instagram** product ("API setup with Instagram login").
-3. Add the academy's Instagram account and click **Generate token**.
-4. Paste the token into **Admin → Instagram** (or set `INSTAGRAM_ACCESS_TOKEN`).
+Then choose one option in **Admin → Instagram**:
 
-New posts then appear on the Gallery page and home page automatically. The site checks every 15 minutes, and it renews the 60-day token by itself. Until Instagram is connected, the gallery shows a "Follow on Instagram" button and any extra photos you add in **Admin → Gallery**.
+- **Behold feed link (easiest).** Sign up at [behold.so](https://behold.so), connect the academy's Instagram, create a *JSON feed* and paste its link (`https://feeds.behold.so/…`). Behold keeps the Instagram connection working.
+- **Instagram API token (advanced).** Create an app at [developers.facebook.com/apps](https://developers.facebook.com/apps), add the Instagram product, generate a token for the account, and paste it in (or set `INSTAGRAM_ACCESS_TOKEN`). The site renews the 60-day token by itself.
+
+Once connected, new posts appear on the Gallery and Home pages automatically, checked every 10 minutes. Visitors can tap a post to see it larger, swipe through photo sets, play videos, or open it on Instagram. Until Instagram is connected, the gallery shows a "Follow on Instagram" button and any extra photos you add in **Admin → Gallery**.
 
 ## Project layout
 

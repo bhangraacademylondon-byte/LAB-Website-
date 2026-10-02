@@ -127,3 +127,74 @@ test('member responses never include staff notes', async () => {
   const login = await member('POST', '/api/auth/login', { identifier: 'noted@test.local', password: 'password1' });
   assert.equal(login.body.user.notes, undefined);
 });
+
+test('members can add a bio at sign-up and edit it later; monthly stats are returned', async () => {
+  const member = client();
+  const reg = await member('POST', '/api/auth/register', { name: 'Bio Person', email: 'bio@test.local', password: 'password1', bio: 'Danced giddha for 3 years' });
+  assert.equal(reg.body.user.bio, 'Danced giddha for 3 years');
+  const upd = await member('PATCH', '/api/me', { name: 'Bio Person', phone: '', bio: 'Now learning dhol too' });
+  assert.equal(upd.body.user.bio, 'Now learning dhol too');
+  const me = await member('GET', '/api/me');
+  assert.equal(me.body.user.bio, 'Now learning dhol too');
+  assert.equal(me.body.stats.monthly.length, 6);
+
+  const admin = client();
+  await admin('POST', '/api/auth/login', { identifier: 'admin@test.local', password: 'admin-password' });
+  const detail = await admin('GET', `/api/staff/members/${reg.body.user.id}`);
+  assert.equal(detail.body.member.bio, 'Now learning dhol too');
+});
+
+test('online registration can be switched off from the member pages content', async () => {
+  const admin = client();
+  await admin('POST', '/api/auth/login', { identifier: 'admin@test.local', password: 'admin-password' });
+  const { body: content } = await admin('GET', '/api/content');
+  content.members.allowRegistration = false;
+  await admin('PUT', '/api/admin/content', content);
+  const res = await client()('POST', '/api/auth/register', { name: 'Late', email: 'late@test.local', password: 'password1' });
+  assert.equal(res.status, 403);
+  content.members.allowRegistration = true;
+  await admin('PUT', '/api/admin/content', content);
+});
+
+test('gallery serves live posts from a Behold feed', async () => {
+  const realFetch = global.fetch;
+  let calls = 0;
+  global.fetch = async (url, opts) => {
+    if (String(url).startsWith('https://feeds.behold.so/')) {
+      calls++;
+      return new Response(JSON.stringify({
+        username: 'londonacademyofbhangra',
+        posts: [
+          { id: '1', mediaType: 'IMAGE', mediaUrl: 'https://cdn.example/1.jpg', permalink: 'https://www.instagram.com/p/1/', caption: 'Thursday class!', timestamp: '2026-10-01T19:00:00Z', sizes: { medium: { mediaUrl: 'https://behold.example/1-m.jpg' } } },
+          { id: '2', mediaType: 'VIDEO', mediaUrl: 'https://cdn.example/2.mp4', thumbnailUrl: 'https://cdn.example/2.jpg', permalink: 'https://www.instagram.com/reel/2/', caption: 'Performance', timestamp: '2026-09-28T19:00:00Z' },
+          { id: '3', mediaType: 'CAROUSEL_ALBUM', mediaUrl: 'https://cdn.example/3.jpg', permalink: 'https://www.instagram.com/p/3/', children: [{ mediaType: 'IMAGE', mediaUrl: 'https://cdn.example/3a.jpg' }, { mediaType: 'IMAGE', mediaUrl: 'https://cdn.example/3b.jpg' }] },
+        ],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    return realFetch(url, opts);
+  };
+  try {
+    const admin = client();
+    await admin('POST', '/api/auth/login', { identifier: 'admin@test.local', password: 'admin-password' });
+    const bad = await admin('POST', '/api/admin/instagram', { beholdUrl: 'https://evil.example/feed' });
+    assert.equal(bad.status, 400);
+    const ok = await admin('POST', '/api/admin/instagram', { beholdUrl: 'https://feeds.behold.so/abc123' });
+    assert.equal(ok.status, 200);
+    assert.equal(ok.body.provider, 'behold');
+    assert.equal(ok.body.username, 'londonacademyofbhangra');
+
+    const feed = await client()('GET', '/api/instagram');
+    assert.equal(feed.body.configured, true);
+    assert.equal(feed.body.posts.length, 3);
+    assert.equal(feed.body.posts[0].image, 'https://behold.example/1-m.jpg');
+    assert.equal(feed.body.posts[1].video, 'https://cdn.example/2.mp4');
+    assert.equal(feed.body.posts[1].image, 'https://cdn.example/2.jpg');
+    assert.equal(feed.body.posts[2].children.length, 2);
+    const before = calls;
+    await client()('GET', '/api/instagram');
+    assert.equal(calls, before, 'second request is served from the cache');
+    await admin('DELETE', '/api/admin/instagram');
+  } finally {
+    global.fetch = realFetch;
+  }
+});

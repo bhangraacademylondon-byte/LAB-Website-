@@ -2,7 +2,7 @@ import {
   api, html, raw, mount, el, toast, openDialog, confirmDialog, formatDate, formatDateTime, formatTime,
   todayLondon, formError, formData, withBusy, safeImg, safeUrl,
 } from './lib.js';
-import { state, navigate, onLeave, setLeaveGuard, reloadContent } from './app.js';
+import { state, navigate, onLeave, setLeaveGuard, reloadContent, monthlyChart } from './app.js';
 
 const isAdmin = () => state.user?.role === 'admin';
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -24,6 +24,7 @@ const NAV = [
   { path: 'content/pricing', label: 'Pricing', icon: '💷', admin: true },
   { path: 'content/gallery', label: 'Gallery', icon: '🖼️', admin: true },
   { path: 'content/contact', label: 'Contact page', icon: '✉️', admin: true },
+  { path: 'content/members', label: 'Member pages', icon: '🔑', admin: true },
   { path: 'content/customPages', label: 'Extra pages', icon: '📄', admin: true },
   { path: 'instagram', label: 'Instagram', icon: '📸', admin: true },
   { path: 'messages', label: 'Messages', icon: '💬', admin: true },
@@ -531,6 +532,7 @@ function addMemberDialog() {
       <option value="member">Member</option><option value="instructor">Instructor (can scan attendance)</option><option value="admin">Admin (full access)</option>
     </select></label>` : ''}
     <label class="field"><span>Password (optional)</span><input name="password" type="text" autocomplete="off"><small>Leave blank to generate one.</small></label>
+    <label class="field"><span>Bio (visible to the member)</span><textarea name="bio" rows="2" maxlength="1000"></textarea></label>
     <label class="field"><span>Notes (staff only)</span><textarea name="notes" rows="2"></textarea></label>
     <div class="form-error"></div>
     <button class="btn btn-primary" type="submit">Create member</button>`.s;
@@ -589,6 +591,11 @@ async function memberDetail(root, id) {
           <div class="stat"><div class="stat-value">${stats.thisMonth}</div><div class="stat-label">This month</div></div>
           <div class="stat"><div class="stat-value" style="font-size:1.1rem;padding:8px 0">${stats.lastAttended ? formatDate(stats.lastAttended, { day: 'numeric', month: 'short' }) : '-'}</div><div class="stat-label">Last class</div></div>
         </div>
+        <div class="card" style="margin-top:20px">
+          <h3>Last 6 months</h3>
+          ${monthlyChart(stats.monthly)}
+        </div>
+        ${!isAdmin() ? html`<div class="card" style="margin-top:20px"><h3>Bio</h3>${member.bio ? html`<p class="bio-box">${member.bio}</p>` : html`<p class="muted">No bio yet.</p>`}</div>` : ''}
         ${isAdmin() ? html`
         <div class="card" style="margin-top:20px">
           <h3>Details</h3>
@@ -607,6 +614,7 @@ async function memberDetail(root, id) {
                 <option value="0" ${raw(!member.active ? 'selected' : '')}>Inactive</option>
               </select></label>
             </div>
+            <label class="field"><span>Bio (written by the member)</span><textarea name="bio" rows="3" maxlength="1000">${member.bio}</textarea></label>
             <label class="field"><span>Notes (staff only)</span><textarea name="notes" rows="3">${member.notes}</textarea></label>
             <div class="form-error"></div>
             <div><button class="btn btn-primary" type="submit">Save changes</button></div>
@@ -672,17 +680,35 @@ async function memberDetail(root, id) {
 
 const RICH_HINT = 'Leave a blank line for a new paragraph. Use **bold**, *italic* and [link text](https://example.com).';
 
+const FONTS = ['Poppins', 'Montserrat', 'Lato', 'Open Sans', 'Raleway', 'Nunito', 'Playfair Display', 'Merriweather', 'Oswald', 'Bebas Neue'];
+const BUTTON_FIELDS = [
+  { key: 'label', label: 'Button text' },
+  { key: 'link', label: 'Link', hint: 'A page like /timetable, or a full web address (https://…)' },
+  { key: 'style', label: 'Colour', type: 'select', options: ['Gold', 'Navy', 'White', 'Outline'] },
+];
+const buttonList = (key, label) => ({ key, label, type: 'list', itemLabel: 'button', titleKey: 'label', fields: BUTTON_FIELDS });
+const singleButton = (key, label) => ({ key, label, type: 'object', fields: [
+  { key: 'label', label: 'Button text', hint: 'Leave blank to hide the button.' },
+  { key: 'link', label: 'Link' },
+] });
+const h = (text) => ({ type: 'heading', label: text });
+
 const SCHEMAS = {
   site: {
     title: 'Site & branding',
     view: '/',
     fields: [
+      h('Academy'),
       { key: 'name', label: 'Academy name' },
       { key: 'shortName', label: 'Short name' },
       { key: 'tagline', label: 'Tagline', type: 'textarea', hint: 'Shown in search engine results and link previews.' },
+      h('Look & feel'),
       { key: 'logo', label: 'Logo', type: 'image' },
       { key: 'primaryColor', label: 'Main colour', type: 'color' },
       { key: 'accentColor', label: 'Accent colour', type: 'color' },
+      { key: 'headingFont', label: 'Heading font', type: 'select', options: FONTS },
+      { key: 'bodyFont', label: 'Text font', type: 'select', options: FONTS },
+      h('Contact details'),
       { key: 'email', label: 'Email address', type: 'email' },
       { key: 'phones', label: 'Phone numbers', type: 'strings', itemLabel: 'phone number' },
       { key: 'address', label: 'Address', type: 'textarea' },
@@ -693,29 +719,56 @@ const SCHEMAS = {
         { key: 'tiktok', label: 'TikTok URL', type: 'url' },
         { key: 'youtube', label: 'YouTube URL', type: 'url' },
       ] },
+      h('Header & footer'),
+      { key: 'loginButtonLabel', label: 'Header login button text' },
+      { key: 'accountButtonLabel', label: 'Header account button text (when logged in)' },
       { key: 'footerText', label: 'Footer text', type: 'textarea' },
-      { key: 'allowRegistration', label: 'Let new members create their own account online', type: 'bool' },
+      { key: 'footerExploreTitle', label: 'Footer links heading' },
+      { key: 'footerContactTitle', label: 'Footer contact heading' },
+      { key: 'copyrightText', label: 'Copyright line', hint: 'Leave blank for "© <year> <academy name>".' },
     ],
   },
   home: {
     title: 'Home page',
     view: '/',
     fields: [
-      { key: 'announcement', label: 'Announcement bar', type: 'object', fields: [
-        { key: 'enabled', label: 'Show announcement bar on every page', type: 'bool' },
+      h('Announcement bar'),
+      { key: 'announcement', label: 'Announcement bar (shown at the top of every page)', type: 'object', fields: [
+        { key: 'enabled', label: 'Show the announcement bar', type: 'bool' },
         { key: 'text', label: 'Announcement text' },
       ] },
+      h('Top banner'),
+      { key: 'heroEyebrow', label: 'Small text above the heading' },
       { key: 'heroTitle', label: 'Main heading' },
       { key: 'heroSubtitle', label: 'Sub heading', type: 'textarea' },
       { key: 'heroImage', label: 'Background image (optional)', type: 'image' },
-      { key: 'ctaPrimary', label: 'Main button', type: 'object', fields: [{ key: 'label', label: 'Text' }, { key: 'link', label: 'Link', hint: 'e.g. /timetable or https://…' }] },
-      { key: 'ctaSecondary', label: 'Second button', type: 'object', fields: [{ key: 'label', label: 'Text' }, { key: 'link', label: 'Link' }] },
+      { key: 'showHeroLogo', label: 'Show the logo in the banner', type: 'bool' },
+      buttonList('heroButtons', 'Banner buttons'),
+      h('Highlights'),
+      { key: 'showHighlights', label: 'Show the highlights section', type: 'bool' },
       { key: 'highlights', label: 'Highlights', type: 'list', itemLabel: 'highlight', titleKey: 'title', fields: [
         { key: 'icon', label: 'Icon (emoji)' }, { key: 'title', label: 'Title' }, { key: 'text', label: 'Text', type: 'textarea' },
       ] },
-      { key: 'introTitle', label: 'Welcome section heading' },
-      { key: 'introText', label: 'Welcome section text', type: 'rich' },
-      { key: 'introImage', label: 'Welcome section image (optional, replaces the class summary)', type: 'image' },
+      h('Welcome section'),
+      { key: 'showIntro', label: 'Show the welcome section', type: 'bool' },
+      { key: 'introEyebrow', label: 'Small text above the heading' },
+      { key: 'introTitle', label: 'Heading' },
+      { key: 'introText', label: 'Text', type: 'rich' },
+      buttonList('introButtons', 'Buttons'),
+      { key: 'introImage', label: 'Image (optional, replaces the weekly classes box)', type: 'image' },
+      { key: 'classesCardTitle', label: 'Weekly classes box heading' },
+      { key: 'classesCardButton', label: 'Weekly classes box button text' },
+      h('Instagram section'),
+      { key: 'showInstagram', label: 'Show latest Instagram posts on the home page', type: 'bool' },
+      { key: 'instagramEyebrow', label: 'Small text above the heading' },
+      { key: 'instagramTitle', label: 'Heading' },
+      { key: 'instagramPostCount', label: 'Number of posts', type: 'number' },
+      { key: 'instagramButton', label: 'Button text' },
+      h('Call to action band'),
+      { key: 'showCta', label: 'Show the call to action band', type: 'bool' },
+      { key: 'ctaTitle', label: 'Heading' },
+      { key: 'ctaText', label: 'Text' },
+      buttonList('ctaButtons', 'Buttons'),
     ],
   },
   about: {
@@ -724,11 +777,18 @@ const SCHEMAS = {
     fields: [
       { key: 'title', label: 'Page title' },
       { key: 'intro', label: 'Introduction', type: 'textarea' },
-      { key: 'story', label: 'Our story', type: 'rich' },
+      h('Our story'),
+      { key: 'storyEyebrow', label: 'Small text above the story' },
+      { key: 'story', label: 'Story', type: 'rich' },
       { key: 'image', label: 'Image', type: 'image' },
+      h('Values'),
+      { key: 'valuesTitle', label: 'Heading' },
       { key: 'values', label: 'Values', type: 'list', itemLabel: 'value', titleKey: 'title', fields: [
         { key: 'title', label: 'Title' }, { key: 'text', label: 'Text', type: 'textarea' },
       ] },
+      h('Team'),
+      { key: 'teamEyebrow', label: 'Small text above the heading' },
+      { key: 'teamTitle', label: 'Heading' },
       { key: 'founders', label: 'Team members', type: 'list', itemLabel: 'person', titleKey: 'name', fields: [
         { key: 'name', label: 'Name' }, { key: 'role', label: 'Role' }, { key: 'bio', label: 'Bio', type: 'textarea' }, { key: 'image', label: 'Photo', type: 'image' },
       ] },
@@ -750,9 +810,13 @@ const SCHEMAS = {
         { key: 'location', label: 'Location' },
         { key: 'notes', label: 'Notes' },
       ] },
+      { key: 'emptyText', label: 'Text shown when there are no classes' },
       { key: 'notes', label: 'Notes under the timetable', type: 'rich' },
-      { key: 'venueTitle', label: 'Venue heading' },
-      { key: 'venueText', label: 'Venue details', type: 'rich' },
+      h('Venue'),
+      { key: 'venueTitle', label: 'Heading' },
+      { key: 'venueText', label: 'Details', type: 'rich' },
+      { key: 'showMap', label: 'Show a map (location set under Site & branding)', type: 'bool' },
+      singleButton('venueButton', 'Button'),
     ],
   },
   pricing: {
@@ -764,20 +828,27 @@ const SCHEMAS = {
       { key: 'plans', label: 'Prices', type: 'list', itemLabel: 'price option', titleKey: 'name', fields: [
         { key: 'name', label: 'Name' }, { key: 'price', label: 'Price', hint: 'e.g. £7' }, { key: 'period', label: 'Per…', hint: 'e.g. per class' },
         { key: 'description', label: 'Description', type: 'textarea' }, { key: 'features', label: 'Bullet points', type: 'strings', itemLabel: 'bullet point' },
-        { key: 'highlight', label: 'Highlight as most popular', type: 'bool' },
+        { key: 'highlight', label: 'Highlight this option', type: 'bool' },
       ] },
+      { key: 'highlightBadge', label: 'Badge text on the highlighted option' },
       { key: 'notes', label: 'Notes', type: 'rich' },
+      singleButton('ctaButton', 'Button under the prices'),
     ],
   },
   gallery: {
     title: 'Gallery',
     view: '/gallery',
+    note: 'Instagram posts load automatically once Instagram is connected under Admin → Instagram.',
     fields: [
       { key: 'title', label: 'Page title' },
       { key: 'intro', label: 'Introduction', type: 'textarea' },
-      { key: 'instagramUsername', label: 'Instagram username', hint: 'Used for the Follow button. Connect the live feed under Admin → Instagram.' },
+      { key: 'instagramUsername', label: 'Instagram username', hint: 'Used for the Follow button.' },
+      { key: 'followButton', label: 'Follow button text' },
       { key: 'maxPosts', label: 'Number of Instagram posts to show', type: 'number' },
-      { key: 'extraImages', label: 'Extra photos (shown under the Instagram feed)', type: 'list', itemLabel: 'photo', titleKey: 'caption', fields: [
+      { key: 'emptyText', label: 'Text shown when no posts are available' },
+      h('Extra photos'),
+      { key: 'extraTitle', label: 'Heading' },
+      { key: 'extraImages', label: 'Photos (shown under the Instagram feed)', type: 'list', itemLabel: 'photo', titleKey: 'caption', fields: [
         { key: 'url', label: 'Image', type: 'image' }, { key: 'caption', label: 'Caption' },
       ] },
     ],
@@ -785,13 +856,39 @@ const SCHEMAS = {
   contact: {
     title: 'Contact page',
     view: '/contact',
+    note: 'Address, phone numbers, email and social links are edited under Site & branding.',
     fields: [
       { key: 'title', label: 'Page title' },
       { key: 'intro', label: 'Introduction', type: 'textarea' },
+      { key: 'detailsTitle', label: 'Contact details heading' },
+      { key: 'showMap', label: 'Show a map', type: 'bool' },
+      h('Contact form'),
       { key: 'formEnabled', label: 'Show the contact form (messages appear under Admin → Messages)', type: 'bool' },
+      { key: 'formTitle', label: 'Form heading' },
       { key: 'formIntro', label: 'Text above the form', type: 'textarea' },
+      { key: 'submitLabel', label: 'Send button text' },
+      { key: 'successMessage', label: 'Message shown after sending' },
     ],
-    note: 'Address, phone numbers, email and social links are edited under Site & branding.',
+  },
+  members: {
+    title: 'Member pages',
+    view: '/login',
+    note: 'Wording on the member login, sign-up and account pages.',
+    fields: [
+      { key: 'allowRegistration', label: 'Let new members create their own account online', type: 'bool' },
+      h('Login page'),
+      { key: 'loginTitle', label: 'Heading' },
+      { key: 'loginIntro', label: 'Introduction', type: 'textarea' },
+      { key: 'forgotPasswordText', label: 'Forgotten password text', type: 'textarea' },
+      h('Sign-up page'),
+      { key: 'registerTitle', label: 'Heading' },
+      { key: 'registerIntro', label: 'Introduction', type: 'textarea' },
+      { key: 'bioPrompt', label: 'Hint shown in the bio box', type: 'textarea' },
+      { key: 'welcomeMessage', label: 'Message shown after signing up' },
+      { key: 'registrationClosedText', label: 'Text shown when sign-up is turned off', type: 'textarea' },
+      h('Member account page'),
+      { key: 'qrHint', label: 'Text under the QR code' },
+    ],
   },
   customPages: {
     title: 'Extra pages',
@@ -843,6 +940,8 @@ function buildField(f, obj, onChange) {
   );
 
   switch (f.type) {
+    case 'heading':
+      return el('h3', { class: 'form-heading', text: f.label });
     case 'bool':
       return el('label', { class: 'checkbox' },
         el('input', { type: 'checkbox', checked: obj[f.key], onchange: (e) => set(e.target.checked) }), f.label);
@@ -1083,52 +1182,72 @@ function jsonEditor(root) {
 async function instagramPage(root) {
   const status = await api('/api/admin/instagram');
   const expires = status.expiresAt ? new Date(status.expiresAt) : null;
+  const via = status.provider === 'behold' ? 'a Behold feed' : 'the Instagram API';
   mount(root, html`
     ${head('Instagram gallery')}
     <div class="card">
       <h3>Status</h3>
       ${status.configured ? html`
-        <p>✅ Connected${status.username ? html` to <strong>@${status.username}</strong>` : ''}${status.accountType ? ` (${status.accountType.toLowerCase()} account)` : ''}.</p>
-        <p class="muted small">New posts appear on the Gallery page automatically (checked every 15 minutes).
-          ${status.fromEnv ? 'The token comes from the INSTAGRAM_ACCESS_TOKEN setting on the server.' : expires ? `The access token renews itself automatically (current token valid until ${expires.toLocaleDateString('en-GB')}).` : ''}
-          ${status.lastFetchedAt ? `Last updated ${new Date(status.lastFetchedAt).toLocaleString('en-GB')}.` : ''}</p>
+        <p>✅ Connected${status.username ? html` to <strong>@${status.username}</strong>` : ''} via ${via}.</p>
+        <p class="muted small">New posts appear on the Gallery and Home pages automatically. The site checks for new posts every 10 minutes.
+          ${status.provider === 'instagram' && status.fromEnv ? 'The token comes from the INSTAGRAM_ACCESS_TOKEN setting on the server.' : ''}
+          ${status.provider === 'instagram' && !status.fromEnv && expires ? `The access token renews itself automatically (current token valid until ${expires.toLocaleDateString('en-GB')}).` : ''}
+          ${status.lastFetchedAt ? `Last checked ${new Date(status.lastFetchedAt).toLocaleString('en-GB')}.` : ''}</p>
         ${status.lastError ? html`<div class="notice warn">Last error: ${status.lastError}</div>` : ''}
         <div class="btn-row">
-          <button class="btn btn-sm btn-primary" id="ig-refresh">Refresh now</button>
+          <button class="btn btn-sm btn-primary" id="ig-refresh">Check for new posts now</button>
           ${!status.fromEnv ? html`<button class="btn btn-sm btn-danger" id="ig-disconnect">Disconnect</button>` : ''}
           <a class="btn btn-sm btn-outline" href="/gallery" target="_blank" rel="noopener">View gallery ↗</a>
         </div>`
-      : html`<p>⚪ Not connected. Until you connect, the Gallery page shows a "Follow us on Instagram" button and any extra photos you add under <a href="/admin/content/gallery">Gallery</a>.</p>`}
+      : html`<p>⚪ Not connected yet. Until you connect, the Gallery page shows a "Follow on Instagram" button and any extra photos you add under <a href="/admin/content/gallery">Gallery</a>.</p>`}
     </div>
 
     <div class="card" style="margin-top:20px">
-      <h3>${status.configured ? 'Replace access token' : 'Connect Instagram'}</h3>
+      <h3>Option 1 (easiest): Behold feed link</h3>
+      <p class="small muted">Behold is a service that connects to Instagram for you and keeps the connection working. Its free plan is enough for one gallery.</p>
       <ol class="small" style="padding-left:20px">
-        <li>Make sure @londonacademyofbhangra is a <strong>Professional</strong> account (Business or Creator). In the Instagram app: Settings → Account type and tools → Switch to professional account.</li>
+        <li>Make sure @londonacademyofbhangra is a <strong>Professional</strong> account (Business or Creator). In the Instagram app go to Settings → Account type and tools → Switch to professional account.</li>
+        <li>Sign up at <a href="https://behold.so" target="_blank" rel="noopener">behold.so</a> and connect the academy's Instagram account.</li>
+        <li>Create a <strong>JSON feed</strong> and copy its link. It looks like <code>https://feeds.behold.so/abc123</code>.</li>
+        <li>Paste the link below.</li>
+      </ol>
+      <form class="form" id="behold-form">
+        <label class="field"><span>Behold JSON feed link</span><input name="beholdUrl" type="url" required placeholder="https://feeds.behold.so/…" value="${status.beholdUrl}"></label>
+        <div class="form-error"></div>
+        <div><button class="btn btn-primary" type="submit">Save & test connection</button></div>
+      </form>
+    </div>
+
+    <details class="card" style="margin-top:20px">
+      <summary><strong>Option 2 (advanced): Instagram API access token</strong></summary>
+      <ol class="small" style="padding-left:20px;margin-top:12px">
+        <li>The Instagram account must be a <strong>Professional</strong> account (see above).</li>
         <li>Go to <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener">developers.facebook.com/apps</a>, create an app (type "Business") and add the <strong>Instagram</strong> product ("API setup with Instagram login").</li>
-        <li>Under "Generate access tokens", add the academy's Instagram account and click <strong>Generate token</strong>. Log in to Instagram when asked.</li>
-        <li>Copy the token and paste it below. It lasts 60 days and this site renews it automatically.</li>
+        <li>Under "Generate access tokens", add the academy's Instagram account and click <strong>Generate token</strong>.</li>
+        <li>Paste the token below. It lasts 60 days and this site renews it automatically.</li>
       </ol>
       <form class="form" id="ig-form">
         <label class="field"><span>Access token</span><input name="accessToken" type="password" autocomplete="off" required placeholder="IGAA…"></label>
         <div class="form-error"></div>
         <div><button class="btn btn-primary" type="submit">Save & test connection</button></div>
       </form>
-    </div>`);
+    </details>`);
 
-  const form = root.querySelector('#ig-form');
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    await withBusy(form.querySelector('[type=submit]'), async () => {
-      try {
-        await api('/api/admin/instagram', { method: 'POST', body: formData(form) });
-        toast('Instagram connected!', 'success');
-        instagramPage(root);
-      } catch (err) {
-        formError(form, err.message);
-      }
+  for (const id of ['behold-form', 'ig-form']) {
+    const form = root.querySelector(`#${id}`);
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      await withBusy(form.querySelector('[type=submit]'), async () => {
+        try {
+          await api('/api/admin/instagram', { method: 'POST', body: formData(form) });
+          toast('Instagram connected! New posts will now appear in the gallery.', 'success', 5000);
+          instagramPage(root);
+        } catch (err) {
+          formError(form, err.message);
+        }
+      });
     });
-  });
+  }
   root.querySelector('#ig-refresh')?.addEventListener('click', async (e) => {
     await withBusy(e.target, async () => {
       const r = await api('/api/admin/instagram/refresh', { method: 'POST' });

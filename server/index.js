@@ -51,6 +51,7 @@ function publicUser(u, { includeNotes = false } = {}) {
     phone: u.phone || '',
     role: u.role,
     active: Boolean(u.active),
+    bio: u.bio || '',
     notes: includeNotes ? u.notes || '' : undefined,
     createdAt: u.created_at,
   };
@@ -72,7 +73,24 @@ function memberStats(userId) {
         WHERE a.user_id = ? ORDER BY s.date DESC LIMIT 1`
     )
     .get(userId);
-  return { total, thisMonth, lastAttended: last ? last.date : null };
+  // Attendance per month for the last 6 months (oldest first), including empty months.
+  const counts = new Map(
+    db
+      .prepare(
+        `SELECT substr(s.date, 1, 7) AS month, COUNT(*) AS n FROM attendance a JOIN class_sessions s ON s.id = a.session_id
+          WHERE a.user_id = ? GROUP BY month`
+      )
+      .all(userId)
+      .map((r) => [r.month, r.n])
+  );
+  const [y, m] = month.split('-').map(Number);
+  const monthly = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(Date.UTC(y, m - 1 - i, 1));
+    const key = d.toISOString().slice(0, 7);
+    monthly.push({ month: key, count: counts.get(key) || 0 });
+  }
+  return { total, thisMonth, lastAttended: last ? last.date : null, monthly };
 }
 
 function memberAttendance(userId, limit = 200) {
@@ -164,8 +182,9 @@ app.get('/api/content', (_req, res) => {
 
 app.get('/api/instagram', async (_req, res) => {
   const feed = await instagram.getFeed();
-  const max = Math.min(Math.max(Number(content.getContent().gallery.maxPosts) || 12, 1), 50);
-  res.setHeader('Cache-Control', 'public, max-age=300');
+  const { gallery, home } = content.getContent();
+  const max = Math.min(Math.max(Number(gallery.maxPosts) || 12, Number(home.instagramPostCount) || 0, 1), 50);
+  res.setHeader('Cache-Control', 'public, max-age=120');
   res.json({ ...feed, posts: (feed.posts || []).slice(0, max) });
 });
 
@@ -207,19 +226,20 @@ app.post('/api/auth/login', (req, res) => {
 });
 
 app.post('/api/auth/register', (req, res) => {
-  if (!content.getContent().site.allowRegistration) throw new HttpError(403, 'Online registration is closed. Please ask an instructor to create your account.');
+  if (!content.getContent().members.allowRegistration) throw new HttpError(403, 'Online registration is closed. Please ask an instructor to create your account.');
   const name = str(req.body.name, 120);
   const email = str(req.body.email, 200);
   const phone = str(req.body.phone, 40);
   const password = typeof req.body.password === 'string' ? req.body.password : '';
+  const bio = str(req.body.bio, 1000);
   if (!name) throw new HttpError(400, 'Please enter your name.');
   if (!EMAIL_RE.test(email)) throw new HttpError(400, 'Please enter a valid email address.');
   if (password.length < 8) throw new HttpError(400, 'Password must be at least 8 characters.');
   if (db.prepare('SELECT 1 FROM users WHERE email = ?').get(email)) throw new HttpError(409, 'An account with that email already exists. Try logging in.');
   const memberId = auth.generateMemberId();
   const info = db
-    .prepare('INSERT INTO users (member_id, name, email, phone, password_hash, role) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(memberId, name, email, phone, auth.hashPassword(password), 'member');
+    .prepare('INSERT INTO users (member_id, name, email, phone, password_hash, role, bio) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(memberId, name, email, phone, auth.hashPassword(password), 'member', bio);
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
   auth.createSession(res, req, user.id);
   res.status(201).json({ user: publicUser(user) });
@@ -251,7 +271,8 @@ app.patch('/api/me', auth.requireRole('member'), (req, res) => {
   const name = str(req.body.name, 120);
   const phone = str(req.body.phone, 40);
   if (!name) throw new HttpError(400, 'Name cannot be empty.');
-  db.prepare('UPDATE users SET name = ?, phone = ? WHERE id = ?').run(name, phone, req.user.id);
+  const bio = str(req.body.bio, 1000);
+  db.prepare('UPDATE users SET name = ?, phone = ?, bio = ? WHERE id = ?').run(name, phone, bio, req.user.id);
   res.json({ user: publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id)) });
 });
 
@@ -449,6 +470,7 @@ staff.post('/members', (req, res) => {
   const email = str(req.body.email, 200);
   const phone = str(req.body.phone, 40);
   const notes = str(req.body.notes, 2000);
+  const bio = str(req.body.bio, 1000);
   let role = ['member', 'instructor', 'admin'].includes(req.body.role) ? req.body.role : 'member';
   if (req.user.role !== 'admin') role = 'member';
   if (!name) throw new HttpError(400, 'Please enter a name.');
@@ -458,8 +480,8 @@ staff.post('/members', (req, res) => {
   if (password.length < 8) throw new HttpError(400, 'Password must be at least 8 characters.');
   const memberId = auth.generateMemberId();
   const info = db
-    .prepare('INSERT INTO users (member_id, name, email, phone, password_hash, role, notes) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .run(memberId, name, email || null, phone, auth.hashPassword(password), role, notes);
+    .prepare('INSERT INTO users (member_id, name, email, phone, password_hash, role, notes, bio) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(memberId, name, email || null, phone, auth.hashPassword(password), role, notes, bio);
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
   res.status(201).json({ member: publicUser(user, { includeNotes: true }), password });
 });
@@ -494,6 +516,7 @@ admin.patch('/members/:id', (req, res) => {
   const email = req.body.email !== undefined ? str(req.body.email, 200) : member.email || '';
   const phone = req.body.phone !== undefined ? str(req.body.phone, 40) : member.phone || '';
   const notes = req.body.notes !== undefined ? str(req.body.notes, 2000) : member.notes || '';
+  const bio = req.body.bio !== undefined ? str(req.body.bio, 1000) : member.bio || '';
   const role = req.body.role !== undefined ? req.body.role : member.role;
   const active = req.body.active !== undefined ? (req.body.active ? 1 : 0) : member.active;
   if (!name) throw new HttpError(400, 'Name cannot be empty.');
@@ -501,8 +524,8 @@ admin.patch('/members/:id', (req, res) => {
   if (!['member', 'instructor', 'admin'].includes(role)) throw new HttpError(400, 'Invalid role.');
   if (member.id === req.user.id && (role !== 'admin' || !active)) throw new HttpError(400, 'You cannot remove your own admin access.');
   if (email && db.prepare('SELECT 1 FROM users WHERE email = ? AND id != ?').get(email, member.id)) throw new HttpError(409, 'Another member already uses that email.');
-  db.prepare('UPDATE users SET name = ?, email = ?, phone = ?, notes = ?, role = ?, active = ? WHERE id = ?').run(
-    name, email || null, phone, notes, role, active, member.id
+  db.prepare('UPDATE users SET name = ?, email = ?, phone = ?, notes = ?, bio = ?, role = ?, active = ? WHERE id = ?').run(
+    name, email || null, phone, notes, bio, role, active, member.id
   );
   if (!active) auth.destroyAllSessionsFor(member.id);
   res.json({ member: publicUser(loadMember(member.id), { includeNotes: true }) });
@@ -580,7 +603,16 @@ admin.get('/instagram', (_req, res) => res.json(instagram.status()));
 
 admin.post('/instagram', async (req, res) => {
   const token = str(req.body.accessToken, 1000);
-  if (!token) throw new HttpError(400, 'Please paste an access token.');
+  const beholdUrl = str(req.body.beholdUrl, 300);
+  if (beholdUrl) {
+    try {
+      await instagram.setBeholdUrl(beholdUrl);
+    } catch (err) {
+      throw new HttpError(400, `Could not load that feed: ${err.message}`);
+    }
+    return res.json(instagram.status());
+  }
+  if (!token) throw new HttpError(400, 'Please paste a Behold feed link or an access token.');
   try {
     await instagram.setToken(token);
   } catch (err) {
