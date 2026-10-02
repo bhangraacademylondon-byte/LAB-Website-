@@ -1,7 +1,6 @@
 :root {
   --primary: #2f2f52;
   --primary-dark: #1f1f3a;
-  --logo-bg: #1f1f3a;
   --accent: #a2895c;
   --accent-light: #c9b48a;
   --bg: #ffffff;
@@ -54,7 +53,7 @@ p { margin: 0 0 1em; }
 .site-header { position: sticky; top: 0; z-index: 50; background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
 .header-inner { display: flex; align-items: center; justify-content: space-between; height: var(--header-h); gap: 16px; }
 .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--primary-dark); min-width: 0; }
-.brand-logo { width: 48px; height: 48px; border-radius: 50%; object-fit: contain; background: var(--logo-bg); flex-shrink: 0; }
+.brand-logo { width: 48px; height: 48px; border-radius: 50%; object-fit: contain; background: #fff; flex-shrink: 0; }
 .brand-name { font-weight: 700; font-size: 1rem; line-height: 1.15; display: block; }
 
 .site-nav ul { list-style: none; margin: 0; padding: 0; display: flex; gap: 4px; }
@@ -128,8 +127,8 @@ input[type='color'] { width: 56px; height: 44px; padding: 2px; border: 1.5px sol
 .hero h1 { color: #fff; }
 .hero p { font-size: 1.1rem; color: rgba(255, 255, 255, 0.86); max-width: 560px; }
 .hero .btn-row { margin-top: 28px; }
-.hero-logo { justify-self: center; width: min(360px, 80%); aspect-ratio: 1; border-radius: 50%; background: var(--logo-bg); overflow: hidden; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35), 0 0 0 10px rgba(162, 137, 92, 0.35); }
-.hero-logo img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.hero-logo { justify-self: center; width: min(360px, 80%); aspect-ratio: 1; border-radius: 50%; background: #fff; padding: 6%; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35), 0 0 0 10px rgba(162, 137, 92, 0.35); }
+.hero-logo img { width: 100%; height: 100%; object-fit: contain; }
 .hero .eyebrow { color: var(--accent-light); }
 @media (max-width: 800px) {
   .hero-inner { grid-template-columns: 1fr; text-align: center; padding: 40px 16px 56px; }
@@ -209,7 +208,7 @@ input[type='color'] { width: 56px; height: 44px; padding: 2px; border: 1.5px sol
 /* ---------- auth & account ---------- */
 .auth-wrap { max-width: 440px; margin: 0 auto; padding: 48px 16px; }
 .auth-wrap .card { padding: 32px 24px; }
-.auth-logo { width: 96px; margin: 0 auto 12px; border-radius: 50%; background: var(--logo-bg); }
+.auth-logo { width: 96px; margin: 0 auto 12px; }
 .member-card { background: linear-gradient(140deg, var(--primary) 0%, var(--primary-dark) 100%); color: #fff; border-radius: 20px; padding: 24px; text-align: center; box-shadow: 0 16px 40px rgba(31, 31, 58, 0.3); position: relative; overflow: hidden; }
 .member-card::after { content: ''; position: absolute; width: 260px; height: 260px; border: 10px solid rgba(162, 137, 92, 0.35); border-radius: 50%; top: -120px; right: -120px; }
 .member-card h2 { color: #fff; margin-bottom: 4px; font-size: 1.4rem; }
@@ -323,7 +322,7 @@ dialog::backdrop { background: rgba(20, 20, 40, 0.55); }
 .footer-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 32px; }
 .footer-grid ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
 .footer-brand { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
-.footer-brand img { width: 56px; height: 56px; border-radius: 50%; background: var(--logo-bg); box-shadow: 0 0 0 2px rgba(162, 137, 92, 0.6); }
+.footer-brand img { width: 56px; height: 56px; border-radius: 50%; background: #fff; }
 .footer-bottom { grid-column: 1 / -1; border-top: 1px solid rgba(255, 255, 255, 0.12); padding-top: 16px; font-size: 0.85rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 @media (max-width: 760px) { .footer-grid { grid-template-columns: 1fr; gap: 24px; } }
 

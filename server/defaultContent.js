@@ -7,7 +7,7 @@ module.exports = {
     name: 'London Academy of Bhangra',
     shortName: 'LAB',
     tagline: 'Authentic Punjabi dance for all ages and abilities in East London',
-    logo: '/img/logo-dark.png',
+    logo: '/img/logo.png',
     primaryColor: '#2f2f52',
     accentColor: '#a2895c',
     email: '',
