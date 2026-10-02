@@ -104,11 +104,16 @@ function memberAttendance(userId, limit = 200) {
     .all(userId, limit);
 }
 
+// Login accepts an email address or a member ID typed on its own (e.g. "LAB-7K3Q9X").
+// Anything containing "@" is always treated as an email, so an address such as
+// "slab234567@…" is never mistaken for a member ID.
 function findUserByIdentifier(identifier) {
   const value = identifier.trim();
   if (!value) return null;
-  const memberId = extractMemberId(value);
-  if (memberId) return db.prepare('SELECT * FROM users WHERE member_id = ?').get(memberId);
+  if (!value.includes('@')) {
+    const match = value.toUpperCase().match(/^LAB-?([2-9A-HJ-NP-Z]{6})$/);
+    return match ? db.prepare('SELECT * FROM users WHERE member_id = ?').get(`LAB-${match[1]}`) : null;
+  }
   return db.prepare('SELECT * FROM users WHERE email = ?').get(value);
 }
 
@@ -188,7 +193,24 @@ app.get('/api/instagram', async (_req, res) => {
   res.json({ ...feed, posts: (feed.posts || []).slice(0, max) });
 });
 
-const contactLimiter = new Map();
+// Small in-memory per-IP limiter: allows `max` hits per `windowMs`.
+function rateLimiter(max, windowMs) {
+  const hits = new Map();
+  return (key) => {
+    const now = Date.now();
+    const recent = (hits.get(key) || []).filter((t) => now - t < windowMs);
+    if (recent.length >= max) return false;
+    recent.push(now);
+    hits.set(key, recent);
+    if (hits.size > 5000) {
+      for (const [k, list] of hits) if (!list.some((t) => now - t < windowMs)) hits.delete(k);
+    }
+    return true;
+  };
+}
+const allowContact = rateLimiter(5, 3600_000);
+const allowRegister = rateLimiter(10, 3600_000);
+
 app.post('/api/contact', (req, res) => {
   if (!content.getContent().contact.formEnabled) throw new HttpError(400, 'The contact form is turned off.');
   const name = str(req.body.name, 120);
@@ -198,11 +220,7 @@ app.post('/api/contact', (req, res) => {
   const body = str(req.body.message, 5000);
   if (str(req.body.website)) return res.json({ ok: true }); // honeypot field
   if (!name || !EMAIL_RE.test(email) || !body) throw new HttpError(400, 'Please give your name, a valid email and a message.');
-  const now = Date.now();
-  const recent = (contactLimiter.get(req.ip) || []).filter((t) => now - t < 3600_000);
-  if (recent.length >= 5) throw new HttpError(429, 'Too many messages. Please try again later.');
-  recent.push(now);
-  contactLimiter.set(req.ip, recent);
+  if (!allowContact(req.ip)) throw new HttpError(429, 'Too many messages. Please try again later.');
   db.prepare('INSERT INTO messages (name, email, phone, subject, body) VALUES (?, ?, ?, ?, ?)').run(name, email, phone, subject, body);
   res.json({ ok: true });
 });
@@ -215,7 +233,8 @@ app.post('/api/auth/login', (req, res) => {
   const key = `${req.ip}|${identifier.toLowerCase()}`;
   if (auth.tooManyAttempts(key)) throw new HttpError(429, 'Too many attempts. Please wait 15 minutes and try again.');
   const user = findUserByIdentifier(identifier);
-  if (!user || !auth.verifyPassword(password, user.password_hash)) {
+  // Always run a bcrypt comparison so response time does not reveal whether the account exists.
+  if (!auth.verifyPassword(password, user?.password_hash) || !user) {
     auth.recordFailedAttempt(key);
     throw new HttpError(401, 'Incorrect email/member ID or password.');
   }
@@ -235,11 +254,18 @@ app.post('/api/auth/register', (req, res) => {
   if (!name) throw new HttpError(400, 'Please enter your name.');
   if (!EMAIL_RE.test(email)) throw new HttpError(400, 'Please enter a valid email address.');
   if (password.length < 8) throw new HttpError(400, 'Password must be at least 8 characters.');
+  if (!allowRegister(req.ip)) throw new HttpError(429, 'Too many sign-ups from this connection. Please try again later.');
   if (db.prepare('SELECT 1 FROM users WHERE email = ?').get(email)) throw new HttpError(409, 'An account with that email already exists. Try logging in.');
   const memberId = auth.generateMemberId();
-  const info = db
-    .prepare('INSERT INTO users (member_id, name, email, phone, password_hash, role, bio) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .run(memberId, name, email, phone, auth.hashPassword(password), 'member', bio);
+  let info;
+  try {
+    info = db
+      .prepare('INSERT INTO users (member_id, name, email, phone, password_hash, role, bio) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(memberId, name, email, phone, auth.hashPassword(password), 'member', bio);
+  } catch (err) {
+    if (/UNIQUE/.test(err.message)) throw new HttpError(409, 'An account with that email already exists. Try logging in.');
+    throw err;
+  }
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
   auth.createSession(res, req, user.id);
   res.status(201).json({ user: publicUser(user) });
@@ -655,7 +681,16 @@ app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '30d', immutable: true 
 app.get('/vendor/html5-qrcode.min.js', (_req, res) => {
   res.sendFile(require.resolve('html5-qrcode/html5-qrcode.min.js'), { maxAge: '7d' });
 });
-app.use(express.static(PUBLIC_DIR, { index: false, maxAge: '1h' }));
+// Scripts, styles and the manifest are revalidated on every load (cheap 304s via ETag),
+// so after an update browsers never mix new and old app files. Images cache for a day.
+app.use(
+  express.static(PUBLIC_DIR, {
+    index: false,
+    setHeaders: (res, file) => {
+      res.setHeader('Cache-Control', /\.(png|jpe?g|webp|gif|svg|ico)$/i.test(file) ? 'public, max-age=86400' : 'no-cache');
+    },
+  })
+);
 
 const indexTemplate = fs.readFileSync(path.join(PUBLIC_DIR, 'index.html'), 'utf8');
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);

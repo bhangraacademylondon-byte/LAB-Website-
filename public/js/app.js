@@ -183,9 +183,11 @@ function renderHome() {
   const { home, site, timetable } = state.content;
   setTitle('');
   const heroImg = safeImg(home.heroImage);
+  // Percent-encode characters that could end the CSS url('…') early.
+  const heroCss = heroImg.replace(/["'()\\\s<>]/g, (c) => `%${c.charCodeAt(0).toString(16).padStart(2, '0')}`);
   const groups = groupByDay(timetable.classes);
   mount(main(), html`
-    <section class="hero ${heroImg ? 'has-image' : ''} ${home.showHeroLogo ? '' : 'no-logo'}" ${raw(heroImg ? `style="background-image:url('${esc(heroImg)}')"` : '')}>
+    <section class="hero ${heroImg ? 'has-image' : ''} ${home.showHeroLogo ? '' : 'no-logo'}" ${raw(heroImg ? `style="background-image:url('${esc(heroCss)}')"` : '')}>
       <div class="container hero-inner">
         <div>
           ${home.heroEyebrow ? html`<span class="eyebrow">${home.heroEyebrow}</span>` : ''}
@@ -814,12 +816,23 @@ export function setLeaveGuard(fn) {
   leaveGuard = fn;
 }
 
+let currentUrl = location.pathname + location.search;
+
 export async function navigate(path, { replace = false } = {}) {
   if (leaveGuard && !leaveGuard()) return;
   leaveGuard = null;
   if (replace) history.replaceState({}, '', path);
   else history.pushState({}, '', path);
   await route();
+}
+
+// Back/forward buttons: honour the unsaved-changes warning too.
+function onPopState() {
+  if (leaveGuard && !leaveGuard()) {
+    history.pushState({}, '', currentUrl);
+    return;
+  }
+  route();
 }
 
 let cleanup = null;
@@ -829,6 +842,7 @@ export function onLeave(fn) {
 
 async function route() {
   leaveGuard = null;
+  currentUrl = location.pathname + location.search;
   if (cleanup) {
     try {
       cleanup();
@@ -897,7 +911,7 @@ document.addEventListener('click', (e) => {
   navigate(url.pathname + url.search + url.hash);
 });
 
-window.addEventListener('popstate', route);
+window.addEventListener('popstate', onPopState);
 window.addEventListener('beforeunload', (e) => {
   if (leaveGuard && !leaveGuard(true)) e.preventDefault();
 });

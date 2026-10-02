@@ -10,10 +10,39 @@ function isPlainObject(v) {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
+// Make a list item's fields the same kind as the starter item's (list, object
+// or plain value), without copying the starter item's text into it.
+function sanitiseItem(template, item) {
+  const out = { ...item };
+  for (const [key, value] of Object.entries(template)) {
+    if (!(key in out)) continue;
+    if (Array.isArray(value)) {
+      out[key] = Array.isArray(out[key]) ? out[key].filter((v) => v !== null && v !== undefined && typeof v !== 'object') : [];
+    } else if (isPlainObject(value)) {
+      if (!isPlainObject(out[key])) out[key] = {};
+    } else if (out[key] !== null && typeof out[key] === 'object') {
+      out[key] = typeof value === 'boolean' ? false : '';
+    }
+  }
+  return out;
+}
+
 // Fill in any keys missing from saved content with their defaults, so new
 // fields added in later versions of the app show up without a migration.
+// Values of the wrong type (e.g. text where a list belongs, from the Advanced
+// editor) fall back to the default so the site and scanner never break.
 function mergeDefaults(base, saved) {
-  if (!isPlainObject(base)) return saved === undefined ? base : saved;
+  if (Array.isArray(base)) {
+    if (!Array.isArray(saved)) return structuredClone(base);
+    const template = base[0];
+    if (template === undefined) return saved.filter((item) => item !== null && item !== undefined);
+    if (!isPlainObject(template)) return saved.filter((item) => item !== null && item !== undefined && typeof item !== 'object');
+    return saved.filter(isPlainObject).map((item) => sanitiseItem(template, item));
+  }
+  if (!isPlainObject(base)) {
+    if (saved === undefined || saved === null || typeof saved === 'object') return base;
+    return typeof base === 'boolean' ? Boolean(saved) : saved;
+  }
   if (!isPlainObject(saved)) return structuredClone(base);
   const out = { ...saved };
   for (const [key, value] of Object.entries(base)) {

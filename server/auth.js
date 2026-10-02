@@ -29,9 +29,11 @@ function hashPassword(password) {
   return bcrypt.hashSync(password, 10);
 }
 
+// Used when the account does not exist, so a failed login always costs one bcrypt comparison.
+const DUMMY_HASH = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), 10);
+
 function verifyPassword(password, hash) {
-  if (!hash) return false;
-  return bcrypt.compareSync(password, hash);
+  return bcrypt.compareSync(String(password || ''), hash || DUMMY_HASH) && Boolean(hash);
 }
 
 function sha256(value) {

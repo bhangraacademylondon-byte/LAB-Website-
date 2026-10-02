@@ -18,12 +18,27 @@ const FEED_TTL_MS = 10 * 60_000;
 const FIELDS = 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,children{media_type,media_url,thumbnail_url}';
 const BEHOLD_RE = /^https:\/\/feeds\.behold\.so\/[A-Za-z0-9_-]+\/?$/;
 
-let memoryCache = null; // { fetchedAt, posts }
+const RETRY_AFTER_ERROR_MS = 2 * 60_000;
+
+// Last good feed, kept in the database so the gallery still has posts after a
+// restart even if Instagram is briefly unreachable.
+let memoryCache = getSetting('instagram_cache', null); // { fetchedAt, posts, generation }
 let inflight = null;
+let lastFailureAt = 0;
+// Bumped whenever the connection changes, so a fetch started for the old
+// connection can never overwrite the cache for the new one.
+let generation = 0;
+
+function resetCache() {
+  generation++;
+  memoryCache = null;
+  lastFailureAt = 0;
+  setSetting('instagram_cache', null);
+}
 
 function getConfig() {
   const stored = getSetting('instagram', {}) || {};
-  if (!stored.accessToken && process.env.INSTAGRAM_ACCESS_TOKEN) {
+  if (!stored.accessToken && !stored.beholdUrl && process.env.INSTAGRAM_ACCESS_TOKEN) {
     return { ...stored, accessToken: process.env.INSTAGRAM_ACCESS_TOKEN, fromEnv: true };
   }
   return stored;
@@ -112,13 +127,22 @@ async function getFeed({ force = false } = {}) {
   const cfg = getConfig();
   if (!provider(cfg)) return { configured: false, posts: [] };
 
-  if (!force && memoryCache && Date.now() - memoryCache.fetchedAt < FEED_TTL_MS) {
+  const fresh = memoryCache && Date.now() - memoryCache.fetchedAt < FEED_TTL_MS;
+  const coolingDown = Date.now() - lastFailureAt < RETRY_AFTER_ERROR_MS;
+  if (!force && memoryCache && (fresh || coolingDown)) {
     return { configured: true, posts: memoryCache.posts, fetchedAt: memoryCache.fetchedAt };
   }
+  if (!force && !memoryCache && coolingDown) {
+    return { configured: true, posts: [], error: 'Instagram posts are unavailable right now.' };
+  }
   if (!inflight) {
+    const gen = generation;
     inflight = fetchPosts()
       .then((posts) => {
+        if (gen !== generation) return { fetchedAt: Date.now(), posts: [] };
         memoryCache = { fetchedAt: Date.now(), posts };
+        lastFailureAt = 0;
+        setSetting('instagram_cache', memoryCache);
         saveConfig({ lastError: '', lastFetchedAt: new Date().toISOString() });
         return memoryCache;
       })
@@ -130,6 +154,7 @@ async function getFeed({ force = false } = {}) {
     const result = await inflight;
     return { configured: true, posts: result.posts, fetchedAt: result.fetchedAt };
   } catch (err) {
+    lastFailureAt = Date.now();
     saveConfig({ lastError: err.message });
     // Serve stale posts rather than an empty gallery if Instagram is briefly down.
     if (memoryCache) return { configured: true, posts: memoryCache.posts, stale: true };
@@ -153,7 +178,7 @@ async function setBeholdUrl(url) {
     tokenSetAt: new Date().toISOString(),
     lastError: '',
   });
-  memoryCache = null;
+  resetCache();
   return feed;
 }
 
@@ -168,13 +193,13 @@ async function setToken(token) {
     expiresAt: new Date(Date.now() + 60 * 86400_000).toISOString(),
     lastError: '',
   });
-  memoryCache = null;
+  resetCache();
   return me;
 }
 
 function clearToken() {
   setSetting('instagram', {});
-  memoryCache = null;
+  resetCache();
 }
 
 async function refreshTokenIfNeeded() {
