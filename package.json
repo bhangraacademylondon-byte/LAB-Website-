@@ -1,0 +1,23 @@
+{
+  "name": "london-academy-of-bhangra",
+  "version": "1.0.0",
+  "private": true,
+  "description": "London Academy of Bhangra web app: public site, member attendance tracking with QR codes, and a content admin.",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning server/index.js",
+    "dev": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning --watch server/index.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "express": "^5.2.1",
+    "html5-qrcode": "^2.3.8",
+    "multer": "^2.4.0",
+    "qrcode": "^1.5.4"
+  }
+}

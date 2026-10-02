@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{{SITE_NAME}}</title>
+  <meta name="description" content="{{SITE_DESCRIPTION}}">
+  <meta name="theme-color" content="{{THEME_COLOR}}">
+  <meta property="og:title" content="{{SITE_NAME}}">
+  <meta property="og:description" content="{{SITE_DESCRIPTION}}">
+  <meta property="og:image" content="/img/icon-512.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32.png">
+  <link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+  <script type="module" src="/js/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <div id="announcement" class="announcement" hidden></div>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="/" class="brand" data-link>
+        <img src="/img/logo.png" alt="" class="brand-logo" id="brand-logo" width="48" height="48">
+        <span class="brand-text">
+          <span class="brand-name" id="brand-name">{{SITE_NAME}}</span>
+        </span>
+      </a>
+      <button class="menu-toggle" id="menu-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav" aria-label="Main">
+        <ul id="nav-list"></ul>
+        <div class="nav-account" id="nav-account"></div>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <div class="page-loading"><div class="spinner" aria-label="Loading"></div></div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid" id="footer"></div>
+  </footer>
+
+  <div id="toast-region" class="toast-region" aria-live="polite"></div>
+  <noscript><p class="container">Please enable JavaScript to use this site.</p></noscript>
+</body>
+</html>
