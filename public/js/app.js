@@ -29,7 +29,7 @@ function applyTheme() {
     root.setProperty('--accent', site.accentColor);
     root.setProperty('--accent-light', shade(site.accentColor, 0.28));
   }
-  const logo = safeImg(site.logo) || '/img/logo.png';
+  const logo = safeImg(site.logo) || '/img/logo-dark.png';
   document.getElementById('brand-logo').src = logo;
   document.getElementById('brand-name').textContent = site.name;
 }
@@ -69,7 +69,7 @@ function renderFooter() {
   mount('#footer', html`
     <div>
       <div class="footer-brand">
-        <img src="${safeImg(site.logo) || '/img/logo.png'}" alt="" width="56" height="56">
+        <img src="${safeImg(site.logo) || '/img/logo-dark.png'}" alt="" width="56" height="56">
         <strong style="color:#fff">${site.name}</strong>
       </div>
       <p>${site.footerText}</p>
@@ -167,7 +167,7 @@ function renderHome() {
             ${home.ctaSecondary?.label ? html`<a class="btn btn-light" href="${safeUrl(home.ctaSecondary.link)}">${home.ctaSecondary.label}</a>` : ''}
           </div>
         </div>
-        <div class="hero-logo"><img src="${safeImg(site.logo) || '/img/logo.png'}" alt="${site.name} logo"></div>
+        <div class="hero-logo"><img src="${safeImg(site.logo) || '/img/logo-dark.png'}" alt="${site.name} logo"></div>
       </div>
     </section>
 
@@ -349,7 +349,7 @@ async function renderGallery() {
       <div class="container">
         <div class="insta-head">
           <div class="insta-handle">
-            <img src="${safeImg(site.logo) || '/img/logo.png'}" alt="">
+            <img src="${safeImg(site.logo) || '/img/logo-dark.png'}" alt="">
             <div>@${username}<div class="muted small">Instagram</div></div>
           </div>
           <a class="btn btn-insta" href="${profileUrl}" target="_blank" rel="noopener">Follow on Instagram</a>
@@ -472,7 +472,7 @@ function authShell(title, inner) {
   return html`
     <div class="auth-wrap">
       <div class="card">
-        <img class="auth-logo" src="${safeImg(site.logo) || '/img/logo.png'}" alt="">
+        <img class="auth-logo" src="${safeImg(site.logo) || '/img/logo-dark.png'}" alt="">
         <h1 class="center" style="font-size:1.6rem">${title}</h1>
         ${inner}
       </div>
