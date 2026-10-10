@@ -81,9 +81,13 @@ function renderHeader() {
   const u = state.user;
   mount('#nav-account', u
     ? html`
-        ${u.role !== 'member' ? html`<a class="btn btn-sm btn-outline" href="/admin">${u.role === 'admin' ? 'Admin' : 'Instructor'}</a>` : ''}
+        ${u.role !== 'member' ? html`<a class="btn btn-sm btn-outline" href="/admin">${u.role === 'admin' ? 'Admin' : 'Teacher'}</a>` : ''}
         <a class="btn btn-sm btn-primary" href="/account">${site.accountButtonLabel || 'My account'}</a>`
     : html`<a class="btn btn-sm btn-primary" href="/login">${site.loginButtonLabel || 'Member login'}</a>`);
+
+  // Teachers on a phone get a one-tap shortcut to the QR scanner on every page.
+  const fab = document.getElementById('scan-fab');
+  fab.hidden = !u || u.role === 'member' || path.startsWith('/admin/scanner') || path.startsWith('/admin/debriefs');
 
   const bar = document.getElementById('announcement');
   if (home.announcement?.enabled && home.announcement.text) {
@@ -714,7 +718,7 @@ async function renderAccount() {
         <div class="admin-head">
           <h1 style="font-size:1.8rem">Hi, ${u.name.split(' ')[0]} 👋</h1>
           <div class="btn-row no-print">
-            ${u.role !== 'member' ? html`<a class="btn btn-sm btn-accent" href="/admin/scanner">Open scanner</a><a class="btn btn-sm btn-outline" href="/admin">${u.role === 'admin' ? 'Admin' : 'Instructor'} dashboard</a>` : ''}
+            ${u.role !== 'member' ? html`<a class="btn btn-sm btn-accent" href="/admin/scanner">Open scanner</a><a class="btn btn-sm btn-outline" href="/admin">${u.role === 'admin' ? 'Admin' : 'Teacher'} dashboard</a>` : ''}
             <button class="btn btn-sm btn-ghost" id="logout">Log out</button>
           </div>
         </div>
@@ -748,15 +752,15 @@ async function renderAccount() {
                 <li class="list-item">
                   <div><strong>${a.title}</strong><div class="meta">${formatDate(a.date)}${a.startTime ? ` · ${formatTime(a.startTime)}` : ''}</div></div>
                   <span class="tag">✓ Attended</span>
-                </li>`)}</ul>` : html`<p class="muted">No classes yet. Your attendance will appear here once an instructor scans your QR code.</p>`}
+                </li>`)}</ul>` : html`<p class="muted">No classes yet. Your attendance will appear here once a teacher scans your QR code.</p>`}
             </div>
             <div class="card" style="margin-top:20px">
               <h3>My profile</h3>
               <form class="form" id="profile-form">
                 <label class="field"><span>Name</span><input name="name" value="${u.name}" required></label>
                 <label class="field"><span>Phone</span><input name="phone" type="tel" value="${u.phone}"></label>
-                <label class="field"><span>Bio</span><textarea name="bio" rows="4" maxlength="1000" placeholder="${members.bioPrompt}">${u.bio}</textarea><small>Your instructors can see this.</small></label>
-                <label class="field"><span>Email</span><input value="${u.email}" disabled><small>Ask an instructor to change your email.</small></label>
+                <label class="field"><span>Bio</span><textarea name="bio" rows="4" maxlength="1000" placeholder="${members.bioPrompt}">${u.bio}</textarea><small>Your teachers can see this.</small></label>
+                <label class="field"><span>Email</span><input value="${u.email}" disabled><small>Ask a teacher to change your email.</small></label>
                 <div class="form-error" role="alert"></div>
                 <div><button class="btn btn-primary" type="submit">Save profile</button></div>
               </form>

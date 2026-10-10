@@ -5,7 +5,8 @@ A mobile-friendly website and members' app for the London Academy of Bhangra (LA
 - **Public site:** Home, About, Timetable, Pricing, Gallery and Contact tabs, plus any extra pages you create.
 - **Instagram gallery:** shows the latest posts from @londonacademyofbhangra automatically.
 - **Member accounts:** members sign up online, write a short bio, and get a unique member ID (e.g. `LAB-7K3Q9X`) and QR code. They can track their attendance: totals, a 6-month chart and a full history.
-- **QR scanner for instructors:** scan members' QR codes with a phone camera to record attendance for each class. Manual check-in by name or ID is also available.
+- **QR scanner for teachers:** scan members' QR codes with a phone camera to record attendance for each class. On a phone the camera opens straight away. *Scan from a photo* and manual check-in are also available.
+- **Class debriefs:** after each class a teacher logs who ran it, the date, the number of attendees, the LAB pouch balance and class feedback.
 - **Admin page:** edit every part of the website: all text, headings and buttons, images, logo, colours, fonts, menu tabs, home page sections (show or hide), timetable, prices, contact details, member page wording and extra pages. Also manage members, sessions, CSV exports and contact-form messages.
 
 ## Running it
@@ -35,21 +36,37 @@ Any Node host works, for example Render, Railway, Fly.io or a small VPS. You can
 | Role | Can do |
 | --- | --- |
 | Member | See their QR card and attendance, update their name, phone and password |
-| Instructor | Everything a member can, plus: QR scanner, sessions and attendance, view and add members, CSV export |
+| Teacher | Everything a member can, plus: QR scanner, sessions and attendance, class debriefs, view and add members, CSV export |
 | Admin | Everything, plus: edit website content, change roles, reset passwords, Instagram, messages |
 
-Make someone an instructor in **Admin → Members → (person) → Role**.
+Make someone a teacher in **Admin → Members → (person) → Role**.
 
 ## Taking attendance
 
-1. An instructor opens **Admin → QR scanner** on their phone.
+1. A teacher opens **Admin → QR scanner** on their phone (or taps the **📷 Scan QR** button shown on every page on a phone).
 2. They pick today's class. Classes come from the timetable for the current day, or they can create a one-off session.
 3. They tap **Start camera** and scan each member's QR code from the member's **My account** page (or a printed card).
 4. Each scan is recorded once per session. Scanning someone twice shows "already checked in".
 
 Members can log in with their email **or** member ID. If someone loses their card, **Issue new member ID** in their admin page cancels the old QR code.
 
-Online sign-up can be switched off in **Admin → Member pages**. Admins and instructors can always add members themselves. A one-time password is shown to pass on to the member.
+Online sign-up can be switched off in **Admin → Member pages**. Admins and teachers can always add members themselves. A one-time password is shown to pass on to the member.
+
+### Camera on phones
+
+The scanner uses the phone's camera straight from the website, with no app to install. The first time, the phone asks for permission; tap **Allow**. The site must be served over **https** or phones will refuse camera access. If a teacher opened the link inside another app (Instagram, WhatsApp) and the camera won't start, open the link in Safari or Chrome, or use **Scan from a photo**, which takes a picture with the normal camera app.
+
+## Class debriefs
+
+When the class ends, the teacher taps **Finish class & write debrief** on the scanner screen (also under **Admin → Class debriefs** or on a session's page). The form is pre-filled with the class, date, the teacher's name and the number of people scanned in, and shows the last recorded LAB pouch balance. It logs:
+
+- who ran the class (tick teachers, or type other names)
+- date of class
+- number of attendees
+- LAB pouch balance (£)
+- class feedback
+
+There is one debrief per class. The teacher who wrote it, or an admin, can edit it; only admins can delete. **Admin → Class debriefs** lists them with the latest pouch balance and average attendance, and exports to CSV. The dashboard shows how many recent classes still need a debrief.
 
 ## Connecting Instagram
 
@@ -69,7 +86,7 @@ server/            Express API (auth, members, attendance, content, Instagram)
   defaultContent.js  Starter text for the site (everything is editable in Admin)
 public/            Front end (no build step)
   js/app.js          Public pages, login and member account
-  js/admin.js        Admin and instructor area, including the QR scanner
+  js/admin.js        Admin and teacher area: QR scanner, sessions, members, debriefs, content editors
   img/               Academy logo and app icons
 test/              API tests (node --test)
 ```

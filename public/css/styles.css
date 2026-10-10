@@ -370,3 +370,12 @@ dialog.lightbox::backdrop { background: rgba(0, 0, 0, 0.85); }
 .bio-box { white-space: pre-wrap; background: var(--bg-soft); border-radius: 10px; padding: 12px 14px; margin: 0; }
 .form-heading { margin: 12px 0 0; padding-top: 16px; border-top: 1px solid var(--border); font-size: 1.05rem; color: var(--accent); }
 .form > .form-heading:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+.debrief-cta { border-top: 1px solid var(--border); margin-top: 16px; padding-top: 16px; }
+.check-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+.cell-clip { max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+.detail-list { display: grid; grid-template-columns: max-content 1fr; gap: 10px 20px; margin: 0; }
+.detail-list dt { font-weight: 600; color: var(--primary-dark); }
+.detail-list dd { margin: 0; }
+@media (max-width: 520px) { .detail-list { grid-template-columns: 1fr; gap: 2px; } .detail-list dd { margin-bottom: 10px; } }
+.scan-fab { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 60; border-radius: 999px; padding: 14px 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); }
+@media (pointer: fine) { .scan-fab { display: none; } }

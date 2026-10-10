@@ -74,6 +74,23 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  -- Filled in by a teacher after each class. pouch_balance_pence is the cash in
+  -- the LAB pouch at the end of the class, stored in pence to avoid rounding.
+  CREATE TABLE IF NOT EXISTS class_debriefs (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id          INTEGER UNIQUE REFERENCES class_sessions(id) ON DELETE SET NULL,
+    class_title         TEXT NOT NULL DEFAULT '',
+    class_date          TEXT NOT NULL,
+    ran_by              TEXT NOT NULL,
+    attendee_count      INTEGER NOT NULL DEFAULT 0,
+    pouch_balance_pence INTEGER,
+    feedback            TEXT NOT NULL DEFAULT '',
+    submitted_by        INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_debriefs_date ON class_debriefs(class_date);
   CREATE INDEX IF NOT EXISTS idx_attendance_user ON attendance(user_id);
   CREATE INDEX IF NOT EXISTS idx_sessions_date ON class_sessions(date);
 `);

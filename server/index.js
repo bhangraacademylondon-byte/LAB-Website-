@@ -238,14 +238,14 @@ app.post('/api/auth/login', (req, res) => {
     auth.recordFailedAttempt(key);
     throw new HttpError(401, 'Incorrect email/member ID or password.');
   }
-  if (!user.active) throw new HttpError(403, 'This account has been deactivated. Please speak to an instructor.');
+  if (!user.active) throw new HttpError(403, 'This account has been deactivated. Please speak to a teacher.');
   auth.clearAttempts(key);
   auth.createSession(res, req, user.id);
   res.json({ user: publicUser(user) });
 });
 
 app.post('/api/auth/register', (req, res) => {
-  if (!content.getContent().members.allowRegistration) throw new HttpError(403, 'Online registration is closed. Please ask an instructor to create your account.');
+  if (!content.getContent().members.allowRegistration) throw new HttpError(403, 'Online registration is closed. Please ask a teacher to create your account.');
   const name = str(req.body.name, 120);
   const email = str(req.body.email, 200);
   const phone = str(req.body.phone, 40);
@@ -314,7 +314,7 @@ app.post('/api/me/password', auth.requireRole('member'), (req, res) => {
   res.json({ ok: true });
 });
 
-// ---------- staff: instructors & admins ----------
+// ---------- staff: teachers (role 'instructor') & admins ----------
 
 const staff = express.Router();
 staff.use(auth.requireRole('instructor'));
@@ -331,6 +331,14 @@ staff.get('/stats', (_req, res) => {
       .prepare("SELECT COUNT(*) AS n FROM attendance a JOIN class_sessions s ON s.id = a.session_id WHERE s.date >= date(?, '-30 days')")
       .get(date).n,
     unreadMessages: db.prepare('SELECT COUNT(*) AS n FROM messages WHERE is_read = 0').get().n,
+    // Sessions from the last 14 days that still need a debrief.
+    debriefsDue: db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM class_sessions s WHERE s.date BETWEEN date(?, '-14 days') AND ?
+           AND NOT EXISTS (SELECT 1 FROM class_debriefs d WHERE d.session_id = s.id)
+           AND EXISTS (SELECT 1 FROM attendance a WHERE a.session_id = s.id)`
+      )
+      .get(date, date).n,
   });
 });
 
@@ -527,6 +535,141 @@ staff.get('/members/:id/qr.svg', async (req, res) => {
   const member = loadMember(req.params.id);
   res.setHeader('Content-Type', 'image/svg+xml');
   res.send(await qrSvg(member.member_id));
+});
+
+// ----- class debriefs -----
+
+// "£123.45", "123.4" or "123" -> pence. Returns null for anything else.
+function parsePounds(value) {
+  const m = String(value ?? '').trim().replace(/,/g, '').match(/^£?\s*(\d{1,7})(?:\.(\d{1,2}))?$/);
+  if (!m) return null;
+  return Number(m[1]) * 100 + Number((m[2] || '0').padEnd(2, '0'));
+}
+
+function publicDebrief(d) {
+  return {
+    id: d.id,
+    sessionId: d.session_id,
+    classTitle: d.class_title,
+    classDate: d.class_date,
+    ranBy: d.ran_by,
+    attendeeCount: d.attendee_count,
+    pouchBalancePence: d.pouch_balance_pence,
+    feedback: d.feedback,
+    submittedBy: d.submitted_by,
+    submittedByName: d.submitted_by_name || '',
+    createdAt: d.created_at,
+    updatedAt: d.updated_at,
+  };
+}
+
+const DEBRIEF_SELECT = `SELECT d.*, u.name AS submitted_by_name FROM class_debriefs d LEFT JOIN users u ON u.id = d.submitted_by`;
+
+function loadDebrief(id) {
+  const d = db.prepare(`${DEBRIEF_SELECT} WHERE d.id = ?`).get(Number(id));
+  if (!d) throw new HttpError(404, 'Debrief not found.');
+  return d;
+}
+
+function readDebrief(body) {
+  const ranBy = (Array.isArray(body.ranBy) ? body.ranBy : [body.ranBy])
+    .map((n) => str(n, 120))
+    .filter(Boolean);
+  const classDate = str(body.classDate, 10);
+  const classTitle = str(body.classTitle, 120);
+  const attendeeCount = Number(body.attendeeCount);
+  const pence = parsePounds(body.pouchBalance);
+  const feedback = str(body.feedback, 5000);
+  if (!ranBy.length) throw new HttpError(400, 'Please say who ran the class.');
+  if (!DATE_RE.test(classDate)) throw new HttpError(400, 'Please enter the date of the class.');
+  if (!Number.isInteger(attendeeCount) || attendeeCount < 0 || attendeeCount > 2000) throw new HttpError(400, 'Please enter the number of attendees as a whole number.');
+  if (pence === null) throw new HttpError(400, 'Please enter the LAB pouch balance in pounds, e.g. 125.50');
+  return { ranBy: [...new Set(ranBy)].join(', ').slice(0, 500), classDate, classTitle, attendeeCount, pence, feedback };
+}
+
+staff.get('/teachers', (_req, res) => {
+  const teachers = db
+    .prepare("SELECT id, name FROM users WHERE role IN ('instructor', 'admin') AND active = 1 ORDER BY name COLLATE NOCASE")
+    .all();
+  res.json({ teachers });
+});
+
+// Everything the form needs: session details, scanned head count, teachers,
+// the last recorded pouch balance, and any debrief already written for it.
+staff.get('/debriefs/prefill', (req, res) => {
+  const session = req.query.session ? loadSession(req.query.session) : null;
+  const existing = session ? db.prepare(`${DEBRIEF_SELECT} WHERE d.session_id = ?`).get(session.id) : null;
+  const last = db
+    .prepare('SELECT pouch_balance_pence, class_date, class_title FROM class_debriefs WHERE pouch_balance_pence IS NOT NULL ORDER BY class_date DESC, id DESC LIMIT 1')
+    .get();
+  res.json({
+    session,
+    scannedCount: session ? db.prepare('SELECT COUNT(*) AS n FROM attendance WHERE session_id = ?').get(session.id).n : null,
+    existing: existing ? publicDebrief(existing) : null,
+    lastBalance: last ? { pence: last.pouch_balance_pence, date: last.class_date, title: last.class_title } : null,
+    today: todayInfo().date,
+  });
+});
+
+staff.get('/debriefs', (req, res) => {
+  const from = DATE_RE.test(req.query.from || '') ? req.query.from : '0000-00-00';
+  const to = DATE_RE.test(req.query.to || '') ? req.query.to : '9999-12-31';
+  const rows = db.prepare(`${DEBRIEF_SELECT} WHERE d.class_date BETWEEN ? AND ? ORDER BY d.class_date DESC, d.id DESC LIMIT 500`).all(from, to);
+  res.json({ debriefs: rows.map(publicDebrief) });
+});
+
+staff.get('/debriefs.csv', (req, res) => {
+  const from = DATE_RE.test(req.query.from || '') ? req.query.from : '0000-00-00';
+  const to = DATE_RE.test(req.query.to || '') ? req.query.to : '9999-12-31';
+  const rows = db
+    .prepare(`${DEBRIEF_SELECT} WHERE d.class_date BETWEEN ? AND ? ORDER BY d.class_date, d.id`)
+    .all(from, to)
+    .map((d) => [
+      d.class_date, d.class_title, d.ran_by, d.attendee_count,
+      d.pouch_balance_pence === null ? '' : (d.pouch_balance_pence / 100).toFixed(2),
+      d.feedback, d.submitted_by_name || '', d.created_at,
+    ]);
+  sendCsv(res, 'class-debriefs.csv', ['Date', 'Class', 'Ran by', 'Attendees', 'LAB pouch balance (£)', 'Feedback', 'Submitted by', 'Submitted at (UTC)'], rows);
+});
+
+staff.get('/debriefs/:id', (req, res) => {
+  res.json({ debrief: publicDebrief(loadDebrief(req.params.id)) });
+});
+
+staff.post('/debriefs', (req, res) => {
+  const d = readDebrief(req.body);
+  const session = req.body.sessionId ? loadSession(req.body.sessionId) : null;
+  if (session) {
+    const existing = db.prepare('SELECT id FROM class_debriefs WHERE session_id = ?').get(session.id);
+    if (existing) throw new HttpError(409, 'A debrief has already been written for this class. Open it to make changes.');
+  }
+  const info = db
+    .prepare(
+      `INSERT INTO class_debriefs (session_id, class_title, class_date, ran_by, attendee_count, pouch_balance_pence, feedback, submitted_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(session ? session.id : null, d.classTitle || (session ? session.title : ''), d.classDate, d.ranBy, d.attendeeCount, d.pence, d.feedback, req.user.id);
+  res.status(201).json({ debrief: publicDebrief(loadDebrief(info.lastInsertRowid)) });
+});
+
+// Teachers can correct their own debriefs; admins can change any.
+staff.patch('/debriefs/:id', (req, res) => {
+  const existing = loadDebrief(req.params.id);
+  if (req.user.role !== 'admin' && existing.submitted_by !== req.user.id) {
+    throw new HttpError(403, 'Only the teacher who wrote this debrief, or an admin, can change it.');
+  }
+  const d = readDebrief(req.body);
+  db.prepare(
+    `UPDATE class_debriefs SET class_title = ?, class_date = ?, ran_by = ?, attendee_count = ?, pouch_balance_pence = ?,
+            feedback = ?, updated_at = datetime('now') WHERE id = ?`
+  ).run(d.classTitle || existing.class_title, d.classDate, d.ranBy, d.attendeeCount, d.pence, d.feedback, existing.id);
+  res.json({ debrief: publicDebrief(loadDebrief(existing.id)) });
+});
+
+staff.delete('/debriefs/:id', auth.requireRole('admin'), (req, res) => {
+  const d = loadDebrief(req.params.id);
+  db.prepare('DELETE FROM class_debriefs WHERE id = ?').run(d.id);
+  res.json({ ok: true });
 });
 
 app.use('/api/staff', staff);

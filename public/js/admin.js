@@ -5,6 +5,8 @@ import {
 import { state, navigate, onLeave, setLeaveGuard, reloadContent, monthlyChart } from './app.js';
 
 const isAdmin = () => state.user?.role === 'admin';
+// The 'instructor' role is shown to people as "Teacher".
+const ROLE_LABELS = { member: 'Member', instructor: 'Teacher', admin: 'Admin' };
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 // ---------- layout ----------
@@ -15,6 +17,7 @@ const NAV = [
   { path: 'scanner', label: 'QR scanner', icon: '📷' },
   { path: 'sessions', label: 'Sessions', icon: '📅' },
   { path: 'members', label: 'Members', icon: '👥' },
+  { path: 'debriefs', label: 'Class debriefs', icon: '📝' },
   { heading: 'Website', admin: true },
   { path: 'content/site', label: 'Site & branding', icon: '🎨', admin: true },
   { path: 'content/nav', label: 'Menu tabs', icon: '🧭', admin: true },
@@ -61,6 +64,13 @@ export async function render(parts) {
   if (section === 'scanner') return scanner(layout('scanner'));
   if (section === 'sessions') return sub ? sessionDetail(layout('sessions'), sub) : sessionsList(layout('sessions'));
   if (section === 'members') return sub ? memberDetail(layout('members'), sub) : membersList(layout('members'));
+  if (section === 'debriefs') {
+    const root = layout('debriefs');
+    if (sub === 'new') return debriefForm(root);
+    if (sub && id === 'edit') return debriefForm(root, { id: sub });
+    if (sub) return debriefView(root, sub);
+    return debriefsList(root);
+  }
   if (section === 'content') return contentEditor(layout(`content/${sub}`), sub, id);
   if (section === 'instagram') return instagramPage(layout('instagram'));
   if (section === 'messages') return messagesPage(layout('messages'));
@@ -77,6 +87,7 @@ async function dashboard(root) {
       <div class="stat"><div class="stat-value">${stats.members}</div><div class="stat-label">Active members</div></div>
       <div class="stat"><div class="stat-value">${stats.todayAttendance}</div><div class="stat-label">Checked in today</div></div>
       <div class="stat"><div class="stat-value">${stats.last30Attendance}</div><div class="stat-label">Check-ins (30 days)</div></div>
+      <a class="stat" href="/admin/debriefs" style="text-decoration:none"><div class="stat-value">${stats.debriefsDue}</div><div class="stat-label">Debriefs to write</div></a>
       ${isAdmin() ? html`<a class="stat" href="/admin/messages" style="text-decoration:none"><div class="stat-value">${stats.unreadMessages}</div><div class="stat-label">Unread messages</div></a>` : ''}
     </div>
     <div class="grid grid-2" style="margin-top:24px">
@@ -93,6 +104,7 @@ async function dashboard(root) {
         <ul class="list">
           <li class="list-item"><a href="/admin/members">Add or find a member</a></li>
           <li class="list-item"><a href="/admin/sessions">Attendance history & CSV export</a></li>
+          <li class="list-item"><a href="/admin/debriefs">Class debriefs & LAB pouch balance</a></li>
           ${isAdmin() ? html`
           <li class="list-item"><a href="/admin/content/home">Edit the website</a></li>
           <li class="list-item"><a href="/admin/instagram">Instagram gallery settings</a></li>` : ''}
@@ -103,6 +115,27 @@ async function dashboard(root) {
 }
 
 // ---------- scanner ----------
+
+// Explains, in plain words, why the camera could not start and how to fix it.
+function cameraHelp(err) {
+  const text = String(err?.name || '') + ' ' + String(err?.message || err || '');
+  if (!window.isSecureContext) {
+    return html`The camera only works when the site is opened with a secure <strong>https://</strong> address.`;
+  }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    return html`This browser can't use the camera. If you opened the link from an app like Instagram or WhatsApp, open it in <strong>Safari</strong> (iPhone) or <strong>Chrome</strong> (Android) instead, or use <strong>Scan from a photo</strong>.`;
+  }
+  if (/NotAllowed|Permission|denied/i.test(text)) {
+    return html`Camera access was blocked. <strong>iPhone:</strong> tap <strong>aA</strong> in the address bar → Website Settings → Camera → Allow. <strong>Android (Chrome):</strong> tap the icon left of the address → Permissions → Camera → Allow. Then tap <strong>Start camera</strong> again.`;
+  }
+  if (/NotFound|Overconstrained|no camera/i.test(text)) {
+    return html`No camera was found on this device. Use manual check-in below instead.`;
+  }
+  if (/NotReadable|in use|Could not start video/i.test(text)) {
+    return html`The camera is being used by another app. Close other camera apps and tap <strong>Start camera</strong> again.`;
+  }
+  return html`Could not start the camera (${text.trim()}). Try <strong>Scan from a photo</strong> or manual check-in.`;
+}
 
 let qrLibPromise = null;
 function loadQrLib() {
@@ -232,11 +265,15 @@ async function scanner(root) {
             <div class="scanner-placeholder" id="scanner-placeholder">
               <p>Point the camera at a member's QR code.</p>
               <button class="btn btn-accent" id="start-camera">📷 Start camera</button>
+              <p class="small" style="opacity:.75;margin-top:12px">Your phone will ask to use the camera. Tap <strong>Allow</strong>.</p>
             </div>
           </div>
           <div class="btn-row" style="margin-top:12px">
             <button class="btn btn-sm btn-outline" id="stop-camera" hidden>Stop camera</button>
             <button class="btn btn-sm btn-ghost" id="switch-camera" hidden>Switch camera</button>
+            <label class="btn btn-sm btn-ghost" id="photo-scan-label">📸 Scan from a photo
+              <input type="file" accept="image/*" capture="environment" id="photo-scan" hidden>
+            </label>
           </div>
           <div id="scan-result"></div>
           <div class="card" style="margin-top:16px">
@@ -254,6 +291,10 @@ async function scanner(root) {
             <a class="btn btn-sm btn-ghost" href="/api/staff/sessions/${session.id}/export.csv">Export CSV</a>
           </div>
           <ul class="list" id="attendee-list"></ul>
+          <div class="debrief-cta">
+            <p class="small muted" style="margin:0 0 10px">Class finished? Log who ran it, the head count, the LAB pouch balance and how it went.</p>
+            <a class="btn btn-accent btn-block" href="/admin/debriefs/new?session=${session.id}">📝 Finish class &amp; write debrief</a>
+          </div>
         </div>
       </div>`);
 
@@ -286,7 +327,7 @@ async function scanner(root) {
         const r = await api(`/api/staff/sessions/${session.id}/attendance`, { method: 'POST', body });
         if (r.status === 'recorded') {
           beep(true);
-          showResult('ok', '✅', html`<strong>${r.member.name}</strong> checked in<br><span class="small">${r.member.memberId} · ${r.stats.total} classes total</span>`);
+          showResult('ok', '✅', html`<strong>${r.member.name}</strong> checked in<br><span class="small">${r.member.memberId} · ${r.stats.total} ${r.stats.total === 1 ? 'class' : 'classes'} total</span>`);
         } else {
           beep(true);
           showResult('warn', 'ℹ️', html`<strong>${r.member.name}</strong> is already checked in`);
@@ -326,10 +367,32 @@ async function scanner(root) {
       } catch (err) {
         scannerInstance = null;
         placeholder.hidden = false;
-        const secure = window.isSecureContext ? '' : ' The camera only works when the site is opened over https.';
-        showResult('err', '⚠️', `Could not start the camera: ${err?.message || err}.${secure}`);
+        showResult('err', '⚠️', cameraHelp(err));
       }
     };
+
+    // Fallback for phones where the live camera is blocked (e.g. in-app browsers):
+    // take a photo of the QR code with the camera app and read it from the photo.
+    root.querySelector('#photo-scan').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      e.target.value = '';
+      if (!file) return;
+      try {
+        const lib = await loadQrLib();
+        await stopCamera();
+        root.querySelector('#scanner-placeholder').hidden = false;
+        const reader = new lib.Html5Qrcode('qr-reader', { verbose: false });
+        const text = await reader.scanFile(file, false);
+        reader.clear();
+        await checkIn({ code: text });
+      } catch {
+        beep(false);
+        showResult('err', '⚠️', 'No QR code found in that photo. Try again with the code filling more of the picture.');
+      }
+    });
+
+    // On phones and tablets, open the camera straight away.
+    if (window.matchMedia('(pointer: coarse)').matches && navigator.mediaDevices?.getUserMedia) startCamera();
 
     root.querySelector('#start-camera').addEventListener('click', startCamera);
     root.querySelector('#stop-camera').addEventListener('click', async () => {
@@ -417,6 +480,7 @@ async function sessionDetail(root, id) {
   mount(root, html`
     ${head(session.title, html`
       <a class="btn btn-sm btn-accent" href="/admin/scanner?session=${session.id}">📷 Scan into this session</a>
+      <a class="btn btn-sm btn-primary" href="/admin/debriefs/new?session=${session.id}">📝 Debrief</a>
       <a class="btn btn-sm btn-outline" href="/api/staff/sessions/${session.id}/export.csv">Export CSV</a>`)}
     <p class="muted" style="margin-top:-12px">${formatDate(session.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}${session.start_time ? ` · ${formatTime(session.start_time)}` : ''}${session.end_time ? ` to ${formatTime(session.end_time)}` : ''}</p>
     <div class="grid grid-2" style="align-items:start">
@@ -471,12 +535,175 @@ async function sessionDetail(root, id) {
   });
 }
 
+// ---------- class debriefs ----------
+
+const money = (pence) => (pence === null || pence === undefined ? '-' : (pence / 100).toLocaleString('en-GB', { style: 'currency', currency: 'GBP' }));
+const canEditDebrief = (d) => isAdmin() || d.submittedBy === state.user.id;
+
+async function debriefsList(root) {
+  const params = new URLSearchParams(location.search);
+  const to = params.get('to') || todayLondon();
+  const from = params.get('from') || new Date(Date.now() - 180 * 86400_000).toISOString().slice(0, 10);
+  const { debriefs } = await api(`/api/staff/debriefs?from=${from}&to=${to}`);
+  const latest = debriefs.find((d) => d.pouchBalancePence !== null);
+  mount(root, html`
+    ${head('Class debriefs', html`
+      <a class="btn btn-sm btn-outline" href="/api/staff/debriefs.csv?from=${from}&to=${to}">Export CSV</a>
+      <a class="btn btn-sm btn-accent" href="/admin/debriefs/new">+ New debrief</a>`)}
+    <div class="stat-grid" style="margin-bottom:20px">
+      <div class="stat"><div class="stat-value">${debriefs.length}</div><div class="stat-label">Debriefs in range</div></div>
+      <div class="stat"><div class="stat-value" style="font-size:1.5rem">${latest ? money(latest.pouchBalancePence) : '-'}</div><div class="stat-label">Latest pouch balance${latest ? ` (${formatDate(latest.classDate, { day: 'numeric', month: 'short' })})` : ''}</div></div>
+      <div class="stat"><div class="stat-value">${debriefs.length ? Math.round(debriefs.reduce((n, d) => n + d.attendeeCount, 0) / debriefs.length) : '-'}</div><div class="stat-label">Average attendees</div></div>
+    </div>
+    <form class="form-row card" id="range" style="margin-bottom:20px;padding:16px;align-items:end">
+      <label class="field"><span>From</span><input type="date" name="from" value="${from}"></label>
+      <label class="field"><span>To</span><input type="date" name="to" value="${to}"></label>
+      <button class="btn btn-primary" type="submit">Show</button>
+    </form>
+    ${debriefs.length ? html`
+    <div class="table-wrap"><table>
+      <thead><tr><th>Date</th><th>Class</th><th>Ran by</th><th>Attendees</th><th>Pouch balance</th><th>Feedback</th></tr></thead>
+      <tbody>${debriefs.map((d) => html`
+        <tr class="clickable" data-href="/admin/debriefs/${d.id}">
+          <td><a href="/admin/debriefs/${d.id}">${formatDate(d.classDate)}</a></td>
+          <td>${d.classTitle || '-'}</td>
+          <td>${d.ranBy}</td>
+          <td>${d.attendeeCount}</td>
+          <td>${money(d.pouchBalancePence)}</td>
+          <td class="cell-clip">${d.feedback || '-'}</td>
+        </tr>`)}</tbody>
+    </table></div>` : html`<div class="empty">No debriefs in this date range yet. After a class, open the QR scanner and tap <strong>Finish class &amp; write debrief</strong>.</div>`}`);
+  root.querySelector('#range').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const f = formData(e.target);
+    navigate(`/admin/debriefs?from=${f.from}&to=${f.to}`);
+  });
+  root.querySelectorAll('tr[data-href]').forEach((tr) => tr.addEventListener('click', (e) => {
+    if (!e.target.closest('a')) navigate(tr.dataset.href);
+  }));
+}
+
+async function debriefForm(root, { id = null } = {}) {
+  const sessionId = Number(new URLSearchParams(location.search).get('session')) || null;
+  const [{ teachers }, prefill, current] = await Promise.all([
+    api('/api/staff/teachers'),
+    api(`/api/staff/debriefs/prefill${sessionId ? `?session=${sessionId}` : ''}`),
+    id ? api(`/api/staff/debriefs/${id}`).then((r) => r.debrief) : Promise.resolve(null),
+  ]);
+  // A debrief already exists for this class: open it instead of starting a second one.
+  if (!id && prefill.existing) return navigate(`/admin/debriefs/${prefill.existing.id}/edit`, { replace: true });
+  if (current && !canEditDebrief(current)) return navigate(`/admin/debriefs/${current.id}`, { replace: true });
+
+  const session = prefill.session;
+  const ranBy = current ? current.ranBy.split(',').map((n) => n.trim()).filter(Boolean) : [state.user.name];
+  const teacherNames = teachers.map((t) => t.name);
+  const otherNames = ranBy.filter((n) => !teacherNames.includes(n)).join(', ');
+  const values = {
+    classTitle: current?.classTitle ?? session?.title ?? '',
+    classDate: current?.classDate ?? session?.date ?? prefill.today,
+    attendeeCount: current?.attendeeCount ?? prefill.scannedCount ?? '',
+    pouchBalance: current && current.pouchBalancePence !== null ? (current.pouchBalancePence / 100).toFixed(2) : '',
+    feedback: current?.feedback ?? '',
+  };
+
+  mount(root, html`
+    ${head(current ? 'Edit class debrief' : 'Class debrief', html`<a class="btn btn-sm btn-ghost" href="/admin/debriefs">All debriefs</a>`)}
+    <form class="card form" id="debrief-form" novalidate>
+      ${session ? html`<div class="notice" style="margin:0">For <strong>${session.title}</strong>, ${formatDate(session.date, { weekday: 'long', day: 'numeric', month: 'long' })}${prefill.scannedCount !== null ? `. ${prefill.scannedCount} ${prefill.scannedCount === 1 ? 'person was' : 'people were'} scanned in.` : ''}</div>` : ''}
+      <div class="form-row">
+        <label class="field"><span>Class</span><input name="classTitle" value="${values.classTitle}" placeholder="e.g. Adults Bhangra"></label>
+        <label class="field"><span>Date of class</span><input name="classDate" type="date" value="${values.classDate}" required></label>
+      </div>
+      <fieldset class="field" style="border:0;padding:0;margin:0">
+        <legend class="field-label" style="margin-bottom:8px">Who ran the class</legend>
+        <div class="check-grid">
+          ${teachers.map((t) => html`<label class="checkbox"><input type="checkbox" name="ranBy" value="${t.name}" ${raw(ranBy.includes(t.name) ? 'checked' : '')}> ${t.name}</label>`)}
+        </div>
+        <input name="ranByOther" value="${otherNames}" placeholder="Anyone else (separate names with commas)" style="margin-top:10px">
+      </fieldset>
+      <div class="form-row">
+        <label class="field"><span>Number of attendees</span><input name="attendeeCount" type="number" inputmode="numeric" min="0" step="1" value="${values.attendeeCount}" required>
+          ${prefill.scannedCount !== null ? html`<small>${prefill.scannedCount} scanned in. Change this if some people weren't scanned.</small>` : ''}</label>
+        <label class="field"><span>LAB pouch balance (£)</span><input name="pouchBalance" inputmode="decimal" value="${values.pouchBalance}" placeholder="e.g. 125.50" required>
+          <small>Count the cash in the pouch at the end of class.${prefill.lastBalance && !current ? ` Last recorded: ${money(prefill.lastBalance.pence)} on ${formatDate(prefill.lastBalance.date, { day: 'numeric', month: 'short' })}.` : ''}</small></label>
+      </div>
+      <label class="field"><span>Class feedback</span><textarea name="feedback" rows="6" placeholder="How did the class go? What did you teach? Any issues, injuries, new starters or things to follow up?">${values.feedback}</textarea></label>
+      <div class="form-error" role="alert"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" type="submit">${current ? 'Save changes' : 'Submit debrief'}</button>
+        <a class="btn btn-ghost" href="${current ? `/admin/debriefs/${current.id}` : '/admin/debriefs'}">Cancel</a>
+      </div>
+    </form>`);
+
+  const form = root.querySelector('#debrief-form');
+  let dirty = false;
+  form.addEventListener('input', () => { dirty = true; });
+  setLeaveGuard((silent) => !dirty || (!silent && confirm('Your debrief has not been saved. Leave anyway?')));
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    formError(form, '');
+    const fd = new FormData(form);
+    const names = [...fd.getAll('ranBy'), ...String(fd.get('ranByOther') || '').split(',')].map((n) => n.trim()).filter(Boolean);
+    const body = {
+      sessionId: current ? undefined : session?.id,
+      classTitle: fd.get('classTitle'),
+      classDate: fd.get('classDate'),
+      ranBy: names,
+      attendeeCount: fd.get('attendeeCount') === '' ? NaN : Number(fd.get('attendeeCount')),
+      pouchBalance: fd.get('pouchBalance'),
+      feedback: fd.get('feedback'),
+    };
+    await withBusy(form.querySelector('[type=submit]'), async () => {
+      try {
+        const { debrief } = current
+          ? await api(`/api/staff/debriefs/${current.id}`, { method: 'PATCH', body })
+          : await api('/api/staff/debriefs', { method: 'POST', body });
+        dirty = false;
+        toast(current ? 'Debrief updated' : 'Thanks! Debrief saved.', 'success');
+        navigate(`/admin/debriefs/${debrief.id}`);
+      } catch (err) {
+        formError(form, err.message);
+        form.querySelector('.form-error').scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    });
+  });
+}
+
+async function debriefView(root, id) {
+  const { debrief: d } = await api(`/api/staff/debriefs/${id}`);
+  mount(root, html`
+    ${head(`Debrief: ${formatDate(d.classDate, { day: 'numeric', month: 'short', year: 'numeric' })}`, html`
+      <a class="btn btn-sm btn-ghost" href="/admin/debriefs">All debriefs</a>
+      ${canEditDebrief(d) ? html`<a class="btn btn-sm btn-primary" href="/admin/debriefs/${d.id}/edit">Edit</a>` : ''}
+      ${isAdmin() ? html`<button class="btn btn-sm btn-danger" id="delete-debrief">Delete</button>` : ''}`)}
+    <div class="stat-grid">
+      <div class="stat"><div class="stat-value">${d.attendeeCount}</div><div class="stat-label">Attendees</div></div>
+      <div class="stat"><div class="stat-value" style="font-size:1.5rem">${money(d.pouchBalancePence)}</div><div class="stat-label">LAB pouch balance</div></div>
+    </div>
+    <div class="card" style="margin-top:20px">
+      <dl class="detail-list">
+        <dt>Class</dt><dd>${d.classTitle || '-'}${d.sessionId ? html` · <a href="/admin/sessions/${d.sessionId}">see attendance</a>` : ''}</dd>
+        <dt>Date</dt><dd>${formatDate(d.classDate, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</dd>
+        <dt>Ran by</dt><dd>${d.ranBy}</dd>
+        <dt>Submitted by</dt><dd>${d.submittedByName || '-'} · ${formatDateTime(d.createdAt)}${d.updatedAt !== d.createdAt ? ` (edited ${formatDateTime(d.updatedAt)})` : ''}</dd>
+      </dl>
+      <h3 style="margin-top:20px">Class feedback</h3>
+      ${d.feedback ? html`<p class="bio-box">${d.feedback}</p>` : html`<p class="muted">No feedback written.</p>`}
+    </div>`);
+  root.querySelector('#delete-debrief')?.addEventListener('click', async () => {
+    if (!(await confirmDialog('Delete this class debrief?', { confirmLabel: 'Delete', danger: true }))) return;
+    await api(`/api/staff/debriefs/${d.id}`, { method: 'DELETE' });
+    toast('Debrief deleted');
+    navigate('/admin/debriefs');
+  });
+}
+
 // ---------- members ----------
 
 function rolePill(m) {
   if (!m.active) return html`<span class="pill pill-inactive">Inactive</span>`;
   if (m.role === 'admin') return html`<span class="pill pill-admin">Admin</span>`;
-  if (m.role === 'instructor') return html`<span class="pill pill-instructor">Instructor</span>`;
+  if (m.role === 'instructor') return html`<span class="pill pill-instructor">Teacher</span>`;
   return html`<span class="pill">Member</span>`;
 }
 
@@ -529,7 +756,7 @@ function addMemberDialog() {
     <label class="field"><span>Email (used to log in)</span><input name="email" type="email"></label>
     <label class="field"><span>Phone</span><input name="phone" type="tel"></label>
     ${isAdmin() ? html`<label class="field"><span>Role</span><select name="role">
-      <option value="member">Member</option><option value="instructor">Instructor (can scan attendance)</option><option value="admin">Admin (full access)</option>
+      <option value="member">Member</option><option value="instructor">Teacher (can scan attendance and write class debriefs)</option><option value="admin">Admin (full access)</option>
     </select></label>` : ''}
     <label class="field"><span>Password (optional)</span><input name="password" type="text" autocomplete="off"><small>Leave blank to generate one.</small></label>
     <label class="field"><span>Bio (visible to the member)</span><textarea name="bio" rows="2" maxlength="1000"></textarea></label>
@@ -607,7 +834,7 @@ async function memberDetail(root, id) {
             <label class="field"><span>Email</span><input name="email" type="email" value="${member.email}"></label>
             <div class="form-row">
               <label class="field"><span>Role</span><select name="role">
-                ${['member', 'instructor', 'admin'].map((r) => html`<option value="${r}" ${raw(member.role === r ? 'selected' : '')}>${r[0].toUpperCase() + r.slice(1)}</option>`)}
+                ${['member', 'instructor', 'admin'].map((r) => html`<option value="${r}" ${raw(member.role === r ? 'selected' : '')}>${ROLE_LABELS[r]}</option>`)}
               </select></label>
               <label class="field"><span>Status</span><select name="active">
                 <option value="1" ${raw(member.active ? 'selected' : '')}>Active</option>
