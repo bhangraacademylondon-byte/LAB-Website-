@@ -1,0 +1,31 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# In Render: New → Blueprint → pick this repository. You will be asked for
+# ADMIN_EMAIL and ADMIN_PASSWORD (the first admin login).
+services:
+  - type: web
+    name: london-academy-of-bhangra
+    runtime: node
+    region: frankfurt # closest Render region to London
+    plan: starter # a persistent disk needs a paid instance type
+    branch: claude/bhangra-academy-webapp-8rnqlh
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATA_DIR
+        value: /var/data
+      - key: TRUST_PROXY
+        value: "1"
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+    # Members, attendance, debriefs, website content and uploaded images live
+    # here, so they survive restarts and new deploys.
+    disk:
+      name: lab-data
+      mountPath: /var/data
+      sizeGB: 1

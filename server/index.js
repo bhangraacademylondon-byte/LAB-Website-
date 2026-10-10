@@ -180,6 +180,13 @@ app.use('/api', (req, res, next) => {
 
 // ---------- public API ----------
 
+// Used by the hosting platform to check the app is up (also checks the database).
+app.get('/healthz', (_req, res) => {
+  db.prepare('SELECT 1').get();
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ ok: true });
+});
+
 app.get('/api/content', (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.json(content.getContent());

@@ -23,7 +23,19 @@ On first start an admin account is created from `ADMIN_EMAIL` / `ADMIN_PASSWORD`
 
 Run the tests with `npm test`.
 
-### Deploying
+### Deploying to Render
+
+The repository includes a Render Blueprint (`render.yaml`). It sets up a Node web service in Frankfurt, the region closest to London. It also adds a 1 GB persistent disk for the database and uploaded images, and a health check.
+
+1. Sign in at [dashboard.render.com](https://dashboard.render.com) and connect your GitHub account, giving Render access to this repository.
+2. Click **New → Blueprint**, pick this repository and click **Connect**.
+3. Enter **ADMIN_EMAIL** and **ADMIN_PASSWORD** for the first admin login, then click **Apply** (Deploy Blueprint).
+4. When the deploy finishes, your site is live at `https://london-academy-of-bhangra.onrender.com` (or similar). Log in at `/login` with the admin details.
+5. Optional: add your own domain under the service's **Settings → Custom Domains**. Render provides the https certificate.
+
+The *Starter* instance type is needed because free instances cannot have a persistent disk, and without one all data would be lost on every deploy. New pushes to the branch deploy automatically.
+
+### Deploying elsewhere
 
 Any Node host works, for example Render, Railway, Fly.io or a small VPS. You can also use the included `Dockerfile`.
 
