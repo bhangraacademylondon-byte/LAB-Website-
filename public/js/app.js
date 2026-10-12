@@ -1,6 +1,6 @@
 import {
   api, html, raw, mount, esc, safeUrl, safeImg, formatText, toast, formatDate, formatDateTime, formatTime,
-  formError, formData, withBusy, initials,
+  formError, formData, withBusy, initials, el, openDialog,
 } from './lib.js';
 
 export const state = { content: null, user: null, stats: null };
@@ -125,6 +125,7 @@ function renderFooter() {
     </div>
     <div class="footer-bottom">
       <span>${site.copyrightText || `© ${year} ${site.name}`}</span>
+      <a href="/privacy">${state.content.privacy.title}</a>
     </div>`);
 }
 
@@ -550,6 +551,7 @@ function renderContact() {
             <label class="field"><span>Message</span><textarea name="message" required rows="5"></textarea></label>
             <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
             <div class="form-error" role="alert"></div>
+            <p class="small muted" style="margin:0">We only use your details to reply to you. See our <a href="/privacy">Privacy Policy</a>.</p>
             <button class="btn btn-primary" type="submit">${contact.submitLabel || 'Send message'}</button>
           </form>
         </div>` : ''}
@@ -598,6 +600,107 @@ function renderNotFound() {
     </div></section>`);
 }
 
+// ---------- privacy policy & consent ----------
+
+function renderPrivacy() {
+  const { privacy } = state.content;
+  setTitle(privacy.title);
+  mount(main(), html`
+    ${pageHero(privacy.title, privacy.intro)}
+    <section class="section">
+      <div class="container policy">
+        <p class="muted small">Version ${privacy.version}${privacy.lastUpdated ? ` · Last updated ${privacy.lastUpdated}` : ''}</p>
+        <div class="rich">${formatText(privacy.body)}</div>
+      </div>
+    </section>`);
+}
+
+// The age question, parent/guardian details and agreement checkboxes, shared by
+// the sign-up form and the "accept the policy" page.
+function consentFields(user = null) {
+  const { members } = state.content;
+  const under16 = Boolean(user?.under16);
+  return html`
+    <fieldset class="consent-box">
+      <legend class="field-label">Age of the member</legend>
+      <label class="checkbox"><input type="radio" name="ageGroup" value="16plus" ${raw(user?.privacyVersion && !under16 ? 'checked' : '')} required> 16 or over</label>
+      <label class="checkbox"><input type="radio" name="ageGroup" value="under16" ${raw(under16 ? 'checked' : '')}> Under 16</label>
+      <div class="guardian-fields" ${raw(under16 ? '' : 'hidden')}>
+        <p class="small" style="margin:4px 0 0">For members under 16, a <strong>parent or guardian</strong> must fill in this part.</p>
+        <label class="field"><span>Parent or guardian's full name</span><input name="guardianName" value="${user?.guardianName || ''}" autocomplete="off"></label>
+        <label class="field"><span>Parent or guardian's email</span><input name="guardianEmail" type="email" value="${user?.guardianEmail || ''}" autocomplete="off"></label>
+        <label class="field"><span>Parent or guardian's phone (optional)</span><input name="guardianPhone" type="tel" value="${user?.guardianPhone || ''}" autocomplete="off"></label>
+        <label class="checkbox consent-check"><input type="checkbox" name="guardianConsent"> <span>${members.guardianConsentText}</span></label>
+      </div>
+    </fieldset>
+    <label class="checkbox consent-check"><input type="checkbox" name="acceptPrivacy" required>
+      <span>${members.privacyCheckboxText} <a href="/privacy" target="_blank" rel="noopener">Read the Privacy Policy</a></span></label>`;
+}
+
+function bindConsentFields(form, onAgeChange) {
+  const update = () => {
+    const under16 = form.querySelector('input[name=ageGroup]:checked')?.value === 'under16';
+    form.querySelector('.guardian-fields').hidden = !under16;
+    onAgeChange?.(under16);
+  };
+  form.querySelectorAll('input[name=ageGroup]').forEach((r) => r.addEventListener('change', update));
+  update();
+}
+
+function readConsentForm(form) {
+  const fd = new FormData(form);
+  return {
+    acceptPrivacy: fd.get('acceptPrivacy') === 'on',
+    ageGroup: fd.get('ageGroup') || '',
+    guardianName: fd.get('guardianName') || '',
+    guardianEmail: fd.get('guardianEmail') || '',
+    guardianPhone: fd.get('guardianPhone') || '',
+    guardianConsent: fd.get('guardianConsent') === 'on',
+  };
+}
+
+function renderConsent() {
+  if (!state.user) return navigate('/login', { replace: true });
+  const { members, privacy } = state.content;
+  setTitle(privacy.title);
+  const next = nextPath();
+  if (!state.user.privacyRequired) return navigate(next, { replace: true });
+  const changed = Boolean(state.user.privacyVersion);
+  mount(main(), authShell(changed ? 'Our privacy policy has changed' : privacy.title, html`
+    <p class="center muted">${members.consentPageIntro}</p>
+    <div class="policy-scroll rich" tabindex="0">${formatText(privacy.body)}</div>
+    <form class="form" id="consent-form" novalidate style="margin-top:16px">
+      ${consentFields(state.user)}
+      <div class="form-error" role="alert"></div>
+      <button class="btn btn-primary btn-block" type="submit">Accept and continue</button>
+    </form>
+    <p class="center small" style="margin:16px 0 0"><button class="btn btn-ghost btn-sm" id="consent-logout">Log out instead</button></p>`));
+
+  const form = document.getElementById('consent-form');
+  bindConsentFields(form);
+  document.getElementById('consent-logout').addEventListener('click', logout);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    formError(form, '');
+    await withBusy(form.querySelector('button[type=submit]'), async () => {
+      try {
+        const { user } = await api('/api/me/privacy', { method: 'POST', body: readConsentForm(form) });
+        state.user = user;
+        toast('Thank you', 'success');
+        navigate(next, { replace: true });
+      } catch (err) {
+        formError(form, err.message);
+      }
+    });
+  });
+}
+
+// Where to go after logging in: the consent page first if the policy needs accepting.
+function afterLogin(user, next) {
+  if (user.privacyRequired) return navigate(`/privacy-consent?next=${encodeURIComponent(next)}`, { replace: true });
+  navigate(next, { replace: true });
+}
+
 // ---------- auth & member pages ----------
 
 function authShell(title, inner) {
@@ -640,7 +743,7 @@ function renderLogin() {
       try {
         const { user } = await api('/api/auth/login', { method: 'POST', body: formData(form) });
         state.user = user;
-        navigate(nextPath(), { replace: true });
+        afterLogin(user, nextPath());
       } catch (err) {
         formError(form, err.message);
       }
@@ -662,22 +765,26 @@ function renderRegister() {
     <p class="center muted">${members.registerIntro}</p>
     <form class="form" id="register-form" novalidate>
       <label class="field"><span>Full name</span><input name="name" required autocomplete="name"></label>
-      <label class="field"><span>Email</span><input name="email" type="email" required autocomplete="email"></label>
+      <label class="field"><span>Email</span><input name="email" type="email" autocomplete="email"><small id="email-hint" hidden>For under 16s this can be a parent's email. Leave it blank if a brother or sister already uses that email; you will then log in with the member ID you are given.</small></label>
       <label class="field"><span>Phone (optional)</span><input name="phone" type="tel" autocomplete="tel"></label>
       <label class="field"><span>About you (optional)</span><textarea name="bio" rows="3" maxlength="1000" placeholder="${members.bioPrompt}"></textarea></label>
       <label class="field"><span>Password</span><input name="password" type="password" required minlength="8" autocomplete="new-password"><small>At least 8 characters.</small></label>
+      ${consentFields()}
       <div class="form-error" role="alert"></div>
       <button class="btn btn-primary btn-block" type="submit">Create account</button>
     </form>
     <p class="center" style="margin:16px 0 0">Already a member? <a href="/login">Log in</a></p>`));
 
   const form = document.getElementById('register-form');
+  bindConsentFields(form, (under16) => { document.getElementById('email-hint').hidden = !under16; });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     formError(form, '');
     await withBusy(form.querySelector('button[type=submit]'), async () => {
       try {
-        const { user } = await api('/api/auth/register', { method: 'POST', body: formData(form) });
+        const f = formData(form);
+        const body = { name: f.name, email: f.email, phone: f.phone, bio: f.bio, password: f.password, ...readConsentForm(form) };
+        const { user } = await api('/api/auth/register', { method: 'POST', body });
         state.user = user;
         toast(`${members.welcomeMessage} (${user.memberId})`, 'success', 6000);
         navigate('/account', { replace: true });
@@ -774,6 +881,18 @@ async function renderAccount() {
                 <div><button class="btn btn-primary" type="submit">Update password</button></div>
               </form>
             </div>
+            <div class="card" style="margin-top:20px" id="privacy-card">
+              <h3>Your data &amp; privacy</h3>
+              ${u.privacyRequired
+                ? html`<div class="notice warn">You have not accepted the current Privacy Policy. <a href="/privacy-consent?next=/account">Review and accept it</a>.</div>`
+                : html`<p class="small muted">You accepted Privacy Policy version ${u.privacyVersion} on ${formatDateTime(u.privacyAcceptedAt, { day: 'numeric', month: 'long', year: 'numeric' })}.</p>`}
+              ${u.under16 ? html`<p class="small">Under 16 · Parent or guardian: <strong>${u.guardianName}</strong> (${u.guardianEmail}${u.guardianPhone ? `, ${u.guardianPhone}` : ''})</p>` : ''}
+              <div class="btn-row">
+                <a class="btn btn-sm btn-outline" href="/privacy">Read the Privacy Policy</a>
+                <a class="btn btn-sm btn-outline" href="/api/me/export" download>Download my data</a>
+                <button class="btn btn-sm btn-danger" id="delete-account" type="button">Delete my account</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -781,6 +900,7 @@ async function renderAccount() {
 
   document.getElementById('logout').addEventListener('click', logout);
   document.getElementById('print-card').addEventListener('click', () => window.print());
+  document.getElementById('delete-account').addEventListener('click', deleteAccountDialog);
   const profile = document.getElementById('profile-form');
   profile.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -804,6 +924,31 @@ async function renderAccount() {
     } catch (err) {
       formError(pw, err.message);
     }
+  });
+}
+
+function deleteAccountDialog() {
+  const form = el('form', { class: 'form' });
+  form.innerHTML = html`
+    <p>This permanently deletes your account, member ID and attendance history. It cannot be undone.</p>
+    <p class="small muted">Tip: use <strong>Download my data</strong> first if you want a copy.</p>
+    <label class="field"><span>Enter your password to confirm</span><input name="password" type="password" required autocomplete="current-password"></label>
+    <div class="form-error" role="alert"></div>
+    <button class="btn btn-danger" type="submit">Delete my account</button>`.s;
+  const { close } = openDialog('Delete your account?', form);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await withBusy(form.querySelector('[type=submit]'), async () => {
+      try {
+        await api('/api/me/delete', { method: 'POST', body: { password: form.password.value } });
+        close();
+        state.user = null;
+        toast('Your account has been deleted.', 'success', 5000);
+        navigate('/');
+      } catch (err) {
+        formError(form, err.message);
+      }
+    });
   });
 }
 
@@ -867,8 +1012,14 @@ async function route() {
     '/login': renderLogin,
     '/register': renderRegister,
     '/account': renderAccount,
+    '/privacy': renderPrivacy,
+    '/privacy-consent': renderConsent,
   };
   try {
+    const gated = path === '/account' || path === '/admin' || path.startsWith('/admin/');
+    if (gated && state.user?.privacyRequired && state.user.role !== 'admin') {
+      return navigate(`/privacy-consent?next=${encodeURIComponent(location.pathname + location.search)}`, { replace: true });
+    }
     if (routes[path]) {
       const id = path === '/' ? 'home' : path.slice(1);
       if (navItem(id) && !navItem(id).visible && id !== 'home') renderNotFound();
@@ -884,6 +1035,10 @@ async function route() {
     if (err.status === 401) {
       state.user = null;
       return navigate(`/login?next=${encodeURIComponent(path)}`, { replace: true });
+    }
+    if (err.code === 'PRIVACY_REQUIRED') {
+      if (state.user) state.user.privacyRequired = true;
+      return navigate(`/privacy-consent?next=${encodeURIComponent(path)}`, { replace: true });
     }
     console.error(err);
     mount(main(), html`<section class="section"><div class="container empty"><h2>Something went wrong</h2><p>${err.message}</p><a class="btn btn-primary" href="${location.pathname}">Try again</a></div></section>`);

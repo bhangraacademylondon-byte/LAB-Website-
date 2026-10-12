@@ -41,7 +41,7 @@ function client() {
 
 test('members whose email contains a member-ID-like string can still log in by email', async () => {
   const email = 'slab234567@test.local';
-  const reg = await client()('POST', '/api/auth/register', { name: 'Slab', email, password: 'password1' });
+  const reg = await client()('POST', '/api/auth/register', { name: 'Slab', email, password: 'password1', acceptPrivacy: true, ageGroup: '16plus' });
   assert.equal(reg.status, 201);
   const login = await client()('POST', '/api/auth/login', { identifier: email, password: 'password1' });
   assert.equal(login.status, 200);
@@ -66,7 +66,7 @@ test('scripts and styles are revalidated so updates are never mixed with stale f
 test('sign-ups are rate limited per address', async () => {
   let last;
   for (let i = 0; i < 12; i++) {
-    last = await client()('POST', '/api/auth/register', { name: `Spam ${i}`, email: `spam${i}@test.local`, password: 'password1' });
+    last = await client()('POST', '/api/auth/register', { name: `Spam ${i}`, email: `spam${i}@test.local`, password: 'password1', acceptPrivacy: true, ageGroup: '16plus' });
   }
   assert.equal(last.status, 429);
 });

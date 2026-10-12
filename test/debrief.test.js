@@ -43,6 +43,8 @@ async function login(identifier, password) {
   const c = client();
   const r = await c('POST', '/api/auth/login', { identifier, password });
   assert.equal(r.status, 200);
+  // Accounts created by staff accept the privacy policy at their first login.
+  if (r.body.user.privacyRequired) await c('POST', '/api/me/privacy', { acceptPrivacy: true, ageGroup: '16plus' });
   return c;
 }
 

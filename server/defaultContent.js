@@ -164,6 +164,119 @@ module.exports = {
     registrationClosedText: 'Online registration is currently closed. Please speak to a teacher at your next class and they will set up your account.',
     qrHint: 'Show this code to your teacher at the start of each class.',
     welcomeMessage: 'Welcome! Your member ID is shown below.',
+    privacyCheckboxText: 'I have read and agree to the Privacy Policy.',
+    guardianConsentText: 'I am the parent or guardian of this child. I give my consent for the London Academy of Bhangra to create this account and use their information as described in the Privacy Policy.',
+    consentPageIntro: 'Before you continue, please read and accept our Privacy Policy.',
+  },
+
+  privacy: {
+    title: 'Privacy policy',
+    // Change the version whenever the policy changes in a way people should
+    // agree to again. Everyone is then asked to accept it at their next login.
+    version: '2026-10',
+    lastUpdated: '12 October 2026',
+    intro: 'How the London Academy of Bhangra collects, uses and protects your information, including information about children.',
+    body: `## Who we are
+
+The London Academy of Bhangra ("LAB", "we", "us") runs Bhangra dance classes in East London. We are responsible for the personal information described in this policy. If you have any questions, contact us using the details on our [Contact page](/contact) or speak to a teacher at class.
+
+## What information we collect
+
+When you create an account or attend classes we collect:
+
+- **Account details:** your name, email address, phone number (optional), password (stored in encrypted form so nobody can read it) and the short bio you choose to write.
+- **Your member ID and QR code**, which we use to register you at classes.
+- **Attendance records:** which classes you attended and when, and which teacher checked you in.
+- **For members under 16:** the name, email address and phone number of a parent or guardian, and a record of their consent.
+- **Your privacy choices:** which version of this policy you accepted and when.
+- **Messages** you send us through the contact form.
+
+Teachers also record class debriefs (who ran the class, the number of attendees, the class cash balance and general feedback). Debriefs do not list individual students.
+
+We do not collect payment card details, and we do not ask for sensitive information such as health details through the website. If you tell a teacher about a medical condition so they can keep you safe, we will only use it for that purpose.
+
+## How we use your information
+
+We use your information to:
+
+- create and manage your membership account;
+- register attendance at classes and show you your attendance history;
+- contact you, or your parent or guardian, about classes, changes and safety;
+- keep accurate records of classes, attendance and money collected;
+- keep our classes and website safe and secure;
+- reply to messages you send us.
+
+We do **not** sell your information, use it for advertising or share it with other organisations for their marketing.
+
+## Our legal reasons for using your information
+
+Under UK data protection law (the UK GDPR and the Data Protection Act 2018) we rely on:
+
+- **Contract:** to provide the classes and membership you have signed up for.
+- **Legitimate interests:** to keep attendance and class records, run the academy safely and protect our website.
+- **Consent:** for members under 16, we rely on the consent of a parent or guardian. You can withdraw consent at any time.
+- **Legal obligation:** to keep financial records where the law requires it.
+
+## Children under 16
+
+We welcome dancers of all ages, and we take extra care with children's information.
+
+- A child under 16 can only have an account if a **parent or guardian** creates it or gives their consent during sign-up. We ask for the parent or guardian's name and contact details.
+- We only collect the information we need to run classes and keep children safe. We use it only for that purpose.
+- We contact the parent or guardian about anything important to do with the child's membership.
+- Children's information is only seen by LAB teachers and administrators. It is never published on our website or social media.
+- We will **always ask separately** before posting photos or videos in which a child can be identified, and we will respect any request to remove them.
+- A parent or guardian can ask to see, correct or delete their child's information at any time.
+
+If we find that a child under 16 has created an account without a parent or guardian's consent, we will suspend the account and contact them, or delete it.
+
+## Who can see your information
+
+- **LAB teachers** can see members' names, member IDs, contact details, bios and attendance so they can run classes.
+- **LAB administrators** can see and manage all account information.
+- **Our website hosting provider** stores the information on secure servers for us. They are only allowed to use it to provide their service to us.
+
+We will only share information with anyone else if the law requires it (for example, with the police or a court), or to protect someone's safety.
+
+## Other services our website uses
+
+- **Instagram:** our Gallery page shows posts from the academy's own Instagram account. We do not send any member information to Instagram.
+- **Google Fonts and Google Maps:** our pages load fonts and a map from Google. Google will receive your device's IP address when this happens, under Google's own privacy policy.
+
+## Cookies
+
+We use one essential cookie to keep you logged in. It does not track you and is not used for advertising. We do not use analytics or advertising cookies.
+
+## How long we keep your information
+
+- **Account and attendance records:** while you are a member. If an account has not been used for two years, we will delete it or remove the personal details.
+- **Parent or guardian consent records:** for as long as the child's account exists.
+- **Class debriefs and financial records:** up to six years, to meet record-keeping requirements.
+- **Contact form messages:** up to 12 months.
+
+You can delete your account yourself at any time from **My account**.
+
+## Your rights
+
+You have the right to:
+
+- **access** your information. You can download it from **My account → Download my data**;
+- **correct** information that is wrong;
+- **delete** your account and information;
+- **object to** or **restrict** how we use your information;
+- **withdraw consent** where we rely on it.
+
+To use any of these rights, contact us or speak to a teacher. We will respond within one month. A parent or guardian can use these rights for a child under 16.
+
+If you are unhappy with how we have handled your information, please tell us first so we can put it right. You also have the right to complain to the Information Commissioner's Office (ICO) at [ico.org.uk](https://ico.org.uk).
+
+## Keeping your information safe
+
+Passwords are encrypted, the website uses a secure (https) connection, and only teachers and administrators can see member information. Please keep your password private.
+
+## Changes to this policy
+
+If we make important changes, we will update the version and date at the top of this page. We will ask you to read and accept the new policy the next time you log in.`,
   },
 
   customPages: [],

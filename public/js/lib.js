@@ -46,26 +46,35 @@ export function safeImg(url) {
 }
 
 // Turns admin-entered plain text into safe HTML: paragraphs, line breaks,
-// **bold**, *italic* and [links](https://...).
+// **bold**, *italic*, [links](https://...), "## " headings and "- " bullet lists.
 export function formatText(text) {
   const paragraphs = String(text || '').trim().split(/\n\s*\n/);
   return raw(
     paragraphs
       .filter(Boolean)
       .map((p) => {
-        let s = esc(p);
-        s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-        s = s.replace(/(^|[^*])\*(?!\s)(.+?)\*(?!\*)/g, '$1<em>$2</em>');
-        s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, label, href) => {
-          const decoded = href.replace(/&amp;/g, '&');
-          const safe = safeUrl(decoded);
-          const external = /^https?:/i.test(safe);
-          return `<a href="${esc(safe)}"${external ? ' target="_blank" rel="noopener"' : ''}>${label}</a>`;
-        });
-        return `<p>${s.replace(/\n/g, '<br>')}</p>`;
+        if (/^##\s+/.test(p)) return `<h3>${inline(p.replace(/^##\s+/, ''))}</h3>`;
+        const lines = p.split('\n');
+        if (lines.every((l) => /^\s*[-•]\s+/.test(l))) {
+          return `<ul>${lines.map((l) => `<li>${inline(l.replace(/^\s*[-•]\s+/, ''))}</li>`).join('')}</ul>`;
+        }
+        return `<p>${inline(p).replace(/\n/g, '<br>')}</p>`;
       })
       .join('')
   );
+}
+
+function inline(text) {
+  let s = esc(text);
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/(^|[^*])\*(?!\s)(.+?)\*(?!\*)/g, '$1<em>$2</em>');
+  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, label, href) => {
+    const decoded = href.replace(/&amp;/g, '&');
+    const safe = safeUrl(decoded);
+    const external = /^https?:/i.test(safe);
+    return `<a href="${esc(safe)}"${external ? ' target="_blank" rel="noopener"' : ''}>${label}</a>`;
+  });
+  return s;
 }
 
 export function mount(target, content) {
@@ -93,6 +102,7 @@ export async function api(path, { method = 'GET', body, form } = {}) {
   if (!res.ok) {
     const err = new Error((isJson && data.error) || `Request failed (${res.status})`);
     err.status = res.status;
+    err.code = isJson ? data.code : undefined;
     throw err;
   }
   return data;

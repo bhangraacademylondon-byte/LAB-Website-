@@ -6,6 +6,7 @@ A mobile-friendly website and members' app for the London Academy of Bhangra (LA
 - **Instagram gallery:** shows the latest posts from @londonacademyofbhangra automatically.
 - **Member accounts:** members sign up online, write a short bio, and get a unique member ID (e.g. `LAB-7K3Q9X`) and QR code. They can track their attendance: totals, a 6-month chart and a full history.
 - **QR scanner for teachers:** scan members' QR codes with a phone camera to record attendance for each class. On a phone the camera opens straight away. *Scan from a photo* and manual check-in are also available.
+- **Privacy policy and consent:** sign-up requires accepting the Privacy Policy; under 16s need a parent or guardian's consent.
 - **Class debriefs:** after each class a teacher logs who ran it, the date, the number of attendees, the LAB pouch balance and class feedback.
 - **Admin page:** edit every part of the website: all text, headings and buttons, images, logo, colours, fonts, menu tabs, home page sections (show or hide), timetable, prices, contact details, member page wording and extra pages. Also manage members, sessions, CSV exports and contact-form messages.
 
@@ -79,6 +80,14 @@ When the class ends, the teacher taps **Finish class & write debrief** on the sc
 - class feedback
 
 There is one debrief per class. The teacher who wrote it, or an admin, can edit it; only admins can delete. **Admin → Class debriefs** lists them with the latest pouch balance and average attendance, and exports to CSV. The dashboard shows how many recent classes still need a debrief.
+
+## Privacy policy and consent
+
+- The **Privacy Policy** page (`/privacy`, linked in the footer) is a starting draft for UK data protection law (UK GDPR), with a section on children under 16. Edit it in **Admin → Privacy policy**. Check it matches how the academy really works (especially how long you keep information and photo consent), and consider having it reviewed.
+- **Sign-up** requires ticking "I have read and agree to the Privacy Policy" and saying whether the member is 16 or over. For **under 16s**, a parent or guardian must give their name and email and tick a consent box. Brothers and sisters can share a parent's email by leaving the child's own email blank; they then log in with their member ID.
+- **People added by staff** (including teachers) must accept the policy at their first login before they can use their account or the scanner.
+- **Changing the policy version** in Admin asks everyone to accept the new version at their next login. Every acceptance is recorded (version and date), and shown on the member's admin page.
+- **Members' rights:** in **My account → Your data & privacy**, members can download all their data or delete their account.
 
 ## Connecting Instagram
 

@@ -28,6 +28,7 @@ const NAV = [
   { path: 'content/gallery', label: 'Gallery', icon: '🖼️', admin: true },
   { path: 'content/contact', label: 'Contact page', icon: '✉️', admin: true },
   { path: 'content/members', label: 'Member pages', icon: '🔑', admin: true },
+  { path: 'content/privacy', label: 'Privacy policy', icon: '🔒', admin: true },
   { path: 'content/customPages', label: 'Extra pages', icon: '📄', admin: true },
   { path: 'instagram', label: 'Instagram', icon: '📸', admin: true },
   { path: 'messages', label: 'Messages', icon: '💬', admin: true },
@@ -82,6 +83,7 @@ export async function render(parts) {
 async function dashboard(root) {
   const [stats, today] = await Promise.all([api('/api/staff/stats'), api('/api/staff/today')]);
   mount(root, html`
+    ${state.user.privacyRequired ? html`<div class="notice warn">You have not accepted the current Privacy Policy yet. <a href="/privacy-consent?next=/admin">Review and accept it</a>${isAdmin() ? html`, or <a href="/admin/content/privacy">edit the policy</a> first` : ''}.</div>` : ''}
     ${head(`Welcome, ${state.user.name.split(' ')[0]}`, html`<a class="btn btn-accent" href="/admin/scanner">📷 Scan attendance</a>`)}
     <div class="stat-grid">
       <div class="stat"><div class="stat-value">${stats.members}</div><div class="stat-label">Active members</div></div>
@@ -723,7 +725,7 @@ async function membersList(root) {
         <tr class="clickable" data-href="/admin/members/${m.id}">
           <td><a href="/admin/members/${m.id}"><strong>${m.name}</strong></a><div class="muted small">${m.email}</div></td>
           <td><code>${m.memberId}</code></td>
-          <td>${rolePill(m)}</td>
+          <td>${rolePill(m)}${m.under16 ? html` <span class="pill pill-u16">Under 16</span>` : ''}</td>
           <td>${m.attended}</td>
           <td>${m.lastAttended ? formatDate(m.lastAttended, { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}</td>
         </tr>`)}</tbody>
@@ -759,16 +761,25 @@ function addMemberDialog() {
       <option value="member">Member</option><option value="instructor">Teacher (can scan attendance and write class debriefs)</option><option value="admin">Admin (full access)</option>
     </select></label>` : ''}
     <label class="field"><span>Password (optional)</span><input name="password" type="text" autocomplete="off"><small>Leave blank to generate one.</small></label>
+    <label class="checkbox"><input type="checkbox" name="under16"> Under 16</label>
+    <div class="guardian-fields" hidden>
+      <label class="field"><span>Parent or guardian's name</span><input name="guardianName"></label>
+      <label class="field"><span>Parent or guardian's email</span><input name="guardianEmail" type="email"></label>
+      <label class="field"><span>Parent or guardian's phone</span><input name="guardianPhone" type="tel"></label>
+      <small class="muted">The parent or guardian will be asked to give consent when the account is first used.</small>
+    </div>
     <label class="field"><span>Bio (visible to the member)</span><textarea name="bio" rows="2" maxlength="1000"></textarea></label>
     <label class="field"><span>Notes (staff only)</span><textarea name="notes" rows="2"></textarea></label>
     <div class="form-error"></div>
     <button class="btn btn-primary" type="submit">Create member</button>`.s;
   const { close } = openDialog('Add member', form);
+  form.under16.addEventListener('change', () => { form.querySelector('.guardian-fields').hidden = !form.under16.checked; });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     await withBusy(form.querySelector('[type=submit]'), async () => {
       try {
-        const { member, password } = await api('/api/staff/members', { method: 'POST', body: formData(form) });
+        const body = { ...formData(form), under16: form.under16.checked };
+        const { member, password } = await api('/api/staff/members', { method: 'POST', body });
         close();
         credentialsDialog(member, password, 'Member created');
       } catch (err) {
@@ -822,6 +833,13 @@ async function memberDetail(root, id) {
           <h3>Last 6 months</h3>
           ${monthlyChart(stats.monthly)}
         </div>
+        <div class="card" style="margin-top:20px">
+          <h3>Privacy &amp; consent</h3>
+          ${member.privacyVersion
+            ? html`<p class="small">Accepted Privacy Policy version <strong>${member.privacyVersion}</strong> on ${formatDateTime(member.privacyAcceptedAt, { day: 'numeric', month: 'long', year: 'numeric' })}.${member.privacyRequired ? ' A newer version is waiting to be accepted.' : ''}</p>`
+            : html`<p class="small">Has not accepted the Privacy Policy yet. They will be asked at their next login.</p>`}
+          ${member.under16 ? html`<p class="small"><span class="pill pill-u16">Under 16</span> Parent or guardian: <strong>${member.guardianName || 'not given'}</strong>${member.guardianEmail ? html` · <a href="mailto:${member.guardianEmail}">${member.guardianEmail}</a>` : ''}${member.guardianPhone ? html` · <a href="tel:${member.guardianPhone}">${member.guardianPhone}</a>` : ''}</p>` : ''}
+        </div>
         ${!isAdmin() ? html`<div class="card" style="margin-top:20px"><h3>Bio</h3>${member.bio ? html`<p class="bio-box">${member.bio}</p>` : html`<p class="muted">No bio yet.</p>`}</div>` : ''}
         ${isAdmin() ? html`
         <div class="card" style="margin-top:20px">
@@ -840,6 +858,12 @@ async function memberDetail(root, id) {
                 <option value="1" ${raw(member.active ? 'selected' : '')}>Active</option>
                 <option value="0" ${raw(!member.active ? 'selected' : '')}>Inactive</option>
               </select></label>
+            </div>
+            <label class="checkbox"><input type="checkbox" name="under16" ${raw(member.under16 ? 'checked' : '')}> Under 16</label>
+            <div class="form-row">
+              <label class="field"><span>Parent or guardian's name</span><input name="guardianName" value="${member.guardianName}"></label>
+              <label class="field"><span>Parent or guardian's email</span><input name="guardianEmail" type="email" value="${member.guardianEmail}"></label>
+              <label class="field"><span>Parent or guardian's phone</span><input name="guardianPhone" value="${member.guardianPhone}"></label>
             </div>
             <label class="field"><span>Bio (written by the member)</span><textarea name="bio" rows="3" maxlength="1000">${member.bio}</textarea></label>
             <label class="field"><span>Notes (staff only)</span><textarea name="notes" rows="3">${member.notes}</textarea></label>
@@ -872,6 +896,7 @@ async function memberDetail(root, id) {
     e.preventDefault();
     const body = formData(form);
     body.active = body.active === '1';
+    body.under16 = form.under16.checked;
     try {
       await api(`/api/admin/members/${member.id}`, { method: 'PATCH', body });
       toast('Member saved', 'success');
@@ -1115,6 +1140,22 @@ const SCHEMAS = {
       { key: 'registrationClosedText', label: 'Text shown when sign-up is turned off', type: 'textarea' },
       h('Member account page'),
       { key: 'qrHint', label: 'Text under the QR code' },
+      h('Privacy agreement'),
+      { key: 'privacyCheckboxText', label: 'Privacy Policy checkbox text', type: 'textarea' },
+      { key: 'guardianConsentText', label: 'Parent or guardian consent checkbox text (under 16s)', type: 'textarea' },
+      { key: 'consentPageIntro', label: 'Text at the top of the "accept the policy" page', type: 'textarea' },
+    ],
+  },
+  privacy: {
+    title: 'Privacy policy',
+    view: '/privacy',
+    note: 'This is a starting draft written for UK data protection law (UK GDPR). Please check it matches how the academy really works, especially how long you keep information and photo consent, and consider having it reviewed by someone qualified. Changing the version asks every member and teacher to accept the policy again at their next login.',
+    fields: [
+      { key: 'title', label: 'Page title' },
+      { key: 'version', label: 'Version', hint: 'Change this (e.g. to 2027-01) when you make changes people should agree to again.' },
+      { key: 'lastUpdated', label: 'Last updated (shown on the page)' },
+      { key: 'intro', label: 'Introduction', type: 'textarea' },
+      { key: 'body', label: 'Policy', type: 'rich', hint: 'Start a line with "## " for a heading and "- " for a bullet point. Leave a blank line between paragraphs. Use **bold** and [link text](https://example.com).' },
     ],
   },
   customPages: {

@@ -98,6 +98,31 @@ db.exec(`
 // Columns added after the first release. SQLite has no ADD COLUMN IF NOT EXISTS.
 const userColumns = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
 if (!userColumns.includes('bio')) db.exec("ALTER TABLE users ADD COLUMN bio TEXT NOT NULL DEFAULT ''");
+// Privacy policy acceptance. Under-16s need a parent or guardian's consent.
+for (const [name, type] of [
+  ['privacy_version', 'TEXT'],
+  ['privacy_accepted_at', 'TEXT'],
+  ['under_16', 'INTEGER NOT NULL DEFAULT 0'],
+  ['guardian_name', 'TEXT'],
+  ['guardian_email', 'TEXT'],
+  ['guardian_phone', 'TEXT'],
+]) {
+  if (!userColumns.includes(name)) db.exec(`ALTER TABLE users ADD COLUMN ${name} ${type}`);
+}
+
+// Record of every acceptance, so the academy can show who agreed to which version and when.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS privacy_consents (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    version        TEXT NOT NULL,
+    under_16       INTEGER NOT NULL DEFAULT 0,
+    guardian_name  TEXT,
+    guardian_email TEXT,
+    accepted_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_consents_user ON privacy_consents(user_id);
+`);
 
 function getSetting(key, fallback = null) {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);

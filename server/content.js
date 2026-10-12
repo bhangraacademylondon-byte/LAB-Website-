@@ -101,6 +101,8 @@ function normalise(content) {
     });
   }
   merged.nav = normaliseNav(merged.nav, merged.customPages);
+  // An empty version would let everyone skip the privacy policy, so never allow it.
+  merged.privacy.version = String(merged.privacy.version || '').trim().slice(0, 40) || defaults.privacy.version;
   return merged;
 }
 

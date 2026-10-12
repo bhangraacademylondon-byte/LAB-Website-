@@ -54,7 +54,7 @@ test('mutating requests without the CSRF header are rejected', async () => {
 
 test('member registers, gets an ID, and is scanned into a session', async () => {
   const member = client();
-  const reg = await member('POST', '/api/auth/register', { name: 'Simran', email: 'simran@test.local', password: 'password1' });
+  const reg = await member('POST', '/api/auth/register', { name: 'Simran', email: 'simran@test.local', password: 'password1', acceptPrivacy: true, ageGroup: '16plus' });
   assert.equal(reg.status, 201);
   assert.match(reg.body.user.memberId, /^LAB-[2-9A-HJ-NP-Z]{6}$/);
 
@@ -97,6 +97,7 @@ test('instructors cannot edit content or create admins', async () => {
 
   const teacher = client();
   await teacher('POST', '/api/auth/login', { identifier: 'teacher@test.local', password: 'password1' });
+  await teacher('POST', '/api/me/privacy', { acceptPrivacy: true, ageGroup: '16plus' });
   assert.equal((await teacher('PUT', '/api/admin/content', {})).status, 403);
   const created = await teacher('POST', '/api/staff/members', { name: 'Sneaky', role: 'admin' });
   assert.equal(created.body.member.role, 'member');
@@ -130,7 +131,7 @@ test('member responses never include staff notes', async () => {
 
 test('members can add a bio at sign-up and edit it later; monthly stats are returned', async () => {
   const member = client();
-  const reg = await member('POST', '/api/auth/register', { name: 'Bio Person', email: 'bio@test.local', password: 'password1', bio: 'Danced giddha for 3 years' });
+  const reg = await member('POST', '/api/auth/register', { name: 'Bio Person', email: 'bio@test.local', password: 'password1', acceptPrivacy: true, ageGroup: '16plus', bio: 'Danced giddha for 3 years' });
   assert.equal(reg.body.user.bio, 'Danced giddha for 3 years');
   const upd = await member('PATCH', '/api/me', { name: 'Bio Person', phone: '', bio: 'Now learning dhol too' });
   assert.equal(upd.body.user.bio, 'Now learning dhol too');
@@ -150,7 +151,7 @@ test('online registration can be switched off from the member pages content', as
   const { body: content } = await admin('GET', '/api/content');
   content.members.allowRegistration = false;
   await admin('PUT', '/api/admin/content', content);
-  const res = await client()('POST', '/api/auth/register', { name: 'Late', email: 'late@test.local', password: 'password1' });
+  const res = await client()('POST', '/api/auth/register', { name: 'Late', email: 'late@test.local', password: 'password1', acceptPrivacy: true, ageGroup: '16plus' });
   assert.equal(res.status, 403);
   content.members.allowRegistration = true;
   await admin('PUT', '/api/admin/content', content);

@@ -54,7 +54,47 @@ function publicUser(u, { includeNotes = false } = {}) {
     bio: u.bio || '',
     notes: includeNotes ? u.notes || '' : undefined,
     createdAt: u.created_at,
+    under16: Boolean(u.under_16),
+    guardianName: u.guardian_name || '',
+    guardianEmail: u.guardian_email || '',
+    guardianPhone: u.guardian_phone || '',
+    privacyVersion: u.privacy_version || '',
+    privacyAcceptedAt: u.privacy_accepted_at || '',
+    privacyRequired: u.privacy_version !== currentPrivacyVersion(),
   };
+}
+
+// ---------- privacy policy consent ----------
+
+function currentPrivacyVersion() {
+  return content.getContent().privacy.version;
+}
+
+// Reads the privacy agreement from a sign-up or consent form. Members under 16
+// need a parent or guardian's details and their explicit consent.
+function readConsent(body) {
+  if (body.acceptPrivacy !== true) throw new HttpError(400, 'Please read and accept the Privacy Policy to continue.');
+  if (!['16plus', 'under16'].includes(body.ageGroup)) throw new HttpError(400, 'Please tell us whether the member is 16 or over, or under 16.');
+  const under16 = body.ageGroup === 'under16';
+  if (!under16) return { under16: false, guardianName: null, guardianEmail: null, guardianPhone: null };
+  const guardianName = str(body.guardianName, 120);
+  const guardianEmail = str(body.guardianEmail, 200);
+  const guardianPhone = str(body.guardianPhone, 40);
+  if (!guardianName) throw new HttpError(400, "Please enter the parent or guardian's name.");
+  if (!EMAIL_RE.test(guardianEmail)) throw new HttpError(400, "Please enter the parent or guardian's email address.");
+  if (body.guardianConsent !== true) throw new HttpError(400, 'A parent or guardian must give their consent for members under 16.');
+  return { under16: true, guardianName, guardianEmail, guardianPhone: guardianPhone || null };
+}
+
+function recordConsent(userId, consent) {
+  const version = currentPrivacyVersion();
+  db.prepare(
+    `UPDATE users SET privacy_version = ?, privacy_accepted_at = datetime('now'), under_16 = ?,
+            guardian_name = ?, guardian_email = ?, guardian_phone = ? WHERE id = ?`
+  ).run(version, consent.under16 ? 1 : 0, consent.guardianName, consent.guardianEmail, consent.guardianPhone, userId);
+  db.prepare('INSERT INTO privacy_consents (user_id, version, under_16, guardian_name, guardian_email) VALUES (?, ?, ?, ?, ?)').run(
+    userId, version, consent.under16 ? 1 : 0, consent.guardianName, consent.guardianEmail
+  );
 }
 
 function memberStats(userId) {
@@ -178,6 +218,20 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+// Logged-in members and teachers must accept the current privacy policy before
+// using their account. Admins are not blocked (so they can edit the policy),
+// but are asked to accept it in the app too.
+const PRIVACY_EXEMPT = new Set([
+  'GET /me', 'POST /me/privacy', 'GET /me/export', 'POST /me/delete',
+  'POST /auth/logout', 'POST /auth/login', 'POST /auth/register',
+  'GET /content', 'GET /instagram', 'POST /contact',
+]);
+app.use('/api', (req, res, next) => {
+  if (!req.user || req.user.role === 'admin' || PRIVACY_EXEMPT.has(`${req.method} ${req.path}`)) return next();
+  if (req.user.privacy_version === currentPrivacyVersion()) return next();
+  res.status(403).json({ error: 'Please read and accept the Privacy Policy to continue.', code: 'PRIVACY_REQUIRED' });
+});
+
 // ---------- public API ----------
 
 // Used by the hosting platform to check the app is up (also checks the database).
@@ -259,20 +313,24 @@ app.post('/api/auth/register', (req, res) => {
   const password = typeof req.body.password === 'string' ? req.body.password : '';
   const bio = str(req.body.bio, 1000);
   if (!name) throw new HttpError(400, 'Please enter your name.');
-  if (!EMAIL_RE.test(email)) throw new HttpError(400, 'Please enter a valid email address.');
+  const consent = readConsent(req.body);
+  // Under-16s may leave their own email blank (e.g. a brother or sister already
+  // uses the parent's email); they then log in with their member ID.
+  if (email ? !EMAIL_RE.test(email) : !consent.under16) throw new HttpError(400, 'Please enter a valid email address.');
   if (password.length < 8) throw new HttpError(400, 'Password must be at least 8 characters.');
   if (!allowRegister(req.ip)) throw new HttpError(429, 'Too many sign-ups from this connection. Please try again later.');
-  if (db.prepare('SELECT 1 FROM users WHERE email = ?').get(email)) throw new HttpError(409, 'An account with that email already exists. Try logging in.');
+  if (email && db.prepare('SELECT 1 FROM users WHERE email = ?').get(email)) throw new HttpError(409, 'An account with that email already exists. Try logging in, or leave the email blank for a child who shares a parent\'s email.');
   const memberId = auth.generateMemberId();
   let info;
   try {
     info = db
       .prepare('INSERT INTO users (member_id, name, email, phone, password_hash, role, bio) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(memberId, name, email, phone, auth.hashPassword(password), 'member', bio);
+      .run(memberId, name, email || null, phone, auth.hashPassword(password), 'member', bio);
   } catch (err) {
     if (/UNIQUE/.test(err.message)) throw new HttpError(409, 'An account with that email already exists. Try logging in.');
     throw err;
   }
+  recordConsent(info.lastInsertRowid, consent);
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
   auth.createSession(res, req, user.id);
   res.status(201).json({ user: publicUser(user) });
@@ -288,6 +346,38 @@ app.post('/api/auth/logout', (req, res) => {
 app.get('/api/me', (req, res) => {
   if (!req.user) return res.json({ user: null });
   res.json({ user: publicUser(req.user), stats: memberStats(req.user.id) });
+});
+
+app.post('/api/me/privacy', auth.requireRole('member'), (req, res) => {
+  recordConsent(req.user.id, readConsent(req.body));
+  res.json({ user: publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id)) });
+});
+
+// Right of access: everything the academy holds about the member, as a JSON file.
+app.get('/api/me/export', auth.requireRole('member'), (req, res) => {
+  const u = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  const data = {
+    exportedAt: new Date().toISOString(),
+    account: { ...publicUser(u), privacyRequired: undefined },
+    attendance: memberAttendance(u.id, 100000),
+    privacyConsents: db.prepare('SELECT version, under_16 AS under16, guardian_name AS guardianName, guardian_email AS guardianEmail, accepted_at AS acceptedAt FROM privacy_consents WHERE user_id = ? ORDER BY id').all(u.id),
+    messagesSent: u.email ? db.prepare('SELECT subject, body, created_at AS sentAt FROM messages WHERE email = ? ORDER BY id').all(u.email) : [],
+  };
+  res.setHeader('Content-Disposition', `attachment; filename="lab-my-data-${u.member_id}.json"`);
+  res.setHeader('Cache-Control', 'no-store');
+  res.type('application/json').send(JSON.stringify(data, null, 2));
+});
+
+// Right to erasure: members can delete their own account (password required).
+app.post('/api/me/delete', auth.requireRole('member'), (req, res) => {
+  const row = db.prepare('SELECT password_hash, role FROM users WHERE id = ?').get(req.user.id);
+  if (!auth.verifyPassword(req.body.password, row.password_hash)) throw new HttpError(400, 'Your password is incorrect.');
+  if (row.role === 'admin' && db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND active = 1").get().n <= 1) {
+    throw new HttpError(400, 'You are the only admin. Make someone else an admin before deleting your account.');
+  }
+  db.prepare('DELETE FROM users WHERE id = ?').run(req.user.id);
+  auth.destroySession(req, res);
+  res.json({ ok: true });
 });
 
 app.get('/api/me/attendance', auth.requireRole('member'), (req, res) => {
@@ -512,6 +602,11 @@ staff.post('/members', (req, res) => {
   const phone = str(req.body.phone, 40);
   const notes = str(req.body.notes, 2000);
   const bio = str(req.body.bio, 1000);
+  const under16 = req.body.under16 === true;
+  const guardianName = under16 ? str(req.body.guardianName, 120) : '';
+  const guardianEmail = under16 ? str(req.body.guardianEmail, 200) : '';
+  const guardianPhone = under16 ? str(req.body.guardianPhone, 40) : '';
+  if (guardianEmail && !EMAIL_RE.test(guardianEmail)) throw new HttpError(400, "The parent or guardian's email address does not look right.");
   let role = ['member', 'instructor', 'admin'].includes(req.body.role) ? req.body.role : 'member';
   if (req.user.role !== 'admin') role = 'member';
   if (!name) throw new HttpError(400, 'Please enter a name.');
@@ -521,8 +616,11 @@ staff.post('/members', (req, res) => {
   if (password.length < 8) throw new HttpError(400, 'Password must be at least 8 characters.');
   const memberId = auth.generateMemberId();
   const info = db
-    .prepare('INSERT INTO users (member_id, name, email, phone, password_hash, role, notes, bio) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-    .run(memberId, name, email || null, phone, auth.hashPassword(password), role, notes, bio);
+    .prepare(
+      `INSERT INTO users (member_id, name, email, phone, password_hash, role, notes, bio, under_16, guardian_name, guardian_email, guardian_phone)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(memberId, name, email || null, phone, auth.hashPassword(password), role, notes, bio, under16 ? 1 : 0, guardianName || null, guardianEmail || null, guardianPhone || null);
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
   res.status(201).json({ member: publicUser(user, { includeNotes: true }), password });
 });
@@ -693,6 +791,11 @@ admin.patch('/members/:id', (req, res) => {
   const phone = req.body.phone !== undefined ? str(req.body.phone, 40) : member.phone || '';
   const notes = req.body.notes !== undefined ? str(req.body.notes, 2000) : member.notes || '';
   const bio = req.body.bio !== undefined ? str(req.body.bio, 1000) : member.bio || '';
+  const under16 = req.body.under16 !== undefined ? (req.body.under16 ? 1 : 0) : member.under_16;
+  const guardianName = req.body.guardianName !== undefined ? str(req.body.guardianName, 120) : member.guardian_name || '';
+  const guardianEmail = req.body.guardianEmail !== undefined ? str(req.body.guardianEmail, 200) : member.guardian_email || '';
+  const guardianPhone = req.body.guardianPhone !== undefined ? str(req.body.guardianPhone, 40) : member.guardian_phone || '';
+  if (guardianEmail && !EMAIL_RE.test(guardianEmail)) throw new HttpError(400, "The parent or guardian's email address does not look right.");
   const role = req.body.role !== undefined ? req.body.role : member.role;
   const active = req.body.active !== undefined ? (req.body.active ? 1 : 0) : member.active;
   if (!name) throw new HttpError(400, 'Name cannot be empty.');
@@ -702,6 +805,9 @@ admin.patch('/members/:id', (req, res) => {
   if (email && db.prepare('SELECT 1 FROM users WHERE email = ? AND id != ?').get(email, member.id)) throw new HttpError(409, 'Another member already uses that email.');
   db.prepare('UPDATE users SET name = ?, email = ?, phone = ?, notes = ?, bio = ?, role = ?, active = ? WHERE id = ?').run(
     name, email || null, phone, notes, bio, role, active, member.id
+  );
+  db.prepare('UPDATE users SET under_16 = ?, guardian_name = ?, guardian_email = ?, guardian_phone = ? WHERE id = ?').run(
+    under16, guardianName || null, guardianEmail || null, guardianPhone || null, member.id
   );
   if (!active) auth.destroyAllSessionsFor(member.id);
   res.json({ member: publicUser(loadMember(member.id), { includeNotes: true }) });
