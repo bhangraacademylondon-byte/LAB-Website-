@@ -9,19 +9,22 @@ const path = require('node:path');
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-privacy-'));
 process.env.ADMIN_EMAIL = 'admin@test.local';
 process.env.ADMIN_PASSWORD = 'admin-password';
+process.env.PGLITE_DIR = 'memory';
 
-const { app, ensureAdmin } = require('../server/index.js');
+const { app, prepare } = require('../server/index.js');
+const { close: closeDb } = require('../server/db');
 
 let server;
 let base;
 before(async () => {
-  ensureAdmin();
+  await prepare();
   server = app.listen(0);
   await new Promise((r) => server.once('listening', r));
   base = `http://localhost:${server.address().port}`;
 });
-after(() => {
+after(async () => {
   server.close();
+  await closeDb();
   fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true });
 });
 

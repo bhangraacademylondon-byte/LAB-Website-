@@ -12,7 +12,7 @@ A mobile-friendly website and members' app for the London Academy of Bhangra (LA
 
 ## Running it
 
-Requires **Node.js 22.13 or newer**. The app uses Node's built-in SQLite, so there is no separate database to install.
+Requires **Node.js 22 or newer**. The data is kept in **Postgres**. On your own computer you don't need to install anything: without a `DATABASE_URL`, the app uses an embedded Postgres stored in the `data` folder.
 
 ```bash
 npm install
@@ -24,24 +24,50 @@ On first start an admin account is created from `ADMIN_EMAIL` / `ADMIN_PASSWORD`
 
 Run the tests with `npm test`.
 
-### Deploying to Render
+## Free hosting: Render + Supabase
 
-The repository includes a Render Blueprint (`render.yaml`). It sets up a Node web service in Frankfurt, the region closest to London. It also adds a 1 GB persistent disk for the database and uploaded images, and a health check.
+- **Supabase** (free plan) stores the data: members, attendance, debriefs, consent records, website content, and uploaded photos.
+- **Render** (free plan) runs the website.
+- **Cost:** £0 a month.
 
-1. Sign in at [dashboard.render.com](https://dashboard.render.com) and connect your GitHub account, giving Render access to this repository.
-2. Click **New → Blueprint**, pick this repository and click **Connect**.
-3. Enter **ADMIN_EMAIL** and **ADMIN_PASSWORD** for the first admin login, then click **Apply** (Deploy Blueprint).
-4. When the deploy finishes, your site is live at `https://london-academy-of-bhangra.onrender.com` (or similar). Log in at `/login` with the admin details.
-5. Optional: add your own domain under the service's **Settings → Custom Domains**. Render provides the https certificate.
+### 1. Create the Supabase project
 
-The *Starter* instance type is needed because free instances cannot have a persistent disk, and without one all data would be lost on every deploy. New pushes to the branch deploy automatically.
+1. Sign up at [supabase.com](https://supabase.com) and click **New project**. Name it **LAB**, choose a strong **database password** and save it somewhere safe. Pick the **London (eu-west-2)** region if offered.
+2. When the project is ready, click **Connect** (top of the page). Under **Session pooler**, copy the connection string. It looks like:
+   `postgresql://postgres.abcdefgh:[YOUR-PASSWORD]@aws-0-eu-west-2.pooler.supabase.com:5432/postgres`
+   Replace `[YOUR-PASSWORD]` with your database password. This is your **DATABASE_URL**. (Use the *Session pooler* string, not "Direct connection": Render's free plan can't reach the direct one.)
+3. Go to **Project Settings → API** (or **Data API**). Copy the **Project URL**; this is your **SUPABASE_URL**.
+4. Go to **Project Settings → API Keys**. Copy the **secret** key (or the legacy **service_role** key); this is your **SUPABASE_SERVICE_KEY**. Keep it private: it gives full access to your project.
 
-### Deploying elsewhere
+The app creates its database tables and a public **uploads** storage bucket by itself on first start.
 
-Any Node host works, for example Render, Railway, Fly.io or a small VPS. You can also use the included `Dockerfile`.
+### 2. Deploy on Render
 
-- **The site must be served over HTTPS.** Phones only allow the camera (QR scanner) on secure pages. Most hosts provide HTTPS automatically.
-- **Keep `DATA_DIR` on a persistent disk or volume.** It holds the database (`lab.sqlite`) and uploaded images. Back this folder up regularly.
+1. Sign in at [dashboard.render.com](https://dashboard.render.com) and make sure Render has access to this GitHub repository (GitHub → Settings → Applications → Render → Configure).
+2. Click **New → Blueprint**, pick this repository, and give it a name, e.g. *LAB Website*.
+3. Fill in the values it asks for: **DATABASE_URL**, **SUPABASE_URL**, **SUPABASE_SERVICE_KEY**, **ADMIN_EMAIL** and **ADMIN_PASSWORD**. Then click **Deploy Blueprint**.
+4. When the deploy finishes, the site is live at `https://london-academy-of-bhangra.onrender.com` (Render shows the exact address). Log in at `/login` with your admin details.
+5. Optional: add your own domain under the service's **Settings → Custom Domains**. Render provides the https certificate, which the phone camera needs.
+
+If `DATABASE_URL` is missing, the app refuses to start on Render rather than risk losing data. The error is shown in the service's **Logs**.
+
+### 3. Keep it awake (recommended)
+
+On the free plans, Render puts the site to sleep after 15 minutes without visitors (the next visit then takes about a minute to load). Supabase pauses a project after a week without activity.
+
+To avoid both, set up a free monitor at [uptimerobot.com](https://uptimerobot.com) or [cron-job.org](https://cron-job.org). It should visit `https://<your-site>/healthz` every **10 minutes**. That page also checks the database, so it keeps both services active. One always-awake site fits within Render's free monthly hours.
+
+If Supabase ever does pause the project, open it in the Supabase dashboard and click **Restore**.
+
+### 4. Backups
+
+Supabase's free plan has no backups you can restore yourself. As an admin, use **Admin → Dashboard → Download a full backup** regularly, e.g. monthly, and keep the file somewhere safe and private: it contains members' personal details. The CSV exports under Sessions and Class debriefs are useful too.
+
+### Other hosts
+
+Any Node host works (Railway, Fly.io, a small server, or the included `Dockerfile`): set `DATABASE_URL`, plus `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` for images. Without them, the app keeps everything in `DATA_DIR`, which must then be on a permanent disk.
+
+- **The site must be served over HTTPS.** Phones only allow the camera (QR scanner) on secure pages.
 - If the app is *not* behind a proxy or load balancer, set `TRUST_PROXY=0`.
 
 ## Roles
@@ -103,7 +129,9 @@ Once connected, new posts appear on the Gallery and Home pages automatically, ch
 ## Project layout
 
 ```
-server/            Express API (auth, members, attendance, content, Instagram)
+server/            Express API (auth, members, attendance, debriefs, content, Instagram)
+  db.js              Postgres (DATABASE_URL) or embedded Postgres for local use
+  storage.js         Uploaded images: Supabase Storage or a local folder
   defaultContent.js  Starter text for the site (everything is editable in Admin)
 public/            Front end (no build step)
   js/app.js          Public pages, login and member account

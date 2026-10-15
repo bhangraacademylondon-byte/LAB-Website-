@@ -7,16 +7,15 @@ const express = require('express');
 const multer = require('multer');
 const QRCode = require('qrcode');
 
-const { db, DATA_DIR, transaction } = require('./db');
+const { db, init: initDb, isUniqueViolation, DATA_DIR, DATABASE_URL } = require('./db');
+const storage = require('./storage');
 const auth = require('./auth');
 const content = require('./content');
 const instagram = require('./instagram');
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
-const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
 const TIME_ZONE = process.env.TZ_NAME || 'Europe/London';
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const app = express();
 app.disable('x-powered-by');
@@ -86,41 +85,25 @@ function readConsent(body) {
   return { under16: true, guardianName, guardianEmail, guardianPhone: guardianPhone || null };
 }
 
-function recordConsent(userId, consent) {
+async function recordConsent(userId, consent) {
   const version = currentPrivacyVersion();
-  db.prepare(
-    `UPDATE users SET privacy_version = ?, privacy_accepted_at = datetime('now'), under_16 = ?,
-            guardian_name = ?, guardian_email = ?, guardian_phone = ? WHERE id = ?`
-  ).run(version, consent.under16 ? 1 : 0, consent.guardianName, consent.guardianEmail, consent.guardianPhone, userId);
-  db.prepare('INSERT INTO privacy_consents (user_id, version, under_16, guardian_name, guardian_email) VALUES (?, ?, ?, ?, ?)').run(
-    userId, version, consent.under16 ? 1 : 0, consent.guardianName, consent.guardianEmail
-  );
+  (await db.run(`UPDATE users SET privacy_version = ?, privacy_accepted_at = ${db.NOW}, under_16 = ?,
+            guardian_name = ?, guardian_email = ?, guardian_phone = ? WHERE id = ?`, version, consent.under16 ? 1 : 0, consent.guardianName, consent.guardianEmail, consent.guardianPhone, userId));
+  (await db.run('INSERT INTO privacy_consents (user_id, version, under_16, guardian_name, guardian_email) VALUES (?, ?, ?, ?, ?)', userId, version, consent.under16 ? 1 : 0, consent.guardianName, consent.guardianEmail));
 }
 
-function memberStats(userId) {
+async function memberStats(userId) {
   const { date } = todayInfo();
   const month = date.slice(0, 7);
-  const total = db.prepare('SELECT COUNT(*) AS n FROM attendance WHERE user_id = ?').get(userId).n;
-  const thisMonth = db
-    .prepare(
-      `SELECT COUNT(*) AS n FROM attendance a JOIN class_sessions s ON s.id = a.session_id
-        WHERE a.user_id = ? AND substr(s.date, 1, 7) = ?`
-    )
-    .get(userId, month).n;
-  const last = db
-    .prepare(
-      `SELECT s.date FROM attendance a JOIN class_sessions s ON s.id = a.session_id
-        WHERE a.user_id = ? ORDER BY s.date DESC LIMIT 1`
-    )
-    .get(userId);
+  const total = (await db.get('SELECT COUNT(*) AS n FROM attendance WHERE user_id = ?', userId)).n;
+  const thisMonth = (await db.get(`SELECT COUNT(*) AS n FROM attendance a JOIN class_sessions s ON s.id = a.session_id
+        WHERE a.user_id = ? AND substr(s.date, 1, 7) = ?`, userId, month)).n;
+  const last = (await db.get(`SELECT s.date FROM attendance a JOIN class_sessions s ON s.id = a.session_id
+        WHERE a.user_id = ? ORDER BY s.date DESC LIMIT 1`, userId));
   // Attendance per month for the last 6 months (oldest first), including empty months.
   const counts = new Map(
-    db
-      .prepare(
-        `SELECT substr(s.date, 1, 7) AS month, COUNT(*) AS n FROM attendance a JOIN class_sessions s ON s.id = a.session_id
-          WHERE a.user_id = ? GROUP BY month`
-      )
-      .all(userId)
+    (await db.all(`SELECT substr(s.date, 1, 7) AS month, COUNT(*) AS n FROM attendance a JOIN class_sessions s ON s.id = a.session_id
+          WHERE a.user_id = ? GROUP BY month`, userId))
       .map((r) => [r.month, r.n])
   );
   const [y, m] = month.split('-').map(Number);
@@ -133,28 +116,24 @@ function memberStats(userId) {
   return { total, thisMonth, lastAttended: last ? last.date : null, monthly };
 }
 
-function memberAttendance(userId, limit = 200) {
-  return db
-    .prepare(
-      `SELECT s.id AS sessionId, s.title, s.date, s.start_time AS startTime, s.end_time AS endTime,
+async function memberAttendance(userId, limit = 200) {
+  return (await db.all(`SELECT s.id AS sessionId, s.title, s.date, s.start_time AS startTime, s.end_time AS endTime,
               s.location, a.method, a.created_at AS scannedAt
          FROM attendance a JOIN class_sessions s ON s.id = a.session_id
-        WHERE a.user_id = ? ORDER BY s.date DESC, s.start_time DESC LIMIT ?`
-    )
-    .all(userId, limit);
+        WHERE a.user_id = ? ORDER BY s.date DESC, s.start_time DESC LIMIT ?`, userId, limit));
 }
 
 // Login accepts an email address or a member ID typed on its own (e.g. "LAB-7K3Q9X").
 // Anything containing "@" is always treated as an email, so an address such as
 // "slab234567@…" is never mistaken for a member ID.
-function findUserByIdentifier(identifier) {
+async function findUserByIdentifier(identifier) {
   const value = identifier.trim();
   if (!value) return null;
   if (!value.includes('@')) {
     const match = value.toUpperCase().match(/^LAB-?([2-9A-HJ-NP-Z]{6})$/);
-    return match ? db.prepare('SELECT * FROM users WHERE member_id = ?').get(`LAB-${match[1]}`) : null;
+    return match ? (await db.get('SELECT * FROM users WHERE member_id = ?', `LAB-${match[1]}`)) : null;
   }
-  return db.prepare('SELECT * FROM users WHERE email = ?').get(value);
+  return (await db.get('SELECT * FROM users WHERE lower(email) = lower(?)', value));
 }
 
 function extractMemberId(value) {
@@ -182,7 +161,7 @@ async function qrSvg(memberId) {
 
 // ---------- security & parsing ----------
 
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
@@ -212,7 +191,7 @@ app.use(auth.loadUser);
 // State-changing API calls must carry a custom header. Browsers will not send
 // it cross-site without a CORS preflight (which we never allow), so this
 // blocks CSRF in combination with SameSite cookies.
-app.use('/api', (req, res, next) => {
+app.use('/api', async (req, res, next) => {
   if (req.method === 'GET' || req.method === 'HEAD') return next();
   if (req.get('X-LAB-CSRF') !== '1') return res.status(403).json({ error: 'Missing request header.' });
   next();
@@ -226,7 +205,7 @@ const PRIVACY_EXEMPT = new Set([
   'POST /auth/logout', 'POST /auth/login', 'POST /auth/register',
   'GET /content', 'GET /instagram', 'POST /contact',
 ]);
-app.use('/api', (req, res, next) => {
+app.use('/api', async (req, res, next) => {
   if (!req.user || req.user.role === 'admin' || PRIVACY_EXEMPT.has(`${req.method} ${req.path}`)) return next();
   if (req.user.privacy_version === currentPrivacyVersion()) return next();
   res.status(403).json({ error: 'Please read and accept the Privacy Policy to continue.', code: 'PRIVACY_REQUIRED' });
@@ -235,13 +214,13 @@ app.use('/api', (req, res, next) => {
 // ---------- public API ----------
 
 // Used by the hosting platform to check the app is up (also checks the database).
-app.get('/healthz', (_req, res) => {
-  db.prepare('SELECT 1').get();
+app.get('/healthz', async (_req, res) => {
+  (await db.get('SELECT 1'));
   res.setHeader('Cache-Control', 'no-store');
   res.json({ ok: true });
 });
 
-app.get('/api/content', (_req, res) => {
+app.get('/api/content', async (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.json(content.getContent());
 });
@@ -272,7 +251,7 @@ function rateLimiter(max, windowMs) {
 const allowContact = rateLimiter(5, 3600_000);
 const allowRegister = rateLimiter(10, 3600_000);
 
-app.post('/api/contact', (req, res) => {
+app.post('/api/contact', async (req, res) => {
   if (!content.getContent().contact.formEnabled) throw new HttpError(400, 'The contact form is turned off.');
   const name = str(req.body.name, 120);
   const email = str(req.body.email, 200);
@@ -282,18 +261,18 @@ app.post('/api/contact', (req, res) => {
   if (str(req.body.website)) return res.json({ ok: true }); // honeypot field
   if (!name || !EMAIL_RE.test(email) || !body) throw new HttpError(400, 'Please give your name, a valid email and a message.');
   if (!allowContact(req.ip)) throw new HttpError(429, 'Too many messages. Please try again later.');
-  db.prepare('INSERT INTO messages (name, email, phone, subject, body) VALUES (?, ?, ?, ?, ?)').run(name, email, phone, subject, body);
+  (await db.run('INSERT INTO messages (name, email, phone, subject, body) VALUES (?, ?, ?, ?, ?)', name, email, phone, subject, body));
   res.json({ ok: true });
 });
 
 // ---------- auth ----------
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const identifier = str(req.body.identifier, 200);
   const password = typeof req.body.password === 'string' ? req.body.password : '';
   const key = `${req.ip}|${identifier.toLowerCase()}`;
   if (auth.tooManyAttempts(key)) throw new HttpError(429, 'Too many attempts. Please wait 15 minutes and try again.');
-  const user = findUserByIdentifier(identifier);
+  const user = await findUserByIdentifier(identifier);
   // Always run a bcrypt comparison so response time does not reveal whether the account exists.
   if (!auth.verifyPassword(password, user?.password_hash) || !user) {
     auth.recordFailedAttempt(key);
@@ -301,11 +280,11 @@ app.post('/api/auth/login', (req, res) => {
   }
   if (!user.active) throw new HttpError(403, 'This account has been deactivated. Please speak to a teacher.');
   auth.clearAttempts(key);
-  auth.createSession(res, req, user.id);
+  await auth.createSession(res, req, user.id);
   res.json({ user: publicUser(user) });
 });
 
-app.post('/api/auth/register', (req, res) => {
+app.post('/api/auth/register', async (req, res) => {
   if (!content.getContent().members.allowRegistration) throw new HttpError(403, 'Online registration is closed. Please ask a teacher to create your account.');
   const name = str(req.body.name, 120);
   const email = str(req.body.email, 200);
@@ -319,49 +298,48 @@ app.post('/api/auth/register', (req, res) => {
   if (email ? !EMAIL_RE.test(email) : !consent.under16) throw new HttpError(400, 'Please enter a valid email address.');
   if (password.length < 8) throw new HttpError(400, 'Password must be at least 8 characters.');
   if (!allowRegister(req.ip)) throw new HttpError(429, 'Too many sign-ups from this connection. Please try again later.');
-  if (email && db.prepare('SELECT 1 FROM users WHERE email = ?').get(email)) throw new HttpError(409, 'An account with that email already exists. Try logging in, or leave the email blank for a child who shares a parent\'s email.');
-  const memberId = auth.generateMemberId();
+  if (email && (await db.get('SELECT 1 FROM users WHERE lower(email) = lower(?)', email))) throw new HttpError(409, 'An account with that email already exists. Try logging in, or leave the email blank for a child who shares a parent\'s email.');
+  const memberId = await auth.generateMemberId();
   let info;
   try {
-    info = db
-      .prepare('INSERT INTO users (member_id, name, email, phone, password_hash, role, bio) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(memberId, name, email || null, phone, auth.hashPassword(password), 'member', bio);
+    info = (await db.run('INSERT INTO users (member_id, name, email, phone, password_hash, role, bio) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id', memberId, name, email || null, phone, auth.hashPassword(password), 'member', bio));
   } catch (err) {
-    if (/UNIQUE/.test(err.message)) throw new HttpError(409, 'An account with that email already exists. Try logging in.');
+    if (isUniqueViolation(err)) throw new HttpError(409, 'An account with that email already exists. Try logging in.');
     throw err;
   }
-  recordConsent(info.lastInsertRowid, consent);
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
-  auth.createSession(res, req, user.id);
+  const newId = info.rows[0].id;
+  await recordConsent(newId, consent);
+  const user = await db.get('SELECT * FROM users WHERE id = ?', newId);
+  await auth.createSession(res, req, user.id);
   res.status(201).json({ user: publicUser(user) });
 });
 
-app.post('/api/auth/logout', (req, res) => {
-  auth.destroySession(req, res);
+app.post('/api/auth/logout', async (req, res) => {
+  await auth.destroySession(req, res);
   res.json({ ok: true });
 });
 
 // ---------- member (self) ----------
 
-app.get('/api/me', (req, res) => {
+app.get('/api/me', async (req, res) => {
   if (!req.user) return res.json({ user: null });
-  res.json({ user: publicUser(req.user), stats: memberStats(req.user.id) });
+  res.json({ user: publicUser(req.user), stats: await memberStats(req.user.id) });
 });
 
-app.post('/api/me/privacy', auth.requireRole('member'), (req, res) => {
-  recordConsent(req.user.id, readConsent(req.body));
-  res.json({ user: publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id)) });
+app.post('/api/me/privacy', auth.requireRole('member'), async (req, res) => {
+  await recordConsent(req.user.id, readConsent(req.body));
+  res.json({ user: publicUser((await db.get('SELECT * FROM users WHERE id = ?', req.user.id))) });
 });
 
 // Right of access: everything the academy holds about the member, as a JSON file.
-app.get('/api/me/export', auth.requireRole('member'), (req, res) => {
-  const u = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+app.get('/api/me/export', auth.requireRole('member'), async (req, res) => {
+  const u = (await db.get('SELECT * FROM users WHERE id = ?', req.user.id));
   const data = {
     exportedAt: new Date().toISOString(),
     account: { ...publicUser(u), privacyRequired: undefined },
-    attendance: memberAttendance(u.id, 100000),
-    privacyConsents: db.prepare('SELECT version, under_16 AS under16, guardian_name AS guardianName, guardian_email AS guardianEmail, accepted_at AS acceptedAt FROM privacy_consents WHERE user_id = ? ORDER BY id').all(u.id),
-    messagesSent: u.email ? db.prepare('SELECT subject, body, created_at AS sentAt FROM messages WHERE email = ? ORDER BY id').all(u.email) : [],
+    attendance: await memberAttendance(u.id, 100000),
+    privacyConsents: (await db.all('SELECT version, under_16 AS under16, guardian_name AS guardianName, guardian_email AS guardianEmail, accepted_at AS acceptedAt FROM privacy_consents WHERE user_id = ? ORDER BY id', u.id)),
+    messagesSent: u.email ? (await db.all('SELECT subject, body, created_at AS sentAt FROM messages WHERE lower(email) = lower(?) ORDER BY id', u.email)) : [],
   };
   res.setHeader('Content-Disposition', `attachment; filename="lab-my-data-${u.member_id}.json"`);
   res.setHeader('Cache-Control', 'no-store');
@@ -369,19 +347,19 @@ app.get('/api/me/export', auth.requireRole('member'), (req, res) => {
 });
 
 // Right to erasure: members can delete their own account (password required).
-app.post('/api/me/delete', auth.requireRole('member'), (req, res) => {
-  const row = db.prepare('SELECT password_hash, role FROM users WHERE id = ?').get(req.user.id);
+app.post('/api/me/delete', auth.requireRole('member'), async (req, res) => {
+  const row = (await db.get('SELECT password_hash, role FROM users WHERE id = ?', req.user.id));
   if (!auth.verifyPassword(req.body.password, row.password_hash)) throw new HttpError(400, 'Your password is incorrect.');
-  if (row.role === 'admin' && db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND active = 1").get().n <= 1) {
+  if (row.role === 'admin' && (await db.get("SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND active = 1")).n <= 1) {
     throw new HttpError(400, 'You are the only admin. Make someone else an admin before deleting your account.');
   }
-  db.prepare('DELETE FROM users WHERE id = ?').run(req.user.id);
-  auth.destroySession(req, res);
+  (await db.run('DELETE FROM users WHERE id = ?', req.user.id));
+  await auth.destroySession(req, res);
   res.json({ ok: true });
 });
 
-app.get('/api/me/attendance', auth.requireRole('member'), (req, res) => {
-  res.json({ attendance: memberAttendance(req.user.id), stats: memberStats(req.user.id) });
+app.get('/api/me/attendance', auth.requireRole('member'), async (req, res) => {
+  res.json({ attendance: await memberAttendance(req.user.id), stats: await memberStats(req.user.id) });
 });
 
 app.get('/api/me/qr.svg', auth.requireRole('member'), async (req, res) => {
@@ -390,24 +368,24 @@ app.get('/api/me/qr.svg', auth.requireRole('member'), async (req, res) => {
   res.send(await qrSvg(req.user.member_id));
 });
 
-app.patch('/api/me', auth.requireRole('member'), (req, res) => {
+app.patch('/api/me', auth.requireRole('member'), async (req, res) => {
   const name = str(req.body.name, 120);
   const phone = str(req.body.phone, 40);
   if (!name) throw new HttpError(400, 'Name cannot be empty.');
   const bio = str(req.body.bio, 1000);
-  db.prepare('UPDATE users SET name = ?, phone = ?, bio = ? WHERE id = ?').run(name, phone, bio, req.user.id);
-  res.json({ user: publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id)) });
+  (await db.run('UPDATE users SET name = ?, phone = ?, bio = ? WHERE id = ?', name, phone, bio, req.user.id));
+  res.json({ user: publicUser((await db.get('SELECT * FROM users WHERE id = ?', req.user.id))) });
 });
 
-app.post('/api/me/password', auth.requireRole('member'), (req, res) => {
+app.post('/api/me/password', auth.requireRole('member'), async (req, res) => {
   const current = typeof req.body.current === 'string' ? req.body.current : '';
   const next = typeof req.body.next === 'string' ? req.body.next : '';
-  const row = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user.id);
+  const row = (await db.get('SELECT password_hash FROM users WHERE id = ?', req.user.id));
   if (!auth.verifyPassword(current, row.password_hash)) throw new HttpError(400, 'Your current password is incorrect.');
   if (next.length < 8) throw new HttpError(400, 'New password must be at least 8 characters.');
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(auth.hashPassword(next), req.user.id);
-  auth.destroyAllSessionsFor(req.user.id);
-  auth.createSession(res, req, req.user.id);
+  (await db.run('UPDATE users SET password_hash = ? WHERE id = ?', auth.hashPassword(next), req.user.id));
+  await auth.destroyAllSessionsFor(req.user.id);
+  await auth.createSession(res, req, req.user.id);
   res.json({ ok: true });
 });
 
@@ -416,57 +394,41 @@ app.post('/api/me/password', auth.requireRole('member'), (req, res) => {
 const staff = express.Router();
 staff.use(auth.requireRole('instructor'));
 
-staff.get('/stats', (_req, res) => {
+staff.get('/stats', async (_req, res) => {
   const { date } = todayInfo();
   res.json({
-    members: db.prepare("SELECT COUNT(*) AS n FROM users WHERE active = 1").get().n,
-    todaySessions: db.prepare('SELECT COUNT(*) AS n FROM class_sessions WHERE date = ?').get(date).n,
-    todayAttendance: db
-      .prepare('SELECT COUNT(*) AS n FROM attendance a JOIN class_sessions s ON s.id = a.session_id WHERE s.date = ?')
-      .get(date).n,
-    last30Attendance: db
-      .prepare("SELECT COUNT(*) AS n FROM attendance a JOIN class_sessions s ON s.id = a.session_id WHERE s.date >= date(?, '-30 days')")
-      .get(date).n,
-    unreadMessages: db.prepare('SELECT COUNT(*) AS n FROM messages WHERE is_read = 0').get().n,
+    members: (await db.get("SELECT COUNT(*) AS n FROM users WHERE active = 1")).n,
+    todaySessions: (await db.get('SELECT COUNT(*) AS n FROM class_sessions WHERE date = ?', date)).n,
+    todayAttendance: (await db.get('SELECT COUNT(*) AS n FROM attendance a JOIN class_sessions s ON s.id = a.session_id WHERE s.date = ?', date)).n,
+    last30Attendance: (await db.get("SELECT COUNT(*) AS n FROM attendance a JOIN class_sessions s ON s.id = a.session_id WHERE s.date >= to_char(?::date - 30, 'YYYY-MM-DD')", date)).n,
+    unreadMessages: (await db.get('SELECT COUNT(*) AS n FROM messages WHERE is_read = 0')).n,
     // Sessions from the last 14 days that still need a debrief.
-    debriefsDue: db
-      .prepare(
-        `SELECT COUNT(*) AS n FROM class_sessions s WHERE s.date BETWEEN date(?, '-14 days') AND ?
+    debriefsDue: (await db.get(`SELECT COUNT(*) AS n FROM class_sessions s WHERE s.date BETWEEN to_char(?::date - 14, 'YYYY-MM-DD') AND ?
            AND NOT EXISTS (SELECT 1 FROM class_debriefs d WHERE d.session_id = s.id)
-           AND EXISTS (SELECT 1 FROM attendance a WHERE a.session_id = s.id)`
-      )
-      .get(date, date).n,
+           AND EXISTS (SELECT 1 FROM attendance a WHERE a.session_id = s.id)`, date, date)).n,
   });
 });
 
-staff.get('/today', (_req, res) => {
+staff.get('/today', async (_req, res) => {
   const today = todayInfo();
   const classes = content
     .getContent()
     .timetable.classes.filter((c) => String(c.day || '').toLowerCase() === today.weekday.toLowerCase());
-  const sessions = db
-    .prepare(
-      `SELECT s.*, (SELECT COUNT(*) FROM attendance a WHERE a.session_id = s.id) AS count
-         FROM class_sessions s WHERE s.date = ? ORDER BY s.start_time`
-    )
-    .all(today.date);
+  const sessions = (await db.all(`SELECT s.*, (SELECT COUNT(*) FROM attendance a WHERE a.session_id = s.id) AS count
+         FROM class_sessions s WHERE s.date = ? ORDER BY s.start_time`, today.date));
   res.json({ ...today, classes, sessions });
 });
 
-staff.get('/sessions', (req, res) => {
+staff.get('/sessions', async (req, res) => {
   const from = DATE_RE.test(req.query.from || '') ? req.query.from : '0000-00-00';
   const to = DATE_RE.test(req.query.to || '') ? req.query.to : '9999-12-31';
-  const sessions = db
-    .prepare(
-      `SELECT s.*, (SELECT COUNT(*) FROM attendance a WHERE a.session_id = s.id) AS count
+  const sessions = (await db.all(`SELECT s.*, (SELECT COUNT(*) FROM attendance a WHERE a.session_id = s.id) AS count
          FROM class_sessions s WHERE s.date BETWEEN ? AND ?
-        ORDER BY s.date DESC, s.start_time DESC LIMIT 500`
-    )
-    .all(from, to);
+        ORDER BY s.date DESC, s.start_time DESC LIMIT 500`, from, to));
   res.json({ sessions });
 });
 
-staff.post('/sessions', (req, res) => {
+staff.post('/sessions', async (req, res) => {
   const title = str(req.body.title, 120);
   const date = str(req.body.date, 10) || todayInfo().date;
   const start = str(req.body.start_time, 5);
@@ -474,38 +436,32 @@ staff.post('/sessions', (req, res) => {
   const location = str(req.body.location, 200);
   if (!title) throw new HttpError(400, 'Please give the session a name.');
   if (!DATE_RE.test(date) || !TIME_RE.test(start) || !TIME_RE.test(end)) throw new HttpError(400, 'Invalid date or time.');
-  db.prepare(
-    `INSERT INTO class_sessions (title, date, start_time, end_time, location, created_by)
-     VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (title, date, start_time) DO NOTHING`
-  ).run(title, date, start, end, location, req.user.id);
-  const session = db.prepare('SELECT * FROM class_sessions WHERE title = ? AND date = ? AND start_time = ?').get(title, date, start);
+  (await db.run(`INSERT INTO class_sessions (title, date, start_time, end_time, location, created_by)
+     VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (title, date, start_time) DO NOTHING`, title, date, start, end, location, req.user.id));
+  const session = (await db.get('SELECT * FROM class_sessions WHERE title = ? AND date = ? AND start_time = ?', title, date, start));
   res.json({ session });
 });
 
-function loadSession(id) {
-  const session = db.prepare('SELECT * FROM class_sessions WHERE id = ?').get(Number(id));
+async function loadSession(id) {
+  const session = (await db.get('SELECT * FROM class_sessions WHERE id = ?', Number(id)));
   if (!session) throw new HttpError(404, 'Session not found.');
   return session;
 }
 
-function sessionAttendees(sessionId) {
-  return db
-    .prepare(
-      `SELECT u.id, u.member_id AS memberId, u.name, a.method, a.created_at AS scannedAt, sb.name AS scannedBy
+async function sessionAttendees(sessionId) {
+  return (await db.all(`SELECT u.id, u.member_id AS memberId, u.name, a.method, a.created_at AS scannedAt, sb.name AS scannedBy
          FROM attendance a JOIN users u ON u.id = a.user_id
          LEFT JOIN users sb ON sb.id = a.scanned_by
-        WHERE a.session_id = ? ORDER BY a.created_at DESC`
-    )
-    .all(sessionId);
+        WHERE a.session_id = ? ORDER BY a.created_at DESC`, sessionId));
 }
 
-staff.get('/sessions/:id', (req, res) => {
-  const session = loadSession(req.params.id);
-  res.json({ session, attendees: sessionAttendees(session.id) });
+staff.get('/sessions/:id', async (req, res) => {
+  const session = await loadSession(req.params.id);
+  res.json({ session, attendees: await sessionAttendees(session.id) });
 });
 
-staff.patch('/sessions/:id', (req, res) => {
-  const session = loadSession(req.params.id);
+staff.patch('/sessions/:id', async (req, res) => {
+  const session = await loadSession(req.params.id);
   const title = str(req.body.title ?? session.title, 120);
   const date = str(req.body.date ?? session.date, 10);
   const start = str(req.body.start_time ?? session.start_time, 5);
@@ -513,90 +469,78 @@ staff.patch('/sessions/:id', (req, res) => {
   const location = str(req.body.location ?? session.location, 200);
   if (!title || !DATE_RE.test(date) || !TIME_RE.test(start) || !TIME_RE.test(end)) throw new HttpError(400, 'Invalid session details.');
   try {
-    db.prepare('UPDATE class_sessions SET title = ?, date = ?, start_time = ?, end_time = ?, location = ? WHERE id = ?').run(
-      title, date, start, end, location, session.id
-    );
+    (await db.run('UPDATE class_sessions SET title = ?, date = ?, start_time = ?, end_time = ?, location = ? WHERE id = ?', title, date, start, end, location, session.id));
   } catch {
     throw new HttpError(409, 'Another session already has that name, date and start time.');
   }
-  res.json({ session: loadSession(session.id) });
+  res.json({ session: await loadSession(session.id) });
 });
 
-staff.delete('/sessions/:id', auth.requireRole('admin'), (req, res) => {
-  const session = loadSession(req.params.id);
-  db.prepare('DELETE FROM class_sessions WHERE id = ?').run(session.id);
+staff.delete('/sessions/:id', auth.requireRole('admin'), async (req, res) => {
+  const session = await loadSession(req.params.id);
+  (await db.run('DELETE FROM class_sessions WHERE id = ?', session.id));
   res.json({ ok: true });
 });
 
 // Record attendance from a scanned QR code, a typed member ID, or a user id (manual pick).
-staff.post('/sessions/:id/attendance', (req, res) => {
-  const session = loadSession(req.params.id);
+staff.post('/sessions/:id/attendance', async (req, res) => {
+  const session = await loadSession(req.params.id);
   let member = null;
   let method = 'qr';
   if (req.body.userId) {
-    member = db.prepare('SELECT * FROM users WHERE id = ?').get(Number(req.body.userId));
+    member = (await db.get('SELECT * FROM users WHERE id = ?', Number(req.body.userId)));
     method = 'manual';
   } else {
     const memberId = extractMemberId(str(req.body.code, 300));
     if (!memberId) throw new HttpError(400, 'That code is not a London Academy of Bhangra member ID.');
-    member = db.prepare('SELECT * FROM users WHERE member_id = ?').get(memberId);
+    member = (await db.get('SELECT * FROM users WHERE member_id = ?', memberId));
     if (req.body.method === 'manual') method = 'manual';
   }
   if (!member) throw new HttpError(404, 'No member found with that ID.');
   if (!member.active) throw new HttpError(403, `${member.name}'s membership is inactive.`);
-  const info = db
-    .prepare('INSERT INTO attendance (session_id, user_id, scanned_by, method) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING')
-    .run(session.id, member.id, req.user.id, method);
+  const info = (await db.run('INSERT INTO attendance (session_id, user_id, scanned_by, method) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING', session.id, member.id, req.user.id, method));
   res.json({
     status: info.changes ? 'recorded' : 'already',
     member: { id: member.id, memberId: member.member_id, name: member.name },
-    stats: memberStats(member.id),
-    count: db.prepare('SELECT COUNT(*) AS n FROM attendance WHERE session_id = ?').get(session.id).n,
+    stats: await memberStats(member.id),
+    count: (await db.get('SELECT COUNT(*) AS n FROM attendance WHERE session_id = ?', session.id)).n,
   });
 });
 
-staff.delete('/sessions/:id/attendance/:userId', (req, res) => {
-  const session = loadSession(req.params.id);
-  db.prepare('DELETE FROM attendance WHERE session_id = ? AND user_id = ?').run(session.id, Number(req.params.userId));
+staff.delete('/sessions/:id/attendance/:userId', async (req, res) => {
+  const session = await loadSession(req.params.id);
+  (await db.run('DELETE FROM attendance WHERE session_id = ? AND user_id = ?', session.id, Number(req.params.userId)));
   res.json({ ok: true });
 });
 
-staff.get('/sessions/:id/export.csv', (req, res) => {
-  const session = loadSession(req.params.id);
-  const rows = sessionAttendees(session.id).map((a) => [a.memberId, a.name, a.method, a.scannedAt, a.scannedBy || '']);
+staff.get('/sessions/:id/export.csv', async (req, res) => {
+  const session = await loadSession(req.params.id);
+  const rows = await sessionAttendees(session.id).map((a) => [a.memberId, a.name, a.method, a.scannedAt, a.scannedBy || '']);
   sendCsv(res, `attendance-${session.date}-${session.id}.csv`, ['Member ID', 'Name', 'Method', 'Recorded at (UTC)', 'Recorded by'], rows);
 });
 
-staff.get('/attendance.csv', (req, res) => {
+staff.get('/attendance.csv', async (req, res) => {
   const from = DATE_RE.test(req.query.from || '') ? req.query.from : '0000-00-00';
   const to = DATE_RE.test(req.query.to || '') ? req.query.to : '9999-12-31';
-  const rows = db
-    .prepare(
-      `SELECT s.date, s.start_time, s.title, u.member_id, u.name, a.method, a.created_at
+  const rows = (await db.all(`SELECT s.date, s.start_time, s.title, u.member_id, u.name, a.method, a.created_at
          FROM attendance a JOIN class_sessions s ON s.id = a.session_id JOIN users u ON u.id = a.user_id
-        WHERE s.date BETWEEN ? AND ? ORDER BY s.date, s.start_time, u.name`
-    )
-    .all(from, to)
+        WHERE s.date BETWEEN ? AND ? ORDER BY s.date, s.start_time, u.name`, from, to))
     .map((r) => [r.date, r.start_time, r.title, r.member_id, r.name, r.method, r.created_at]);
   sendCsv(res, 'attendance.csv', ['Date', 'Start', 'Session', 'Member ID', 'Name', 'Method', 'Recorded at (UTC)'], rows);
 });
 
-staff.get('/members', (req, res) => {
+staff.get('/members', async (req, res) => {
   const q = str(req.query.q, 100);
   const like = `%${q.replace(/[%_\\]/g, (c) => '\\' + c)}%`;
-  const rows = db
-    .prepare(
-      `SELECT u.*, (SELECT COUNT(*) FROM attendance a WHERE a.user_id = u.id) AS attended,
+  const rows = (await db.all(`SELECT u.*, (SELECT COUNT(*) FROM attendance a WHERE a.user_id = u.id) AS attended,
               (SELECT MAX(s.date) FROM attendance a JOIN class_sessions s ON s.id = a.session_id WHERE a.user_id = u.id) AS last_attended
          FROM users u
-        WHERE (? = '' OR u.name LIKE ? ESCAPE '\\' OR u.email LIKE ? ESCAPE '\\' OR u.member_id LIKE ? ESCAPE '\\' OR u.phone LIKE ? ESCAPE '\\')
-        ORDER BY u.active DESC, u.name COLLATE NOCASE LIMIT 1000`
-    )
-    .all(q, like, like, like, like);
+        WHERE (? = '' OR u.name ILIKE ? ESCAPE '\\' OR u.email ILIKE ? ESCAPE '\\' OR u.member_id ILIKE ? ESCAPE '\\' OR u.phone ILIKE ? ESCAPE '\\')
+        ORDER BY u.active DESC, lower(u.name) LIMIT 1000`, q, like, like, like, like));
   res.json({ members: rows.map((r) => ({ ...publicUser(r, { includeNotes: true }), attended: r.attended, lastAttended: r.last_attended })) });
 });
 
-staff.post('/members', (req, res) => {
+staff.post('/members', async (req, res) => {
   const name = str(req.body.name, 120);
   const email = str(req.body.email, 200);
   const phone = str(req.body.phone, 40);
@@ -611,33 +555,29 @@ staff.post('/members', (req, res) => {
   if (req.user.role !== 'admin') role = 'member';
   if (!name) throw new HttpError(400, 'Please enter a name.');
   if (email && !EMAIL_RE.test(email)) throw new HttpError(400, 'That email address does not look right.');
-  if (email && db.prepare('SELECT 1 FROM users WHERE email = ?').get(email)) throw new HttpError(409, 'A member with that email already exists.');
+  if (email && (await db.get('SELECT 1 FROM users WHERE lower(email) = lower(?)', email))) throw new HttpError(409, 'A member with that email already exists.');
   const password = str(req.body.password, 200) || auth.generatePassword();
   if (password.length < 8) throw new HttpError(400, 'Password must be at least 8 characters.');
-  const memberId = auth.generateMemberId();
-  const info = db
-    .prepare(
-      `INSERT INTO users (member_id, name, email, phone, password_hash, role, notes, bio, under_16, guardian_name, guardian_email, guardian_phone)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(memberId, name, email || null, phone, auth.hashPassword(password), role, notes, bio, under16 ? 1 : 0, guardianName || null, guardianEmail || null, guardianPhone || null);
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
+  const memberId = await auth.generateMemberId();
+  const info = (await db.run(`INSERT INTO users (member_id, name, email, phone, password_hash, role, notes, bio, under_16, guardian_name, guardian_email, guardian_phone)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`, memberId, name, email || null, phone, auth.hashPassword(password), role, notes, bio, under16 ? 1 : 0, guardianName || null, guardianEmail || null, guardianPhone || null));
+  const user = await db.get('SELECT * FROM users WHERE id = ?', info.rows[0].id);
   res.status(201).json({ member: publicUser(user, { includeNotes: true }), password });
 });
 
-function loadMember(id) {
-  const member = db.prepare('SELECT * FROM users WHERE id = ?').get(Number(id));
+async function loadMember(id) {
+  const member = (await db.get('SELECT * FROM users WHERE id = ?', Number(id)));
   if (!member) throw new HttpError(404, 'Member not found.');
   return member;
 }
 
-staff.get('/members/:id', (req, res) => {
-  const member = loadMember(req.params.id);
-  res.json({ member: publicUser(member, { includeNotes: true }), stats: memberStats(member.id), attendance: memberAttendance(member.id) });
+staff.get('/members/:id', async (req, res) => {
+  const member = await loadMember(req.params.id);
+  res.json({ member: publicUser(member, { includeNotes: true }), stats: await memberStats(member.id), attendance: await memberAttendance(member.id) });
 });
 
 staff.get('/members/:id/qr.svg', async (req, res) => {
-  const member = loadMember(req.params.id);
+  const member = await loadMember(req.params.id);
   res.setHeader('Content-Type', 'image/svg+xml');
   res.send(await qrSvg(member.member_id));
 });
@@ -670,8 +610,8 @@ function publicDebrief(d) {
 
 const DEBRIEF_SELECT = `SELECT d.*, u.name AS submitted_by_name FROM class_debriefs d LEFT JOIN users u ON u.id = d.submitted_by`;
 
-function loadDebrief(id) {
-  const d = db.prepare(`${DEBRIEF_SELECT} WHERE d.id = ?`).get(Number(id));
+async function loadDebrief(id) {
+  const d = (await db.get(`${DEBRIEF_SELECT} WHERE d.id = ?`, Number(id)));
   if (!d) throw new HttpError(404, 'Debrief not found.');
   return d;
 }
@@ -692,43 +632,37 @@ function readDebrief(body) {
   return { ranBy: [...new Set(ranBy)].join(', ').slice(0, 500), classDate, classTitle, attendeeCount, pence, feedback };
 }
 
-staff.get('/teachers', (_req, res) => {
-  const teachers = db
-    .prepare("SELECT id, name FROM users WHERE role IN ('instructor', 'admin') AND active = 1 ORDER BY name COLLATE NOCASE")
-    .all();
+staff.get('/teachers', async (_req, res) => {
+  const teachers = (await db.all("SELECT id, name FROM users WHERE role IN ('instructor', 'admin') AND active = 1 ORDER BY lower(name)"));
   res.json({ teachers });
 });
 
 // Everything the form needs: session details, scanned head count, teachers,
 // the last recorded pouch balance, and any debrief already written for it.
-staff.get('/debriefs/prefill', (req, res) => {
-  const session = req.query.session ? loadSession(req.query.session) : null;
-  const existing = session ? db.prepare(`${DEBRIEF_SELECT} WHERE d.session_id = ?`).get(session.id) : null;
-  const last = db
-    .prepare('SELECT pouch_balance_pence, class_date, class_title FROM class_debriefs WHERE pouch_balance_pence IS NOT NULL ORDER BY class_date DESC, id DESC LIMIT 1')
-    .get();
+staff.get('/debriefs/prefill', async (req, res) => {
+  const session = req.query.session ? await loadSession(req.query.session) : null;
+  const existing = session ? (await db.get(`${DEBRIEF_SELECT} WHERE d.session_id = ?`, session.id)) : null;
+  const last = (await db.get('SELECT pouch_balance_pence, class_date, class_title FROM class_debriefs WHERE pouch_balance_pence IS NOT NULL ORDER BY class_date DESC, id DESC LIMIT 1'));
   res.json({
     session,
-    scannedCount: session ? db.prepare('SELECT COUNT(*) AS n FROM attendance WHERE session_id = ?').get(session.id).n : null,
+    scannedCount: session ? (await db.get('SELECT COUNT(*) AS n FROM attendance WHERE session_id = ?', session.id)).n : null,
     existing: existing ? publicDebrief(existing) : null,
     lastBalance: last ? { pence: last.pouch_balance_pence, date: last.class_date, title: last.class_title } : null,
     today: todayInfo().date,
   });
 });
 
-staff.get('/debriefs', (req, res) => {
+staff.get('/debriefs', async (req, res) => {
   const from = DATE_RE.test(req.query.from || '') ? req.query.from : '0000-00-00';
   const to = DATE_RE.test(req.query.to || '') ? req.query.to : '9999-12-31';
-  const rows = db.prepare(`${DEBRIEF_SELECT} WHERE d.class_date BETWEEN ? AND ? ORDER BY d.class_date DESC, d.id DESC LIMIT 500`).all(from, to);
+  const rows = (await db.all(`${DEBRIEF_SELECT} WHERE d.class_date BETWEEN ? AND ? ORDER BY d.class_date DESC, d.id DESC LIMIT 500`, from, to));
   res.json({ debriefs: rows.map(publicDebrief) });
 });
 
-staff.get('/debriefs.csv', (req, res) => {
+staff.get('/debriefs.csv', async (req, res) => {
   const from = DATE_RE.test(req.query.from || '') ? req.query.from : '0000-00-00';
   const to = DATE_RE.test(req.query.to || '') ? req.query.to : '9999-12-31';
-  const rows = db
-    .prepare(`${DEBRIEF_SELECT} WHERE d.class_date BETWEEN ? AND ? ORDER BY d.class_date, d.id`)
-    .all(from, to)
+  const rows = (await db.all(`${DEBRIEF_SELECT} WHERE d.class_date BETWEEN ? AND ? ORDER BY d.class_date, d.id`, from, to))
     .map((d) => [
       d.class_date, d.class_title, d.ran_by, d.attendee_count,
       d.pouch_balance_pence === null ? '' : (d.pouch_balance_pence / 100).toFixed(2),
@@ -737,43 +671,37 @@ staff.get('/debriefs.csv', (req, res) => {
   sendCsv(res, 'class-debriefs.csv', ['Date', 'Class', 'Ran by', 'Attendees', 'LAB pouch balance (£)', 'Feedback', 'Submitted by', 'Submitted at (UTC)'], rows);
 });
 
-staff.get('/debriefs/:id', (req, res) => {
-  res.json({ debrief: publicDebrief(loadDebrief(req.params.id)) });
+staff.get('/debriefs/:id', async (req, res) => {
+  res.json({ debrief: publicDebrief(await loadDebrief(req.params.id)) });
 });
 
-staff.post('/debriefs', (req, res) => {
+staff.post('/debriefs', async (req, res) => {
   const d = readDebrief(req.body);
-  const session = req.body.sessionId ? loadSession(req.body.sessionId) : null;
+  const session = req.body.sessionId ? await loadSession(req.body.sessionId) : null;
   if (session) {
-    const existing = db.prepare('SELECT id FROM class_debriefs WHERE session_id = ?').get(session.id);
+    const existing = (await db.get('SELECT id FROM class_debriefs WHERE session_id = ?', session.id));
     if (existing) throw new HttpError(409, 'A debrief has already been written for this class. Open it to make changes.');
   }
-  const info = db
-    .prepare(
-      `INSERT INTO class_debriefs (session_id, class_title, class_date, ran_by, attendee_count, pouch_balance_pence, feedback, submitted_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(session ? session.id : null, d.classTitle || (session ? session.title : ''), d.classDate, d.ranBy, d.attendeeCount, d.pence, d.feedback, req.user.id);
-  res.status(201).json({ debrief: publicDebrief(loadDebrief(info.lastInsertRowid)) });
+  const info = (await db.run(`INSERT INTO class_debriefs (session_id, class_title, class_date, ran_by, attendee_count, pouch_balance_pence, feedback, submitted_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`, session ? session.id : null, d.classTitle || (session ? session.title : ''), d.classDate, d.ranBy, d.attendeeCount, d.pence, d.feedback, req.user.id));
+  res.status(201).json({ debrief: publicDebrief(await loadDebrief(info.rows[0].id)) });
 });
 
 // Teachers can correct their own debriefs; admins can change any.
-staff.patch('/debriefs/:id', (req, res) => {
-  const existing = loadDebrief(req.params.id);
+staff.patch('/debriefs/:id', async (req, res) => {
+  const existing = await loadDebrief(req.params.id);
   if (req.user.role !== 'admin' && existing.submitted_by !== req.user.id) {
     throw new HttpError(403, 'Only the teacher who wrote this debrief, or an admin, can change it.');
   }
   const d = readDebrief(req.body);
-  db.prepare(
-    `UPDATE class_debriefs SET class_title = ?, class_date = ?, ran_by = ?, attendee_count = ?, pouch_balance_pence = ?,
-            feedback = ?, updated_at = datetime('now') WHERE id = ?`
-  ).run(d.classTitle || existing.class_title, d.classDate, d.ranBy, d.attendeeCount, d.pence, d.feedback, existing.id);
-  res.json({ debrief: publicDebrief(loadDebrief(existing.id)) });
+  (await db.run(`UPDATE class_debriefs SET class_title = ?, class_date = ?, ran_by = ?, attendee_count = ?, pouch_balance_pence = ?,
+            feedback = ?, updated_at = ${db.NOW} WHERE id = ?`, d.classTitle || existing.class_title, d.classDate, d.ranBy, d.attendeeCount, d.pence, d.feedback, existing.id));
+  res.json({ debrief: publicDebrief(await loadDebrief(existing.id)) });
 });
 
-staff.delete('/debriefs/:id', auth.requireRole('admin'), (req, res) => {
-  const d = loadDebrief(req.params.id);
-  db.prepare('DELETE FROM class_debriefs WHERE id = ?').run(d.id);
+staff.delete('/debriefs/:id', auth.requireRole('admin'), async (req, res) => {
+  const d = await loadDebrief(req.params.id);
+  (await db.run('DELETE FROM class_debriefs WHERE id = ?', d.id));
   res.json({ ok: true });
 });
 
@@ -784,8 +712,8 @@ app.use('/api/staff', staff);
 const admin = express.Router();
 admin.use(auth.requireRole('admin'));
 
-admin.patch('/members/:id', (req, res) => {
-  const member = loadMember(req.params.id);
+admin.patch('/members/:id', async (req, res) => {
+  const member = await loadMember(req.params.id);
   const name = req.body.name !== undefined ? str(req.body.name, 120) : member.name;
   const email = req.body.email !== undefined ? str(req.body.email, 200) : member.email || '';
   const phone = req.body.phone !== undefined ? str(req.body.phone, 40) : member.phone || '';
@@ -802,49 +730,56 @@ admin.patch('/members/:id', (req, res) => {
   if (email && !EMAIL_RE.test(email)) throw new HttpError(400, 'That email address does not look right.');
   if (!['member', 'instructor', 'admin'].includes(role)) throw new HttpError(400, 'Invalid role.');
   if (member.id === req.user.id && (role !== 'admin' || !active)) throw new HttpError(400, 'You cannot remove your own admin access.');
-  if (email && db.prepare('SELECT 1 FROM users WHERE email = ? AND id != ?').get(email, member.id)) throw new HttpError(409, 'Another member already uses that email.');
-  db.prepare('UPDATE users SET name = ?, email = ?, phone = ?, notes = ?, bio = ?, role = ?, active = ? WHERE id = ?').run(
-    name, email || null, phone, notes, bio, role, active, member.id
-  );
-  db.prepare('UPDATE users SET under_16 = ?, guardian_name = ?, guardian_email = ?, guardian_phone = ? WHERE id = ?').run(
-    under16, guardianName || null, guardianEmail || null, guardianPhone || null, member.id
-  );
-  if (!active) auth.destroyAllSessionsFor(member.id);
-  res.json({ member: publicUser(loadMember(member.id), { includeNotes: true }) });
+  if (email && (await db.get('SELECT 1 FROM users WHERE lower(email) = lower(?) AND id != ?', email, member.id))) throw new HttpError(409, 'Another member already uses that email.');
+  (await db.run('UPDATE users SET name = ?, email = ?, phone = ?, notes = ?, bio = ?, role = ?, active = ? WHERE id = ?', name, email || null, phone, notes, bio, role, active, member.id));
+  (await db.run('UPDATE users SET under_16 = ?, guardian_name = ?, guardian_email = ?, guardian_phone = ? WHERE id = ?', under16, guardianName || null, guardianEmail || null, guardianPhone || null, member.id));
+  if (!active) await auth.destroyAllSessionsFor(member.id);
+  res.json({ member: publicUser(await loadMember(member.id), { includeNotes: true }) });
 });
 
-admin.post('/members/:id/reset-password', (req, res) => {
-  const member = loadMember(req.params.id);
+admin.post('/members/:id/reset-password', async (req, res) => {
+  const member = await loadMember(req.params.id);
   const password = str(req.body.password, 200) || auth.generatePassword();
   if (password.length < 8) throw new HttpError(400, 'Password must be at least 8 characters.');
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(auth.hashPassword(password), member.id);
-  auth.destroyAllSessionsFor(member.id);
+  (await db.run('UPDATE users SET password_hash = ? WHERE id = ?', auth.hashPassword(password), member.id));
+  await auth.destroyAllSessionsFor(member.id);
   res.json({ password });
 });
 
-admin.post('/members/:id/new-member-id', (req, res) => {
-  const member = loadMember(req.params.id);
-  const memberId = auth.generateMemberId();
-  db.prepare('UPDATE users SET member_id = ? WHERE id = ?').run(memberId, member.id);
-  res.json({ member: publicUser(loadMember(member.id), { includeNotes: true }) });
+admin.post('/members/:id/new-member-id', async (req, res) => {
+  const member = await loadMember(req.params.id);
+  const memberId = await auth.generateMemberId();
+  (await db.run('UPDATE users SET member_id = ? WHERE id = ?', memberId, member.id));
+  res.json({ member: publicUser(await loadMember(member.id), { includeNotes: true }) });
 });
 
-admin.delete('/members/:id', (req, res) => {
-  const member = loadMember(req.params.id);
+admin.delete('/members/:id', async (req, res) => {
+  const member = await loadMember(req.params.id);
   if (member.id === req.user.id) throw new HttpError(400, 'You cannot delete your own account.');
-  db.prepare('DELETE FROM users WHERE id = ?').run(member.id);
+  (await db.run('DELETE FROM users WHERE id = ?', member.id));
   res.json({ ok: true });
 });
 
-admin.put('/content', (req, res) => {
-  const body = req.body;
-  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'Invalid content.');
-  res.json(content.saveContent(body));
+// Full backup of everything in the database (Supabase's free plan has no
+// restorable backups). Contains personal data and password hashes: keep it safe.
+admin.get('/backup.json', async (_req, res) => {
+  const tables = ['users', 'class_sessions', 'attendance', 'class_debriefs', 'privacy_consents', 'messages', 'settings'];
+  const backup = { app: 'london-academy-of-bhangra', createdAt: new Date().toISOString(), tables: {} };
+  for (const t of tables) backup.tables[t] = await db.all(`SELECT * FROM ${t} ORDER BY 1`);
+  res.setHeader('Content-Disposition', `attachment; filename="lab-backup-${todayInfo().date}.json"`);
+  res.setHeader('Cache-Control', 'no-store');
+  res.type('application/json').send(JSON.stringify(backup));
 });
 
-admin.post('/content/reset', (req, res) => {
+admin.put('/content', async (req, res) => {
+  const body = req.body;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'Invalid content.');
+  res.json(await content.saveContent(body));
+});
+
+admin.post('/content/reset', async (req, res) => {
   try {
-    res.json(content.resetSection(str(req.body.section, 40)));
+    res.json(await content.resetSection(str(req.body.section, 40)));
   } catch {
     throw new HttpError(400, 'Unknown section.');
   }
@@ -852,36 +787,28 @@ admin.post('/content/reset', (req, res) => {
 
 const IMAGE_TYPES = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' };
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: UPLOAD_DIR,
-    filename: (_req, file, cb) => cb(null, `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${IMAGE_TYPES[file.mimetype]}`),
-  }),
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024, files: 1 },
   fileFilter: (_req, file, cb) => cb(null, Boolean(IMAGE_TYPES[file.mimetype])),
 });
 
-admin.post('/upload', upload.single('file'), (req, res) => {
+admin.post('/upload', upload.single('file'), async (req, res) => {
   if (!req.file) throw new HttpError(400, 'Please choose a JPG, PNG, WebP or GIF image (max 10 MB).');
-  res.status(201).json({ url: `/uploads/${req.file.filename}` });
+  const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${IMAGE_TYPES[req.file.mimetype]}`;
+  const url = await storage.save(name, req.file.buffer, req.file.mimetype);
+  res.status(201).json({ url });
 });
 
-admin.get('/uploads', (_req, res) => {
-  const files = fs
-    .readdirSync(UPLOAD_DIR)
-    .filter((f) => /\.(jpe?g|png|webp|gif)$/i.test(f))
-    .map((f) => ({ url: `/uploads/${f}`, mtime: fs.statSync(path.join(UPLOAD_DIR, f)).mtimeMs }))
-    .sort((a, b) => b.mtime - a.mtime);
-  res.json({ files });
+admin.get('/uploads', async (_req, res) => {
+  res.json({ files: await storage.list() });
 });
 
-admin.delete('/uploads/:name', (req, res) => {
-  const name = path.basename(req.params.name);
-  const file = path.join(UPLOAD_DIR, name);
-  if (fs.existsSync(file)) fs.unlinkSync(file);
+admin.delete('/uploads/:name', async (req, res) => {
+  await storage.remove(req.params.name);
   res.json({ ok: true });
 });
 
-admin.get('/instagram', (_req, res) => res.json(instagram.status()));
+admin.get('/instagram', async (_req, res) => res.json(await instagram.status()));
 
 admin.post('/instagram', async (req, res) => {
   const token = str(req.body.accessToken, 1000);
@@ -892,7 +819,7 @@ admin.post('/instagram', async (req, res) => {
     } catch (err) {
       throw new HttpError(400, `Could not load that feed: ${err.message}`);
     }
-    return res.json(instagram.status());
+    return res.json(await instagram.status());
   }
   if (!token) throw new HttpError(400, 'Please paste a Behold feed link or an access token.');
   try {
@@ -900,30 +827,30 @@ admin.post('/instagram', async (req, res) => {
   } catch (err) {
     throw new HttpError(400, `Instagram rejected that token: ${err.message}`);
   }
-  res.json(instagram.status());
+  res.json(await instagram.status());
 });
 
 admin.post('/instagram/refresh', async (_req, res) => {
   const feed = await instagram.getFeed({ force: true });
-  res.json({ ...instagram.status(), postCount: feed.posts.length });
+  res.json({ ...(await instagram.status()), postCount: feed.posts.length });
 });
 
-admin.delete('/instagram', (_req, res) => {
-  instagram.clearToken();
-  res.json(instagram.status());
+admin.delete('/instagram', async (_req, res) => {
+  await instagram.clearToken();
+  res.json(await instagram.status());
 });
 
-admin.get('/messages', (_req, res) => {
-  res.json({ messages: db.prepare('SELECT * FROM messages ORDER BY created_at DESC LIMIT 500').all() });
+admin.get('/messages', async (_req, res) => {
+  res.json({ messages: (await db.all('SELECT * FROM messages ORDER BY created_at DESC LIMIT 500')) });
 });
 
-admin.patch('/messages/:id', (req, res) => {
-  db.prepare('UPDATE messages SET is_read = ? WHERE id = ?').run(req.body.read ? 1 : 0, Number(req.params.id));
+admin.patch('/messages/:id', async (req, res) => {
+  (await db.run('UPDATE messages SET is_read = ? WHERE id = ?', req.body.read ? 1 : 0, Number(req.params.id)));
   res.json({ ok: true });
 });
 
-admin.delete('/messages/:id', (req, res) => {
-  db.prepare('DELETE FROM messages WHERE id = ?').run(Number(req.params.id));
+admin.delete('/messages/:id', async (req, res) => {
+  (await db.run('DELETE FROM messages WHERE id = ?', Number(req.params.id)));
   res.json({ ok: true });
 });
 
@@ -933,8 +860,8 @@ app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found.' }));
 
 // ---------- static files & SPA ----------
 
-app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '30d', immutable: true }));
-app.get('/vendor/html5-qrcode.min.js', (_req, res) => {
+app.use('/uploads', express.static(storage.UPLOAD_DIR, { maxAge: '30d', immutable: true }));
+app.get('/vendor/html5-qrcode.min.js', async (_req, res) => {
   res.sendFile(require.resolve('html5-qrcode/html5-qrcode.min.js'), { maxAge: '7d' });
 });
 // Scripts, styles and the manifest are revalidated on every load (cheap 304s via ETag),
@@ -951,7 +878,7 @@ app.use(
 const indexTemplate = fs.readFileSync(path.join(PUBLIC_DIR, 'index.html'), 'utf8');
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-app.get('/{*path}', (req, res) => {
+app.get('/{*path}', async (req, res) => {
   if (path.extname(req.path)) return res.status(404).send('Not found');
   const site = content.getContent().site;
   const color = /^#[0-9a-f]{3,8}$/i.test(site.primaryColor) ? site.primaryColor : '#2f2f52';
@@ -976,16 +903,15 @@ app.use((err, _req, res, _next) => {
 
 // ---------- first run ----------
 
-function ensureAdmin() {
-  const hasAdmin = db.prepare("SELECT 1 FROM users WHERE role = 'admin'").get();
+async function ensureAdmin() {
+  const hasAdmin = (await db.get("SELECT 1 FROM users WHERE role = 'admin'"));
   if (hasAdmin) return;
   const email = process.env.ADMIN_EMAIL || 'admin@londonacademyofbhangra.org';
   const password = process.env.ADMIN_PASSWORD || auth.generatePassword();
-  transaction(() => {
-    db.prepare('INSERT INTO users (member_id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)').run(
-      auth.generateMemberId(), 'Academy Admin', email, auth.hashPassword(password), 'admin'
-    );
-  });
+  await db.run(
+    'INSERT INTO users (member_id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)',
+    await auth.generateMemberId(), 'Academy Admin', email, auth.hashPassword(password), 'admin'
+  );
   console.log('\n================ First run ================');
   console.log(' Admin account created');
   console.log(`   Email:    ${email}`);
@@ -994,10 +920,32 @@ function ensureAdmin() {
   console.log('===========================================\n');
 }
 
-if (require.main === module) {
-  ensureAdmin();
-  instagram.startBackgroundRefresh();
-  app.listen(PORT, () => console.log(`London Academy of Bhangra running on http://localhost:${PORT}`));
+// Connects to the database and loads the website content. Call before listening.
+async function prepare() {
+  // Render's free plan has no permanent disk: without a database URL every
+  // member and attendance record would be lost on the next restart.
+  if (process.env.RENDER && !DATABASE_URL) {
+    throw new Error('DATABASE_URL is not set. Add your Supabase connection string in Render → Environment.');
+  }
+  await initDb();
+  await content.init();
+  await instagram.init();
+  await storage.init();
+  await ensureAdmin();
 }
 
-module.exports = { app, ensureAdmin, extractMemberId };
+if (require.main === module) {
+  prepare()
+    .then(() => {
+      instagram.startBackgroundRefresh();
+      console.log(`Database: ${db.kind === 'postgres' ? 'Postgres (DATABASE_URL)' : 'embedded Postgres in ' + DATA_DIR}`);
+      console.log(`Uploads: ${storage.describe()}`);
+      app.listen(PORT, () => console.log(`London Academy of Bhangra running on http://localhost:${PORT}`));
+    })
+    .catch((err) => {
+      console.error(`\nCould not start: ${err.message}\n`);
+      process.exit(1);
+    });
+}
+
+module.exports = { app, prepare, ensureAdmin, extractMemberId };

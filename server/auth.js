@@ -11,13 +11,13 @@ const ROLE_RANK = { member: 0, instructor: 1, admin: 2 };
 // No 0/O/1/I/L so IDs are easy to read out loud and type by hand.
 const ID_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 
-function generateMemberId() {
+async function generateMemberId() {
   for (;;) {
     let code = '';
     const bytes = crypto.randomBytes(6);
     for (const b of bytes) code += ID_ALPHABET[b % ID_ALPHABET.length];
     const id = `LAB-${code}`;
-    if (!db.prepare('SELECT 1 FROM users WHERE member_id = ?').get(id)) return id;
+    if (!(await db.get('SELECT 1 FROM users WHERE member_id = ?', id))) return id;
   }
 }
 
@@ -57,15 +57,11 @@ function parseCookies(header) {
   return out;
 }
 
-function createSession(res, req, userId) {
+async function createSession(res, req, userId) {
   const token = crypto.randomBytes(32).toString('base64url');
   const expires = Date.now() + SESSION_DAYS * 86400_000;
-  db.prepare('INSERT INTO auth_sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)').run(
-    sha256(token),
-    userId,
-    expires
-  );
-  db.prepare('DELETE FROM auth_sessions WHERE expires_at < ?').run(Date.now());
+  await db.run('INSERT INTO auth_sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)', sha256(token), userId, expires);
+  await db.run('DELETE FROM auth_sessions WHERE expires_at < ?', Date.now());
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: 'lax',
@@ -75,29 +71,29 @@ function createSession(res, req, userId) {
   });
 }
 
-function destroySession(req, res) {
+async function destroySession(req, res) {
   const token = parseCookies(req.headers.cookie)[COOKIE_NAME];
-  if (token) db.prepare('DELETE FROM auth_sessions WHERE token_hash = ?').run(sha256(token));
+  if (token) await db.run('DELETE FROM auth_sessions WHERE token_hash = ?', sha256(token));
   res.clearCookie(COOKIE_NAME, { path: '/' });
 }
 
-function destroyAllSessionsFor(userId) {
-  db.prepare('DELETE FROM auth_sessions WHERE user_id = ?').run(userId);
+async function destroyAllSessionsFor(userId) {
+  await db.run('DELETE FROM auth_sessions WHERE user_id = ?', userId);
 }
 
 // Attaches req.user when a valid session cookie is present.
-function loadUser(req, _res, next) {
+async function loadUser(req, _res, next) {
   req.user = null;
   const token = parseCookies(req.headers.cookie)[COOKIE_NAME];
   if (token) {
-    const row = db
-      .prepare(
-        `SELECT u.id, u.member_id, u.name, u.email, u.phone, u.bio, u.role, u.active, u.created_at,
-                u.privacy_version, u.privacy_accepted_at, u.under_16, u.guardian_name, u.guardian_email, u.guardian_phone
-           FROM auth_sessions s JOIN users u ON u.id = s.user_id
-          WHERE s.token_hash = ? AND s.expires_at > ?`
-      )
-      .get(sha256(token), Date.now());
+    const row = await db.get(
+      `SELECT u.id, u.member_id, u.name, u.email, u.phone, u.bio, u.role, u.active, u.created_at,
+              u.privacy_version, u.privacy_accepted_at, u.under_16, u.guardian_name, u.guardian_email, u.guardian_phone
+         FROM auth_sessions s JOIN users u ON u.id = s.user_id
+        WHERE s.token_hash = ? AND s.expires_at > ?`,
+      sha256(token),
+      Date.now()
+    );
     if (row && row.active) req.user = row;
   }
   next();

@@ -22,31 +22,35 @@ const RETRY_AFTER_ERROR_MS = 2 * 60_000;
 
 // Last good feed, kept in the database so the gallery still has posts after a
 // restart even if Instagram is briefly unreachable.
-let memoryCache = getSetting('instagram_cache', null); // { fetchedAt, posts, generation }
+let memoryCache = null; // { fetchedAt, posts }
 let inflight = null;
 let lastFailureAt = 0;
 // Bumped whenever the connection changes, so a fetch started for the old
 // connection can never overwrite the cache for the new one.
 let generation = 0;
 
-function resetCache() {
+async function init() {
+  memoryCache = await getSetting('instagram_cache', null);
+}
+
+async function resetCache() {
   generation++;
   memoryCache = null;
   lastFailureAt = 0;
-  setSetting('instagram_cache', null);
+  await setSetting('instagram_cache', null);
 }
 
-function getConfig() {
-  const stored = getSetting('instagram', {}) || {};
+async function getConfig() {
+  const stored = (await getSetting('instagram', {})) || {};
   if (!stored.accessToken && !stored.beholdUrl && process.env.INSTAGRAM_ACCESS_TOKEN) {
     return { ...stored, accessToken: process.env.INSTAGRAM_ACCESS_TOKEN, fromEnv: true };
   }
   return stored;
 }
 
-function saveConfig(patch) {
-  const current = getSetting('instagram', {}) || {};
-  setSetting('instagram', { ...current, ...patch });
+async function saveConfig(patch) {
+  const current = (await getSetting('instagram', {})) || {};
+  await setSetting('instagram', { ...current, ...patch });
 }
 
 async function graphGet(pathname, params) {
@@ -112,7 +116,7 @@ async function fetchBehold(url) {
 }
 
 async function fetchPosts(limit = 50) {
-  const cfg = getConfig();
+  const cfg = await getConfig();
   if (provider(cfg) === 'behold') return (await fetchBehold(cfg.beholdUrl)).posts;
   if (!cfg.accessToken) return null;
   const body = await graphGet('/me/media', {
@@ -124,7 +128,7 @@ async function fetchPosts(limit = 50) {
 }
 
 async function getFeed({ force = false } = {}) {
-  const cfg = getConfig();
+  const cfg = await getConfig();
   if (!provider(cfg)) return { configured: false, posts: [] };
 
   const fresh = memoryCache && Date.now() - memoryCache.fetchedAt < FEED_TTL_MS;
@@ -138,12 +142,12 @@ async function getFeed({ force = false } = {}) {
   if (!inflight) {
     const gen = generation;
     inflight = fetchPosts()
-      .then((posts) => {
+      .then(async (posts) => {
         if (gen !== generation) return { fetchedAt: Date.now(), posts: [] };
         memoryCache = { fetchedAt: Date.now(), posts };
         lastFailureAt = 0;
-        setSetting('instagram_cache', memoryCache);
-        saveConfig({ lastError: '', lastFetchedAt: new Date().toISOString() });
+        await setSetting('instagram_cache', memoryCache);
+        await saveConfig({ lastError: '', lastFetchedAt: new Date().toISOString() });
         return memoryCache;
       })
       .finally(() => {
@@ -155,7 +159,7 @@ async function getFeed({ force = false } = {}) {
     return { configured: true, posts: result.posts, fetchedAt: result.fetchedAt };
   } catch (err) {
     lastFailureAt = Date.now();
-    saveConfig({ lastError: err.message });
+    await saveConfig({ lastError: err.message });
     // Serve stale posts rather than an empty gallery if Instagram is briefly down.
     if (memoryCache) return { configured: true, posts: memoryCache.posts, stale: true };
     return { configured: true, posts: [], error: 'Instagram posts are unavailable right now.' };
@@ -171,21 +175,21 @@ async function setBeholdUrl(url) {
   const clean = String(url || '').trim();
   if (!BEHOLD_RE.test(clean)) throw new Error('That does not look like a Behold JSON feed link (https://feeds.behold.so/…).');
   const feed = await fetchBehold(clean);
-  setSetting('instagram', {
+  await setSetting('instagram', {
     beholdUrl: clean,
     username: feed.username,
     accountType: '',
     tokenSetAt: new Date().toISOString(),
     lastError: '',
   });
-  resetCache();
+  await resetCache();
   return feed;
 }
 
 async function setToken(token) {
   const me = await testToken(token);
   // A fresh long-lived token lasts 60 days. Record that and refresh it well before expiry.
-  setSetting('instagram', {
+  await setSetting('instagram', {
     accessToken: token,
     username: me.username || '',
     accountType: me.account_type || '',
@@ -193,17 +197,17 @@ async function setToken(token) {
     expiresAt: new Date(Date.now() + 60 * 86400_000).toISOString(),
     lastError: '',
   });
-  resetCache();
+  await resetCache();
   return me;
 }
 
-function clearToken() {
-  setSetting('instagram', {});
-  resetCache();
+async function clearToken() {
+  await setSetting('instagram', {});
+  await resetCache();
 }
 
 async function refreshTokenIfNeeded() {
-  const cfg = getConfig();
+  const cfg = await getConfig();
   if (provider(cfg) !== 'instagram' || cfg.fromEnv) return;
   const setAt = cfg.tokenSetAt ? Date.parse(cfg.tokenSetAt) : 0;
   // Tokens can only be refreshed once they are at least 24 hours old.
@@ -213,19 +217,19 @@ async function refreshTokenIfNeeded() {
       grant_type: 'ig_refresh_token',
       access_token: cfg.accessToken,
     });
-    saveConfig({
+    await saveConfig({
       accessToken: body.access_token,
       tokenSetAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + (body.expires_in || 60 * 86400) * 1000).toISOString(),
       lastError: '',
     });
   } catch (err) {
-    saveConfig({ lastError: `Token refresh failed: ${err.message}` });
+    await saveConfig({ lastError: `Token refresh failed: ${err.message}` });
   }
 }
 
-function status() {
-  const cfg = getConfig();
+async function status() {
+  const cfg = await getConfig();
   return {
     configured: Boolean(provider(cfg)),
     provider: provider(cfg),
@@ -246,4 +250,4 @@ function startBackgroundRefresh() {
   setInterval(tick, 12 * 3600_000).unref();
 }
 
-module.exports = { getFeed, setToken, setBeholdUrl, clearToken, status, startBackgroundRefresh, normaliseBehold, normaliseGraph };
+module.exports = { init, getFeed, setToken, setBeholdUrl, clearToken, status, startBackgroundRefresh, normaliseBehold, normaliseGraph };

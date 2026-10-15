@@ -234,7 +234,7 @@ If we find that a child under 16 has created an account without a parent or guar
 
 - **LAB teachers** can see members' names, member IDs, contact details, bios and attendance so they can run classes.
 - **LAB administrators** can see and manage all account information.
-- **Our website hosting provider** stores the information on secure servers for us. They are only allowed to use it to provide their service to us.
+- **Our website and database providers** (Render and Supabase) store the information on secure servers in the UK or European Economic Area. They are only allowed to use it to provide their service to us.
 
 We will only share information with anyone else if the law requires it (for example, with the police or a court), or to protect someone's safety.
 

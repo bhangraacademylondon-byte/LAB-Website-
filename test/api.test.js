@@ -9,21 +9,24 @@ const path = require('node:path');
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-test-'));
 process.env.ADMIN_EMAIL = 'admin@test.local';
 process.env.ADMIN_PASSWORD = 'admin-password';
+process.env.PGLITE_DIR = 'memory';
 
-const { app, ensureAdmin, extractMemberId } = require('../server/index.js');
+const { app, prepare, extractMemberId } = require('../server/index.js');
+const { close: closeDb } = require('../server/db');
 
 let server;
 let base;
 
 before(async () => {
-  ensureAdmin();
+  await prepare();
   server = app.listen(0);
   await new Promise((r) => server.once('listening', r));
   base = `http://localhost:${server.address().port}`;
 });
 
-after(() => {
+after(async () => {
   server.close();
+  await closeDb();
   fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true });
 });
 
@@ -118,6 +121,19 @@ test('admin content edits are saved and merged with defaults', async () => {
 
   const page = await fetch(`${base}/p/performances`);
   assert.equal(page.status, 200);
+});
+
+test('admins can download a full backup; others cannot', async () => {
+  const admin = client();
+  await admin('POST', '/api/auth/login', { identifier: 'admin@test.local', password: 'admin-password' });
+  const backup = await admin('GET', '/api/admin/backup.json');
+  assert.equal(backup.status, 200);
+  assert.ok(backup.body.tables.users.length >= 1);
+  assert.ok(Array.isArray(backup.body.tables.attendance));
+  assert.equal('auth_sessions' in backup.body.tables, false, 'login sessions are never exported');
+  const member = client();
+  await member('POST', '/api/auth/register', { name: 'Nosy', email: 'nosy@test.local', password: 'password1', acceptPrivacy: true, ageGroup: '16plus' });
+  assert.equal((await member('GET', '/api/admin/backup.json')).status, 403);
 });
 
 test('member responses never include staff notes', async () => {

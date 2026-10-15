@@ -109,7 +109,8 @@ async function dashboard(root) {
           <li class="list-item"><a href="/admin/debriefs">Class debriefs & LAB pouch balance</a></li>
           ${isAdmin() ? html`
           <li class="list-item"><a href="/admin/content/home">Edit the website</a></li>
-          <li class="list-item"><a href="/admin/instagram">Instagram gallery settings</a></li>` : ''}
+          <li class="list-item"><a href="/admin/instagram">Instagram gallery settings</a></li>
+          <li class="list-item"><a href="/api/admin/backup.json" download>Download a full backup</a><span class="meta">Do this regularly and keep the file somewhere safe and private.</span></li>` : ''}
           <li class="list-item"><a href="/account">My member card</a></li>
         </ul>
       </div>

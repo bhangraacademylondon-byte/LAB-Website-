@@ -106,21 +106,33 @@ function normalise(content) {
   return merged;
 }
 
+// The content is read on almost every request, so it is kept in memory and
+// written to the database whenever an admin saves. (The app runs as a single
+// server, so the copy in memory is always the latest.)
+let cache = null;
+
+async function init() {
+  cache = normalise(await getSetting('content', {}));
+  return cache;
+}
+
 function getContent() {
-  return normalise(getSetting('content', {}));
+  if (!cache) throw new Error('Content not loaded yet: call content.init() first.');
+  return structuredClone(cache);
 }
 
-function saveContent(content) {
+async function saveContent(content) {
   const clean = normalise(content);
-  setSetting('content', clean);
-  return clean;
+  await setSetting('content', clean);
+  cache = clean;
+  return structuredClone(clean);
 }
 
-function resetSection(section) {
+async function resetSection(section) {
   if (!SECTIONS.includes(section)) throw new Error('Unknown section');
   const current = getContent();
   current[section] = structuredClone(defaults[section]);
   return saveContent(current);
 }
 
-module.exports = { getContent, saveContent, resetSection, SECTIONS };
+module.exports = { init, getContent, saveContent, resetSection, SECTIONS };
