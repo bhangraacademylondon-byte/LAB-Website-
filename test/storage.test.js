@@ -40,7 +40,8 @@ const fake = http.createServer((req, res) => {
 let storage;
 before(async () => {
   await new Promise((r) => fake.listen(0, r));
-  process.env.SUPABASE_URL = `http://127.0.0.1:${fake.address().port}/`;
+  // Copied with the Data API path on the end, as the Supabase dashboard shows it.
+  process.env.SUPABASE_URL = `http://127.0.0.1:${fake.address().port}/rest/v1/`;
   process.env.SUPABASE_SERVICE_KEY = 'sb_secret_test';
   storage = require('../server/storage');
 });
@@ -53,7 +54,7 @@ test('uploads go to a public Supabase Storage bucket', async () => {
   await storage.init(); // second start: "already exists" is fine
 
   const url = await storage.save('123-logo.png', Buffer.from('png-bytes'), 'image/png');
-  assert.equal(url, `${process.env.SUPABASE_URL.replace(/\/$/, '')}/storage/v1/object/public/uploads/123-logo.png`);
+  assert.equal(url, `http://127.0.0.1:${fake.address().port}/storage/v1/object/public/uploads/123-logo.png`);
   assert.equal(files.get('123-logo.png').toString(), 'png-bytes');
   const upload = seen.find((s) => s.url.endsWith('/123-logo.png'));
   assert.equal(upload.apikey, 'sb_secret_test');
@@ -64,4 +65,26 @@ test('uploads go to a public Supabase Storage bucket', async () => {
   assert.deepEqual(list.map((f) => f.name), ['123-logo.png']);
   await storage.remove('../../123-logo.png');
   assert.equal(files.size, 0, 'delete uses only the file name');
+});
+
+test('a storage problem is reported on upload instead of stopping the site', async () => {
+  const broken = http.createServer((req, res) => { req.resume(); req.on('end', () => { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end('{"code":"PGRST125","message":"Invalid path specified in request URL"}'); }); });
+  await new Promise((r) => broken.listen(0, r));
+  const { execFile } = require('node:child_process');
+  const run = require('node:util').promisify(execFile);
+  const script = `
+    const s = require('./server/storage');
+    s.init().then(async () => {
+      console.log('DESCRIBE ' + s.describe());
+      try { await s.save('x.png', Buffer.from('x'), 'image/png'); } catch (e) { console.log('UPLOAD ' + e.message); }
+    });`;
+  // Run asynchronously so this process can keep answering as the stand-in server.
+  const { stdout: out } = await run(process.execPath, ['-e', script], {
+    cwd: require('node:path').join(__dirname, '..'),
+    env: { ...process.env, SUPABASE_URL: `http://127.0.0.1:${broken.address().port}`, SUPABASE_SERVICE_KEY: 'k', DATA_DIR: require('node:os').tmpdir() },
+    encoding: 'utf8',
+  });
+  broken.close();
+  assert.match(out, /DESCRIBE Supabase Storage NOT WORKING/);
+  assert.match(out, /UPLOAD Supabase Storage is not working: .*404.*Check SUPABASE_URL/);
 });
