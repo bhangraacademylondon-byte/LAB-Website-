@@ -1,0 +1,31 @@
+# Render Blueprint (free plan) for the engagement RSVP website.
+# In Render: New → Blueprint → pick this repository and set "Blueprint Path"
+# to engagement-rsvp/render.yaml, then fill in the values marked "sync: false".
+services:
+  - type: web
+    name: ravi-akshee-rsvp
+    runtime: node
+    region: frankfurt # closest Render region to London
+    plan: free
+    rootDir: engagement-rsvp
+    branch: claude/engagement-party-rsvp-98apt4
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: TRUST_PROXY
+        value: "1"
+      - key: ADMIN_EMAIL
+        value: Ravi.akshee@gmail.com
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: DATABASE_URL # Supabase → Connect → Session pooler connection string
+        sync: false
+      - key: SUPABASE_URL # Supabase → Project Settings → API → Project URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY # Supabase → Project Settings → API Keys → secret / service_role key
+        sync: false
+      - key: RESEND_API_KEY # resend.com → API Keys (sign up with Ravi.akshee@gmail.com)
+        sync: false
