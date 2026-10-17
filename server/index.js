@@ -186,6 +186,11 @@ app.use(async (req, res, next) => {
 });
 
 app.use(express.json({ limit: '2mb' }));
+app.use(async (req, _res, next) => {
+  // Static files (images, scripts) don't need the website content.
+  if (!/\.\w+$/.test(req.path) || req.path.startsWith('/api/')) await content.refreshIfStale();
+  next();
+});
 app.use(auth.loadUser);
 
 // State-changing API calls must carry a custom header. Browsers will not send
@@ -771,6 +776,15 @@ admin.get('/backup.json', async (_req, res) => {
   res.type('application/json').send(JSON.stringify(backup));
 });
 
+admin.put('/content/:section', async (req, res) => {
+  const value = req.body?.value;
+  if (!content.SECTIONS.includes(req.params.section) || value === undefined || value === null || typeof value !== 'object') {
+    throw new HttpError(400, 'Invalid content.');
+  }
+  res.json(await content.saveSection(req.params.section, value));
+});
+
+// Replaces all content at once (used by Admin → Advanced to restore a backup).
 admin.put('/content', async (req, res) => {
   const body = req.body;
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'Invalid content.');

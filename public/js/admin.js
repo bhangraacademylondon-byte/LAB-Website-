@@ -1325,6 +1325,15 @@ function saveBar(onSave, viewLink) {
   return { bar, setDirty, isDirty: () => dirty };
 }
 
+// Saves one section only, so an editor opened earlier (another tab, phone or
+// person) can't overwrite newer changes to other sections.
+async function saveSection(section, value) {
+  const saved = await api(`/api/admin/content/${section}`, { method: 'PUT', body: { value } });
+  state.content = saved;
+  await reloadContent();
+  return saved;
+}
+
 async function saveContent(next) {
   const saved = await api('/api/admin/content', { method: 'PUT', body: next });
   state.content = saved;
@@ -1333,6 +1342,9 @@ async function saveContent(next) {
 }
 
 async function contentEditor(root, section) {
+  // Always start editing from the latest saved content, not the copy this
+  // browser loaded earlier.
+  await reloadContent();
   if (section === 'nav') return navEditor(root);
   if (section === 'json') return jsonEditor(root);
   const schema = SCHEMAS[section];
@@ -1345,8 +1357,7 @@ async function contentEditor(root, section) {
   const { bar, setDirty } = saveBar(async (btn) => {
     await withBusy(btn, async () => {
       try {
-        if (schema.root) draftAll[section] = holder.$;
-        await saveContent(draftAll);
+        await saveSection(section, schema.root ? holder.$ : draftAll[section]);
         setDirty(false);
         toast('Saved! The website has been updated.', 'success');
         if (schema.root) contentEditor(root, section);
@@ -1384,7 +1395,7 @@ function navEditor(root) {
   const { bar, setDirty } = saveBar(async (btn) => {
     await withBusy(btn, async () => {
       try {
-        await saveContent(draftAll);
+        await saveSection('nav', nav);
         setDirty(false);
         toast('Menu saved', 'success');
       } catch (err) {

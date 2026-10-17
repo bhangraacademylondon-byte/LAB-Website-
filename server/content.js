@@ -106,14 +106,21 @@ function normalise(content) {
   return merged;
 }
 
-// The content is read on almost every request, so it is kept in memory and
-// written to the database whenever an admin saves. (The app runs as a single
-// server, so the copy in memory is always the latest.)
+// The content is read on almost every request, so a copy is kept in memory.
+// It is re-read from the database every few seconds, because during a deploy
+// (or on a host running several copies of the app) another copy may have saved.
+const MAX_AGE_MS = 2000;
 let cache = null;
+let loadedAt = 0;
 
 async function init() {
   cache = normalise(await getSetting('content', {}));
+  loadedAt = Date.now();
   return cache;
+}
+
+async function refreshIfStale() {
+  if (!cache || Date.now() - loadedAt > MAX_AGE_MS) await init();
 }
 
 function getContent() {
@@ -125,14 +132,21 @@ async function saveContent(content) {
   const clean = normalise(content);
   await setSetting('content', clean);
   cache = clean;
+  loadedAt = Date.now();
   return structuredClone(clean);
 }
 
-async function resetSection(section) {
+// Saves one section (e.g. the home page) on top of the latest saved content,
+// so an editor opened earlier can never undo changes made to other sections.
+async function saveSection(section, value) {
   if (!SECTIONS.includes(section)) throw new Error('Unknown section');
-  const current = getContent();
-  current[section] = structuredClone(defaults[section]);
-  return saveContent(current);
+  const latest = normalise(await getSetting('content', {}));
+  latest[section] = value;
+  return saveContent(latest);
 }
 
-module.exports = { init, getContent, saveContent, resetSection, SECTIONS };
+async function resetSection(section) {
+  return saveSection(section, structuredClone(defaults[section]));
+}
+
+module.exports = { init, refreshIfStale, getContent, saveContent, saveSection, resetSection, SECTIONS };
