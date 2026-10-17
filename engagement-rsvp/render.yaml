@@ -1,14 +1,12 @@
-# Render Blueprint (free plan) for the engagement RSVP website.
-# In Render: New → Blueprint → pick this repository and set "Blueprint Path"
-# to engagement-rsvp/render.yaml, then fill in the values marked "sync: false".
+# Render Blueprint (free plan) for the Pooja & engagement party RSVP website.
+# In Render: New → Blueprint → pick this repository, then fill in the values
+# marked "sync: false" when asked (see README → "Putting it online").
 services:
   - type: web
     name: ravi-akshee-rsvp
     runtime: node
     region: frankfurt # closest Render region to London
     plan: free
-    rootDir: engagement-rsvp
-    branch: claude/engagement-party-rsvp-98apt4
     buildCommand: npm ci --omit=dev
     startCommand: npm start
     healthCheckPath: /healthz

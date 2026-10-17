@@ -1,7 +1,5 @@
 # London Academy of Bhangra web app
 
-> This repository also holds a separate engagement party RSVP website in [`engagement-rsvp/`](engagement-rsvp/README.md).
-
 A mobile-friendly website and members' app for the London Academy of Bhangra (LAB).
 
 - **Public site:** Home, About, Timetable, Pricing, Gallery and Contact tabs, plus any extra pages you create.

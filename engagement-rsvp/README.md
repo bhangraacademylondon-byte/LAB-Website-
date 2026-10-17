@@ -46,12 +46,27 @@ Below the box, tick which events everyone on that list is invited to. So add you
 
 Both events are set up under **Edit website → Events (Pooja & Party)**. Set each event's **date** there. Each event has *Show on the home page for everyone*. If you'd rather Pooja-only guests didn't see the Engagement Party on the public pages, untick it for the party: guests invited to it still see it when they RSVP.
 
+## Putting the code on your GitHub account
+
+This website lives in its own GitHub repository, separate from the London Academy of Bhangra site.
+
+1. Sign in to [github.com](https://github.com) with the account you want to use, and click **+ → New repository**.
+2. Name it e.g. `ravi-akshee-rsvp`. Choose **Private** (recommended). Don't tick "Add a README". Click **Create repository**.
+3. On the next page, click **uploading an existing file**.
+4. Unzip `ravi-akshee-rsvp.zip` on your computer, open the `ravi-akshee-rsvp` folder, select **everything inside it** and drag it onto the GitHub page. Wait for all the files to upload, then click **Commit changes**.
+
+The repository should then show `package.json`, `render.yaml`, `README.md` and the `server`, `public` and `test` folders at the top level.
+
+(If you use git on your computer instead: unzip, `cd ravi-akshee-rsvp`, then `git init`, `git add .`, `git commit -m "RSVP website"`, `git branch -M main`, `git remote add origin <your new repo's URL>`, `git push -u origin main`.)
+
+No guest information is stored in the code: the guest list and replies live in your Supabase database.
+
 ## Running it on your own computer
 
 Requires **Node.js 22 or newer**.
 
 ```bash
-cd engagement-rsvp
+cd ravi-akshee-rsvp
 npm install
 cp .env.example .env      # then set ADMIN_PASSWORD
 npm start                 # http://localhost:3000
@@ -84,14 +99,14 @@ Without a domain of your own, Resend's free plan only delivers to the address yo
 
 ### 3. Render (the website)
 
-1. Sign in at [dashboard.render.com](https://dashboard.render.com) and give Render access to this GitHub repository.
-2. Click **New → Blueprint**, pick this repository, and set **Blueprint Path** to `engagement-rsvp/render.yaml`.
+1. Sign in at [dashboard.render.com](https://dashboard.render.com) (sign up with the same GitHub account that holds this repository) and give Render access to the repository. For a private repository, Render asks you to install its GitHub app: choose **Only select repositories** and pick this one.
+2. Click **New → Blueprint** and pick this repository. Render finds `render.yaml` by itself.
 3. Fill in **ADMIN_PASSWORD**, **DATABASE_URL**, **SUPABASE_URL**, **SUPABASE_SERVICE_KEY** and **RESEND_API_KEY**, then click **Deploy Blueprint**.
 4. When it finishes, the site is live at an address like `https://ravi-akshee-rsvp.onrender.com`. Go to `/admin` and log in with Ravi.akshee@gmail.com and your ADMIN_PASSWORD.
 5. In **Settings → Email updates**, click **Send a test email**.
 6. Optional: under the service's **Environment**, add `PUBLIC_URL` (your site's address) so links in emails always point to the right place, and add your own domain under **Settings → Custom Domains**.
 
-(Alternatively, create a **Web Service** by hand: Root Directory `engagement-rsvp`, build `npm ci --omit=dev`, start `npm start`, and the same environment variables.)
+(Alternatively, create a **Web Service** by hand: build command `npm ci --omit=dev`, start command `npm start`, and the same environment variables.)
 
 ### 4. Keep it awake (recommended)
 
