@@ -121,14 +121,19 @@ function composeEmail(result, link) {
   const site = content.getContent().site;
   const verb = { submitted: 'has replied', updated: 'has changed their reply', admin_edit: 'reply was edited by an admin' }[action];
   const subject = `${action === 'submitted' ? 'New RSVP' : 'RSVP changed'}: ${snap.household}: ${summary}`;
+  const mark = (a) => (a === true ? '✓' : a === false ? '✗' : '?');
+  const status = (a) => (a === true ? 'Coming' : a === false ? 'Not coming' : 'No reply');
+  const multi = (snap.events || []).length > 1;
   const guestLines = snap.guests.map((g) => {
-    const mark = g.attending === true ? '✓' : g.attending === false ? '✗' : '?';
-    const status = g.attending === true ? 'Coming' : g.attending === false ? 'Not coming' : 'No reply';
     const extra = g.plusOne ? ' (extra guest)' : '';
-    return { head: `${mark} ${g.name}${extra}: ${status}`, answers: g.answers.map((a) => `${a.q}: ${a.a}`) };
+    const head = multi
+      ? `${g.name}${extra}: ${g.events.map((e) => `${mark(e.attending)} ${e.name}: ${status(e.attending)}`).join(' · ')}`
+      : `${mark(g.attending)} ${g.name}${extra}: ${status(g.attending)}`;
+    return { head, answers: g.answers.map((a) => `${a.q}: ${a.a}`) };
   });
   const text = [
     `${snap.household} ${verb}.`,
+    ...(multi ? [`Invited to: ${snap.events.join(' and ')}`] : []),
     summary,
     '',
     ...(changes.length ? ['What changed:', ...changes.map((c) => `  • ${c}`), ''] : []),
@@ -140,6 +145,7 @@ function composeEmail(result, link) {
   ].join('\n');
   const html = `<div style="font-family:Georgia,serif;font-size:17px;line-height:1.5;color:#2b2420;max-width:600px">
     <h2 style="margin:0 0 4px">${escHtml(snap.household)} ${escHtml(verb)}</h2>
+    ${multi ? `<p style="margin:0">Invited to: ${escHtml(snap.events.join(' and '))}</p>` : ''}
     <p style="margin:0 0 16px;font-size:18px"><strong>${escHtml(summary)}</strong></p>
     ${changes.length ? `<p style="margin:0">What changed:</p><ul>${changes.map((c) => `<li>${escHtml(c)}</li>`).join('')}</ul>` : ''}
     <ul style="padding-left:0;list-style:none">${guestLines.map((g) => `<li style="margin-bottom:8px">${escHtml(g.head)}${g.answers.map((a) => `<br><span style="color:#6b5e55;padding-left:22px">${escHtml(a)}</span>`).join('')}</li>`).join('')}</ul>
@@ -231,14 +237,14 @@ app.post('/api/rsvp/lookup', async (req, res) => {
 app.get('/api/rsvp/invite', async (req, res) => {
   const invite = await requireInvite(req);
   res.setHeader('Cache-Control', 'no-store');
-  res.json({ invite: rsvp.inviteView(invite, content.getContent().rsvp) });
+  res.json({ invite: rsvp.inviteView(invite, content.getContent()) });
 });
 
 app.post('/api/rsvp/reply', async (req, res) => {
   const current = await requireInvite(req);
-  const settings = content.getContent().rsvp;
+  const settings = content.getContent();
   const view = rsvp.inviteView(current, settings);
-  if (!view.canReply) throw new HttpError(403, settings.open ? settings.closedText : settings.notOpenText);
+  if (!view.canReply) throw new HttpError(403, settings.rsvp.open ? settings.rsvp.closedText : settings.rsvp.notOpenText);
   const result = await rsvp.saveReply(current.household.id, req.body, settings, { actor: 'guest' });
   sendUpdateEmail(req, result, current.household.id).catch((err) => console.error(err));
   res.json({ invite: rsvp.inviteView(result.saved, settings), firstReply: result.firstReply });
@@ -286,7 +292,8 @@ function householdStatus(h, deadlinePassed) {
   return deadlinePassed ? 'overdue' : 'waiting';
 }
 
-function householdView(h, guests, deadlinePassed) {
+function householdView(h, guests, deadlinePassed, allEvents) {
+  const events = rsvp.invitedEvents(h, allEvents);
   return {
     id: h.id,
     name: h.name,
@@ -294,6 +301,7 @@ function householdView(h, guests, deadlinePassed) {
     contactEmail: h.contact_email,
     notes: h.notes,
     plusOnes: h.plus_ones,
+    events: events.map((e) => e.id),
     answers: rsvp.parseJson(h.answers, {}),
     respondedBy: h.responded_by,
     respondedAt: h.responded_at,
@@ -302,12 +310,13 @@ function householdView(h, guests, deadlinePassed) {
     chasedAt: h.chased_at,
     createdAt: h.created_at,
     status: householdStatus(h, deadlinePassed),
-    guests: guests.map(rsvp.guestView),
+    guests: guests.map((g) => rsvp.guestView(g, events)),
   };
 }
 
 async function allHouseholds() {
-  const passed = rsvp.deadlinePassed(content.getContent().rsvp);
+  const { rsvp: settings, events } = content.getContent();
+  const passed = rsvp.deadlinePassed(settings);
   const households = await db.all('SELECT * FROM households ORDER BY lower(name), id');
   const guests = await db.all('SELECT * FROM guests ORDER BY is_plus_one, sort, id');
   const byHousehold = new Map();
@@ -315,24 +324,38 @@ async function allHouseholds() {
     if (!byHousehold.has(g.household_id)) byHousehold.set(g.household_id, []);
     byHousehold.get(g.household_id).push(g);
   }
-  return households.map((h) => householdView(h, byHousehold.get(h.id) || [], passed));
+  return households.map((h) => householdView(h, byHousehold.get(h.id) || [], passed, events.items));
 }
 
+// Overall numbers, plus head counts for each event.
 function stats(households) {
-  const s = { households: households.length, replied: 0, waiting: 0, overdue: 0, invited: 0, coming: 0, notComing: 0, noReply: 0, comingAdults: 0, comingChildren: 0, extraGuests: 0 };
+  const s = { households: households.length, replied: 0, waiting: 0, overdue: 0, invited: 0, extraGuests: 0, noReply: 0 };
+  const perEvent = content.getContent().events.items.map((e) => ({
+    id: e.id, name: e.name, date: e.date, time: e.time, invitations: 0, invited: 0, coming: 0, comingAdults: 0, comingChildren: 0, notComing: 0, noReply: 0,
+  }));
   for (const h of households) {
     s[h.status] += 1;
     for (const g of h.guests) {
-      if (!g.isPlusOne) s.invited += 1;
-      else s.extraGuests += 1;
-      if (g.attending === true) {
-        s.coming += 1;
-        if (g.isChild) s.comingChildren += 1;
-        else s.comingAdults += 1;
-      } else if (g.attending === false) s.notComing += 1;
-      else s.noReply += 1;
+      if (g.isPlusOne) s.extraGuests += 1;
+      else s.invited += 1;
+      if (g.attending === null) s.noReply += 1;
+    }
+    for (const ev of perEvent) {
+      if (!h.events.includes(ev.id)) continue;
+      ev.invitations += 1;
+      for (const g of h.guests) {
+        if (!g.isPlusOne) ev.invited += 1;
+        const a = g.attendance[ev.id];
+        if (a === true) {
+          ev.coming += 1;
+          if (g.isChild) ev.comingChildren += 1;
+          else ev.comingAdults += 1;
+        } else if (a === false) ev.notComing += 1;
+        else ev.noReply += 1;
+      }
     }
   }
+  s.events = perEvent;
   return s;
 }
 
@@ -360,9 +383,10 @@ admin.get('/households', async (_req, res) => {
 admin.get('/households/:id', async (req, res) => {
   const loaded = await rsvp.loadHousehold(Number(req.params.id));
   if (!loaded) throw new HttpError(404, 'Invitation not found.');
-  const passed = rsvp.deadlinePassed(content.getContent().rsvp);
+  const { rsvp: settings, events } = content.getContent();
+  const passed = rsvp.deadlinePassed(settings);
   const log = await db.all('SELECT * FROM rsvp_log WHERE household_id = ? ORDER BY id DESC', loaded.household.id);
-  res.json({ household: householdView(loaded.household, loaded.guests, passed), log: log.map(logView) });
+  res.json({ household: householdView(loaded.household, loaded.guests, passed, events.items), log: log.map(logView) });
 });
 
 // Reads the details form for a family: name, guests on the invitation, extra
@@ -377,10 +401,15 @@ function readHouseholdForm(body) {
   if (!Number.isInteger(plusOnes) || plusOnes < 0 || plusOnes > 20) throw new HttpError(400, 'Extra guests must be a whole number from 0 to 20.');
   const contactEmail = str(body.contactEmail, 200);
   if (contactEmail && !EMAIL_RE.test(contactEmail)) throw new HttpError(400, 'That email address does not look right.');
+  // Which events they're invited to. Left out entirely, it means all of them.
+  const allIds = content.getContent().events.items.map((e) => e.id);
+  const events = body.events === undefined ? allIds : allIds.filter((id) => Array.isArray(body.events) && body.events.includes(id));
+  if (!events.length) throw new HttpError(400, 'Please choose which events they are invited to.');
   return {
     name: str(body.name, 120) || defaultHouseholdName(guests.map((g) => g.name)),
     guests,
     plusOnes,
+    events,
     contactPhone: str(body.contactPhone, 60),
     contactEmail,
     notes: str(body.notes, 2000),
@@ -405,8 +434,8 @@ async function duplicateWarnings(names, exceptHouseholdId) {
 
 async function insertHousehold(tx, form) {
   const { rows } = await tx.run(
-    'INSERT INTO households (name, contact_phone, contact_email, notes, plus_ones) VALUES (?, ?, ?, ?, ?) RETURNING id',
-    form.name, form.contactPhone, form.contactEmail, form.notes, form.plusOnes
+    'INSERT INTO households (name, contact_phone, contact_email, notes, plus_ones, events) VALUES (?, ?, ?, ?, ?, ?) RETURNING id',
+    form.name, form.contactPhone, form.contactEmail, form.notes, form.plusOnes, JSON.stringify(form.events)
   );
   const id = rows[0].id;
   for (const [i, g] of form.guests.entries()) {
@@ -425,6 +454,7 @@ admin.post('/households', async (req, res) => {
 // Several families at once, one per line:
 //   Patel family: Raj Patel, Priya Patel, Anil Patel (child) +1
 //   Sunita Shah, Vik Shah
+// All of them are invited to the events chosen in req.body.events.
 admin.post('/households/bulk', async (req, res) => {
   const lines = str(req.body.text, 100_000).split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   if (!lines.length) throw new HttpError(400, 'Please type at least one family, one per line.');
@@ -447,7 +477,7 @@ admin.post('/households/bulk', async (req, res) => {
       return { name: n.replace(/\((child|kid|c)\)\s*$/i, '').trim(), isChild };
     });
     try {
-      return readHouseholdForm({ name, guests, plusOnes });
+      return readHouseholdForm({ name, guests, plusOnes, events: req.body.events });
     } catch (err) {
       throw new HttpError(400, `Line ${i + 1} ("${line.slice(0, 60)}"): ${err.message}`);
     }
@@ -466,8 +496,8 @@ admin.put('/households/:id', async (req, res) => {
   await transaction(async (tx) => {
     const household = await tx.get('SELECT id FROM households WHERE id = ? FOR UPDATE', id);
     if (!household) throw new HttpError(404, 'Invitation not found.');
-    await tx.run('UPDATE households SET name = ?, contact_phone = ?, contact_email = ?, notes = ?, plus_ones = ? WHERE id = ?',
-      form.name, form.contactPhone, form.contactEmail, form.notes, form.plusOnes, id);
+    await tx.run('UPDATE households SET name = ?, contact_phone = ?, contact_email = ?, notes = ?, plus_ones = ?, events = ? WHERE id = ?',
+      form.name, form.contactPhone, form.contactEmail, form.notes, form.plusOnes, JSON.stringify(form.events), id);
     const existing = await tx.all('SELECT id FROM guests WHERE household_id = ? AND is_plus_one = 0', id);
     const keep = new Set(form.guests.map((g) => g.id).filter(Boolean));
     for (const g of existing) if (!keep.has(g.id)) await tx.run('DELETE FROM guests WHERE id = ?', g.id);
@@ -488,8 +518,7 @@ admin.delete('/households/:id', async (req, res) => {
 
 admin.put('/households/:id/reply', async (req, res) => {
   const id = Number(req.params.id);
-  const settings = content.getContent().rsvp;
-  const result = await rsvp.saveReply(id, req.body, settings, { actor: 'admin', actorName: req.admin.name || req.admin.email });
+  const result = await rsvp.saveReply(id, req.body, content.getContent(), { actor: 'admin', actorName: req.admin.name || req.admin.email });
   sendUpdateEmail(req, result, id).catch((err) => console.error(err));
   res.json({ ok: true });
 });
@@ -527,15 +556,20 @@ admin.get('/log', async (_req, res) => {
 
 admin.get('/export.csv', async (_req, res) => {
   const households = await allHouseholds();
-  const questions = content.getContent().rsvp.questions;
-  const guestQs = questions.filter((q) => q.scope === 'guest');
-  const houseQs = questions.filter((q) => q.scope === 'household');
-  const status = (a) => (a === true ? 'Coming' : a === false ? 'Not coming' : 'No reply');
+  const { rsvp: settings, events } = content.getContent();
+  const guestQs = settings.questions.filter((q) => q.scope === 'guest');
+  const houseQs = settings.questions.filter((q) => q.scope === 'household');
+  const status = (h, g, eventId) => {
+    if (!h.events.includes(eventId)) return 'Not invited';
+    const a = g.attendance[eventId];
+    return a === true ? 'Coming' : a === false ? 'Not coming' : 'No reply';
+  };
   const rows = [];
   for (const h of households) {
     for (const g of h.guests) {
       rows.push([
-        h.name, g.name, g.isPlusOne ? 'Extra guest' : 'Invited', g.isChild ? 'Child' : 'Adult', status(g.attending),
+        h.name, g.name, g.isPlusOne ? 'Extra guest' : 'Invited', g.isChild ? 'Child' : 'Adult',
+        ...events.items.map((e) => status(h, g, e.id)),
         ...guestQs.map((q) => g.answers[q.id] || ''),
         ...houseQs.map((q) => h.answers[q.id] || ''),
         h.respondedAt || '', h.updatedAt || '', h.contactPhone, h.contactEmail, h.notes,
@@ -543,7 +577,8 @@ admin.get('/export.csv', async (_req, res) => {
     }
   }
   sendCsv(res, `rsvps-${rsvp.todayLondon()}.csv`, [
-    'Family / group', 'Guest', 'Type', 'Age', 'Reply',
+    'Family / group', 'Guest', 'Type', 'Age',
+    ...events.items.map((e) => e.name),
     ...guestQs.map((q) => q.label), ...houseQs.map((q) => q.label),
     'First replied (UTC)', 'Last changed (UTC)', 'Phone', 'Email', 'Notes',
   ], rows);
@@ -560,7 +595,8 @@ admin.put('/content/:section', async (req, res) => {
 
 admin.post('/content/:section/reset', async (req, res) => {
   if (!content.SECTIONS.includes(req.params.section)) throw new HttpError(400, 'Unknown section.');
-  res.json(await content.resetSection(req.params.section));
+  const keys = Array.isArray(req.body?.keys) ? req.body.keys.filter((k) => typeof k === 'string') : null;
+  res.json(await content.resetSection(req.params.section, keys));
 });
 
 const IMAGE_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
@@ -687,10 +723,11 @@ const indexTemplate = fs.readFileSync(path.join(PUBLIC_DIR, 'index.html'), 'utf8
 app.get('/{*path}', (req, res) => {
   if (path.extname(req.path)) return res.status(404).send('Not found');
   const { site, home } = content.getContent();
+  const themeCss = content.COLOR_KEYS.map((k) => `--${k.replace(/Color$/, '').replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}: ${site[k]};`).join(' ');
   const html = indexTemplate
     .replaceAll('{{TITLE}}', escHtml(`${site.coupleNames} · ${site.eventTitle}`))
     .replaceAll('{{DESCRIPTION}}', escHtml(`${home.kicker} ${home.heading} ${home.subheading}`.trim()))
-    .replaceAll('{{ACCENT}}', site.accentColor)
+    .replaceAll('{{THEME_CSS}}', themeCss)
     .replaceAll('{{BACKGROUND}}', site.backgroundColor);
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(html);

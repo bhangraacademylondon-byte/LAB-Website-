@@ -6,15 +6,29 @@
 module.exports = {
   site: {
     coupleNames: 'Ravi & Akshee',
-    eventTitle: 'Engagement Party',
-    eventDate: '',
-    eventTime: '6:00pm until late',
-    accentColor: '#8a6a1f',
-    backgroundColor: '#fbf7ef',
+    eventTitle: 'Pooja & Engagement Party',
     contactText: 'Any questions? Call or message Ravi or Akshee, or email us.',
     contactPhone: '',
     contactEmail: '',
     footerNote: 'With love, Ravi & Akshee',
+    // Colours (all editable in Admin → Edit website → Colours)
+    accentColor: '#8a6a1f',
+    buttonTextColor: '#ffffff',
+    backgroundColor: '#fbf7ef',
+    cardColor: '#ffffff',
+    headerColor: '#ffffff',
+    textColor: '#2b2420',
+    headingColor: '#2b2420',
+    highlightColor: '#c9a54c',
+  },
+
+  // The celebrations. Each invitation is for one or more of these.
+  events: {
+    heading: 'The celebrations',
+    items: [
+      { id: 'pooja', name: 'Pooja', date: '', time: '11:00am', details: 'Please join us for the Pooja as we ask for blessings for our future together.', image: '', showOnHome: true },
+      { id: 'party', name: 'Engagement Party', date: '', time: '6:00pm until late', details: 'An evening of food, music and dancing to celebrate our engagement.', image: '', showOnHome: true },
+    ],
   },
 
   home: {
@@ -32,6 +46,7 @@ module.exports = {
     label: 'Our Story',
     visible: true,
     heading: 'Our Story',
+    image: '',
     intro: 'How it all began.',
     chapters: [
       { title: 'How we met', when: '', text: 'Tell your guests how you first met.', image: '' },
@@ -44,10 +59,10 @@ module.exports = {
     label: 'Venue',
     visible: true,
     heading: 'The Venue',
-    name: 'Venue name',
-    address: 'Street address\nTown\nPostcode',
-    postcode: '',
-    text: 'A few words about the venue: which room we are in, where the entrance is, and anything else that will help on the day.',
+    name: 'Courtyard by Marriott London Heathrow Airport',
+    address: '1 Nobel Drive\nHarlington\nHayes',
+    postcode: 'UB3 5EY',
+    text: 'Both the Pooja and the Engagement Party are at the Courtyard by Marriott London Heathrow Airport.',
     image: '',
     phone: '',
     website: '',
@@ -58,13 +73,14 @@ module.exports = {
     label: 'Getting There',
     visible: true,
     heading: 'Getting There & Parking',
+    image: '',
     intro: 'Here is everything you need to find us.',
     sections: [
-      { title: 'By car', text: 'Directions, and the postcode to put in your sat nav.' },
-      { title: 'Parking', text: 'Where to park, how much it costs, and whether you need to book.' },
-      { title: 'By train, tube or bus', text: 'The nearest stations and bus stops, and how long the walk is.' },
-      { title: 'Taxis', text: 'Local taxi numbers and the best drop-off point.' },
-      { title: 'Step-free access', text: 'Step-free entrance, lifts, accessible toilets and blue badge parking.' },
+      { title: 'By car', text: 'Put **UB3 5EY** into your sat nav. The hotel is on Nobel Drive in Harlington, near Heathrow Airport.', image: '' },
+      { title: 'Parking', text: 'Where to park, how much it costs, and whether you need to book.', image: '' },
+      { title: 'By train, tube or bus', text: 'The nearest stations and bus stops, and how long the walk is.', image: '' },
+      { title: 'Taxis', text: 'Local taxi numbers and the best drop-off point.', image: '' },
+      { title: 'Step-free access', text: 'Step-free entrance, lifts, accessible toilets and blue badge parking.', image: '' },
     ],
   },
 
@@ -72,13 +88,14 @@ module.exports = {
     label: 'FAQ',
     visible: true,
     heading: 'Questions & Answers',
+    image: '',
     intro: '',
     items: [
       { q: 'What should I wear?', a: 'Tell your guests the dress code, for example Indian formal or smart.' },
-      { q: 'What time should I arrive?', a: 'Please arrive by 6:00pm.' },
+      { q: 'What time should I arrive?', a: 'The Pooja starts at 11:00am and the Engagement Party starts at 6:00pm. Your invitation shows which you are invited to.' },
       { q: 'Are children invited?', a: 'Children named on your invitation are very welcome.' },
       { q: 'Can I bring someone?', a: 'Your RSVP shows everyone included in your invitation. If you have been given extra places, you can add their names when you reply.' },
-      { q: 'Will there be food?', a: 'Yes. Please tell us about any dietary requirements when you RSVP.' },
+      { q: 'Will there be food?', a: 'Yes. All the food will be **vegetarian**. If you have any other dietary requirements or allergies, you can tell us when you RSVP.' },
       { q: 'Gifts', a: 'Your presence is the only present we need.' },
       { q: 'I can no longer come. What should I do?', a: 'You can change your reply on the RSVP page until the RSVP deadline. After that, please call or message us.' },
     ],
@@ -87,6 +104,7 @@ module.exports = {
   rsvp: {
     label: 'RSVP',
     heading: 'RSVP',
+    image: '',
     intro: 'Please reply for yourself and everyone on your invitation.',
     open: true,
     deadline: '',
@@ -102,7 +120,7 @@ module.exports = {
     closedText: 'The RSVP deadline has passed. If you need to change your reply, please contact us.',
     notOpenText: 'RSVPs are not open yet. Please check back soon.',
     questions: [
-      { id: 'dietary', scope: 'guest', type: 'text', label: 'Dietary requirements or allergies', help: 'Leave blank if none.', options: [], required: false },
+      { id: 'dietary', scope: 'guest', type: 'text', label: 'Any other dietary requirements or allergies? (optional)', help: 'All the food is vegetarian. Leave blank if you have no other requirements.', options: [], required: false },
       { id: 'phone', scope: 'household', type: 'text', label: 'Best phone number to reach you', help: '', options: [], required: false },
       { id: 'message', scope: 'household', type: 'textarea', label: 'A message for Ravi & Akshee', help: 'Optional.', options: [], required: false },
     ],

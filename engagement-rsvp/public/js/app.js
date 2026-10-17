@@ -80,7 +80,7 @@ function renderChrome(path) {
   menuToggle.setAttribute('aria-expanded', 'false');
   mount('#footer', html`
     <div class="names">${site.coupleNames}</div>
-    ${site.eventDate ? html`<div>${longDate(site.eventDate)}</div>` : ''}
+    ${eventDates().map((d) => html`<div>${longDate(d)}</div>`)}
     ${site.contactText ? html`<p style="margin-top:14px">${site.contactText}</p>` : ''}
     <p>
       ${site.contactPhone ? html`<a href="tel:${site.contactPhone.replace(/[^\d+]/g, '')}">📞 ${site.contactPhone}</a>` : ''}
@@ -92,10 +92,22 @@ function renderChrome(path) {
   `);
 }
 
+// The events shown to everyone (some invitations are only for some events).
+function publicEvents() {
+  return C.events.items.filter((e) => e.showOnHome);
+}
+
+function eventDates() {
+  return [...new Set(publicEvents().map((e) => e.date).filter(Boolean))].sort();
+}
+
+const cssName = (key) => `--${key.replace(/Color$/, '').replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
+
 async function loadContent() {
   C = await api('/api/content');
-  document.documentElement.style.setProperty('--accent', C.site.accentColor);
-  document.documentElement.style.setProperty('--bg', C.site.backgroundColor);
+  for (const [key, value] of Object.entries(C.site)) {
+    if (key.endsWith('Color')) document.documentElement.style.setProperty(cssName(key), value);
+  }
 }
 export async function reloadContent() {
   await loadContent();
@@ -124,8 +136,13 @@ function notFound() {
   return html`<section class="page"><div class="container center"><h1>Page not found</h1><p><a class="btn" href="/">Go to the home page</a></p></div></section>`;
 }
 
-function pageHead(heading, intro) {
-  return html`<div class="page-head"><h1>${heading}</h1><div class="ornament" aria-hidden="true">✦</div>${intro ? html`<div class="intro">${formatText(intro)}</div>` : ''}</div>`;
+function pageHead(heading, intro, image = '') {
+  const img = safeImg(image);
+  return html`${img ? html`<div class="page-banner"><img src="${img}" alt=""></div>` : ''}<div class="page-head"><h1>${heading}</h1><div class="ornament" aria-hidden="true">✦</div>${intro ? html`<div class="intro">${formatText(intro)}</div>` : ''}</div>`;
+}
+
+function eventWhen(e) {
+  return [e.date ? longDate(e.date) : '', e.time].filter(Boolean).join(', ');
 }
 
 // ---------- pages ----------
@@ -146,20 +163,32 @@ function deadlineNotice() {
 
 const RENDER = {
   home() {
-    const { site, home, venue } = C;
+    const { site, home, venue, events } = C;
     const img = safeImg(home.image);
-    const days = daysUntil(site.eventDate);
+    const firstDate = eventDates()[0];
+    const days = firstDate ? daysUntil(firstDate) : null;
     return html`<section class="hero"><div class="container">
       ${img ? html`<div class="hero-image"><img src="${img}" alt="${site.coupleNames}"></div>` : ''}
       ${home.kicker ? html`<div class="kicker">${home.kicker}</div>` : ''}
       <h1>${home.heading}</h1>
       ${home.subheading ? html`<div class="sub">${home.subheading}</div>` : ''}
       <div class="ornament" aria-hidden="true">✦</div>
-      <div class="event-facts">
-        <div class="fact"><div class="label">Date</div><div class="value">${site.eventDate ? longDate(site.eventDate) : 'To be announced'}</div></div>
-        ${site.eventTime ? html`<div class="fact"><div class="label">Time</div><div class="value">${site.eventTime}</div></div>` : ''}
-        ${venue.name ? html`<div class="fact"><div class="label">Venue</div><div class="value">${venue.visible ? html`<a href="/venue">${venue.name}</a>` : venue.name}</div></div>` : ''}
-      </div>
+      ${publicEvents().length ? html`${events.heading ? html`<h2 style="margin-top:28px">${events.heading}</h2>` : ''}
+      <div class="events-grid">
+        ${publicEvents().map((e) => {
+          const eImg = safeImg(e.image);
+          return html`<div class="event-card">
+            ${eImg ? html`<img src="${eImg}" alt="" loading="lazy">` : ''}
+            <div class="body">
+              <h3>${e.name}</h3>
+              <div class="when">${e.date ? longDate(e.date) : 'Date to be announced'}</div>
+              ${e.time ? html`<div class="when">${e.time}</div>` : ''}
+              ${e.details ? html`<div class="details prose">${formatText(e.details)}</div>` : ''}
+            </div>
+          </div>`;
+        })}
+      </div>` : ''}
+      ${venue.name ? html`<div class="event-facts" style="grid-template-columns:1fr"><div class="fact"><div class="label">Venue</div><div class="value">${venue.visible ? html`<a href="/venue">${venue.name}</a>` : venue.name}</div></div></div>` : ''}
       ${home.showCountdown && days !== null && days > 0 ? html`<p class="countdown">${days === 1 ? 'Tomorrow!' : `${days} days to go`}</p>` : ''}
       ${home.showCountdown && days === 0 ? html`<p class="countdown">It's today!</p>` : ''}
       ${home.intro ? html`<div class="prose" style="max-width:640px;margin:20px auto 0;font-size:1.1rem">${formatText(home.intro)}</div>` : ''}
@@ -171,7 +200,7 @@ const RENDER = {
   story() {
     const { story } = C;
     return html`<section class="page"><div class="container">
-      ${pageHead(story.heading, story.intro)}
+      ${pageHead(story.heading, story.intro, story.image)}
       ${story.chapters.map((ch) => {
         const img = safeImg(ch.image);
         return html`<div class="chapter ${img ? 'has-image' : ''}">
@@ -190,8 +219,7 @@ const RENDER = {
     const { venue } = C;
     const img = safeImg(venue.image);
     return html`<section class="page"><div class="container">
-      ${pageHead(venue.heading, '')}
-      ${img ? html`<img class="photo" src="${img}" alt="${venue.name}" style="max-height:420px">` : ''}
+      ${pageHead(venue.heading, '', img)}
       <div class="card">
         <h2>${venue.name}</h2>
         <div class="address">${venue.address}</div>
@@ -211,21 +239,21 @@ const RENDER = {
   travel() {
     const { travel, venue } = C;
     return html`<section class="page"><div class="container">
-      ${pageHead(travel.heading, travel.intro)}
+      ${pageHead(travel.heading, travel.intro, travel.image)}
       <div class="card">
         <h2 style="font-size:1.6rem">${venue.name}</h2>
         <div class="address">${venue.address}</div>
         ${venue.postcode ? html`<div class="postcode">${venue.postcode}</div>` : ''}
         <div class="btn-row"><a class="btn" href="${mapsLink()}" target="_blank" rel="noopener">📍 Directions in Google Maps</a></div>
       </div>
-      ${travel.sections.map((s) => html`<div class="card travel-section">${s.title ? html`<h3>${s.title}</h3>` : ''}<div class="prose">${formatText(s.text)}</div></div>`)}
+      ${travel.sections.map((s) => html`<div class="card travel-section">${safeImg(s.image) ? html`<img src="${safeImg(s.image)}" alt="" loading="lazy">` : ''}${s.title ? html`<h3>${s.title}</h3>` : ''}<div class="prose">${formatText(s.text)}</div></div>`)}
     </div></section>`;
   },
 
   faq() {
     const { faq, site } = C;
     return html`<section class="page"><div class="container">
-      ${pageHead(faq.heading, faq.intro)}
+      ${pageHead(faq.heading, faq.intro, faq.image)}
       <div class="faq">
         ${faq.items.map((item) => html`<details><summary>${item.q}</summary><div class="answer prose">${formatText(item.a)}</div></details>`)}
       </div>
@@ -289,7 +317,7 @@ async function renderRsvp(main) {
 function drawRsvp(main = document.getElementById('main')) {
   const { rsvp } = C;
   const body = el('div', { class: 'container' });
-  body.innerHTML = String(pageHead(rsvp.heading, R.step === 'lookup' ? rsvp.intro : ''));
+  body.innerHTML = String(pageHead(rsvp.heading, R.step === 'lookup' ? rsvp.intro : '', R.step === 'lookup' ? rsvp.image : ''));
   const wrap = el('section', { class: 'page' }, body);
 
   if (!rsvp.open) {
@@ -403,12 +431,26 @@ function startAgain() {
   drawRsvp();
 }
 
+const comingToAny = (attendance) => Object.values(attendance || {}).some((v) => v === true);
+
+// "You're invited to: Pooja (Saturday 12 June 2027, 11:00am) ..."
+function invitedTo(inv) {
+  const box = el('div', { class: 'invited-to' });
+  if (inv.events.length === 1) {
+    const e = inv.events[0];
+    box.append(el('strong', { text: `You're invited to the ${e.name}` }), eventWhen(e) ? el('div', { text: eventWhen(e) }) : '');
+  } else {
+    box.append(el('strong', { text: "You're invited to:" }),
+      el('ul', {}, inv.events.map((e) => el('li', {}, el('strong', { text: e.name }), eventWhen(e) ? ` · ${eventWhen(e)}` : ''))));
+  }
+  return box;
+}
+
 // Their current reply, with the option to change it while they still can.
 function overviewStep() {
   const { rsvp } = C;
   const inv = R.invite;
-  const everyone = [...inv.guests, ...inv.plusOnes];
-  const anyComing = everyone.some((g) => g.attending === true);
+  const anyComing = [...inv.guests, ...inv.plusOnes].some((g) => comingToAny(g.attendance));
   const box = el('div', {});
   if (R.justSent) {
     box.append(el('div', { class: 'card thanks' },
@@ -421,6 +463,7 @@ function overviewStep() {
   if (inv.responded) {
     card.append(
       el('h2', { text: R.justSent ? 'Your reply' : greeting(inv) }),
+      invitedTo(inv),
       el('p', { class: 'muted', text: `${R.justSent ? 'Sent' : 'You replied'} on ${formatDateTime(inv.updatedAt || inv.respondedAt, { day: 'numeric', month: 'long', year: 'numeric' })}.` }),
       replySummary(inv)
     );
@@ -448,10 +491,10 @@ function overviewStep() {
   return box;
 }
 
-function statusBadge(attending) {
-  if (attending === true) return el('span', { class: 'badge yes', text: `✓ ${C.rsvp.attendingLabel}` });
-  if (attending === false) return el('span', { class: 'badge no', text: C.rsvp.notAttendingLabel });
-  return el('span', { class: 'badge none', text: 'No reply yet' });
+function statusBadge(attending, prefix = '') {
+  if (attending === true) return el('span', { class: 'badge yes', text: `${prefix}✓ ${C.rsvp.attendingLabel}` });
+  if (attending === false) return el('span', { class: 'badge no', text: `${prefix}${C.rsvp.notAttendingLabel}` });
+  return el('span', { class: 'badge none', text: `${prefix}No reply yet` });
 }
 
 function replySummary(inv, draft = null) {
@@ -460,15 +503,18 @@ function replySummary(inv, draft = null) {
   const houseQs = qs.filter((q) => q.scope === 'household');
   const people = draft
     ? [
-        ...inv.guests.map((g) => ({ name: g.name, attending: draft.guests[g.id].attending, answers: draft.guests[g.id].answers })),
-        ...draft.plusOnes.filter((p) => p.name.trim()).map((p) => ({ name: p.name.trim(), attending: true, answers: p.answers, plusOne: true })),
+        ...inv.guests.map((g) => ({ name: g.name, attendance: draft.guests[g.id].attendance, answers: draft.guests[g.id].answers })),
+        ...draft.plusOnes.filter((p) => p.name.trim()).map((p) => ({ name: p.name.trim(), attendance: p.attendance, answers: p.answers, plusOne: true })),
       ]
     : [...inv.guests, ...inv.plusOnes.map((p) => ({ ...p, plusOne: true }))];
   const answers = draft ? draft.answers : inv.answers;
+  const multi = inv.events.length > 1;
   const list = el('ul', { class: 'summary-list' }, people.map((p) => el('li', {},
     el('div', { style: 'display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center' },
-      el('strong', { text: p.name + (p.plusOne ? ' (your guest)' : '') }), statusBadge(p.attending)),
-    p.attending ? guestQs.filter((q) => p.answers?.[q.id]).map((q) => el('div', { class: 'muted', text: `${q.label}: ${p.answers[q.id]}` })) : []
+      el('strong', { text: p.name + (p.plusOne ? ' (your guest)' : '') }),
+      multi ? null : statusBadge(p.attendance[inv.events[0].id] ?? null)),
+    multi ? el('div', { class: 'event-tags', style: 'margin-top:6px' }, inv.events.map((e) => statusBadge(p.attendance[e.id] ?? null, `${e.name}: `))) : null,
+    comingToAny(p.attendance) ? guestQs.filter((q) => p.answers?.[q.id]).map((q) => el('div', { class: 'muted', text: `${q.label}: ${p.answers[q.id]}` })) : []
   )));
   const extra = houseQs.filter((q) => answers?.[q.id]).map((q) => el('p', {}, el('strong', { text: `${q.label}: ` }), String(answers[q.id])));
   return el('div', {}, list, extra);
@@ -476,8 +522,8 @@ function replySummary(inv, draft = null) {
 
 function makeDraft(inv) {
   const draft = { guests: {}, plusOnes: [], answers: { ...inv.answers } };
-  for (const g of inv.guests) draft.guests[g.id] = { attending: g.attending, answers: { ...g.answers } };
-  draft.plusOnes = inv.plusOnes.map((p) => ({ name: p.name, answers: { ...p.answers } }));
+  for (const g of inv.guests) draft.guests[g.id] = { attendance: { ...g.attendance }, answers: { ...g.answers } };
+  draft.plusOnes = inv.plusOnes.map((p) => ({ name: p.name, attendance: { ...p.attendance }, answers: { ...p.answers } }));
   return draft;
 }
 
@@ -511,33 +557,49 @@ function questionField(q, answers) {
   return wrap;
 }
 
+// Big "Coming" / "Can't come" buttons for one person and one event.
+function choicePair(name, event, attendance, multi) {
+  const value = attendance[event.id];
+  const choose = (v) => {
+    attendance[event.id] = v;
+    R.error = '';
+    redrawKeepingScroll();
+  };
+  const pair = el('div', { class: 'choice-pair', role: 'group', 'aria-label': multi ? `Is ${name} coming to the ${event.name}?` : `Is ${name} coming?` },
+    el('button', { type: 'button', class: 'yes', 'aria-pressed': String(value === true), onclick: () => choose(true) },
+      el('span', { class: 'tick', 'aria-hidden': 'true', text: value === true ? '✓' : '○' }), C.rsvp.attendingLabel),
+    el('button', { type: 'button', class: 'no', 'aria-pressed': String(value === false), onclick: () => choose(false) },
+      el('span', { class: 'tick', 'aria-hidden': 'true', text: value === false ? '✓' : '○' }), C.rsvp.notAttendingLabel)
+  );
+  if (!multi) return pair;
+  return el('div', { class: 'event-reply' },
+    el('div', { class: 'event-label' }, event.name, event.time ? el('span', { class: 'muted', text: ` · ${event.time}` }) : ''),
+    pair);
+}
+
+function cardClass(attendance, events) {
+  if (comingToAny(attendance)) return 'is-yes';
+  if (events.every((e) => attendance[e.id] === false)) return 'is-no';
+  return '';
+}
+
 function formStep() {
   const { rsvp } = C;
   const inv = R.invite;
   if (!R.draft) R.draft = makeDraft(inv);
   const draft = R.draft;
+  const multi = inv.events.length > 1;
   const guestQs = rsvp.questions.filter((q) => q.scope === 'guest');
   const houseQs = rsvp.questions.filter((q) => q.scope === 'household');
   const error = errorBox(R.error);
 
   const guestCard = (g) => {
     const d = draft.guests[g.id];
-    const card = el('div', { class: `guest-card ${d.attending === true ? 'is-yes' : d.attending === false ? 'is-no' : ''}` });
-    const choose = (value) => {
-      d.attending = value;
-      R.error = '';
-      redrawKeepingScroll();
-    };
-    card.append(
+    const card = el('div', { class: `guest-card ${cardClass(d.attendance, inv.events)}` },
       el('div', { class: 'guest-name', text: g.name }),
-      el('div', { class: 'choice-pair', role: 'group', 'aria-label': `Is ${g.name} coming?` },
-        el('button', { type: 'button', class: 'yes', 'aria-pressed': String(d.attending === true), onclick: () => choose(true) },
-          el('span', { class: 'tick', 'aria-hidden': 'true', text: d.attending === true ? '✓' : '○' }), rsvp.attendingLabel),
-        el('button', { type: 'button', class: 'no', 'aria-pressed': String(d.attending === false), onclick: () => choose(false) },
-          el('span', { class: 'tick', 'aria-hidden': 'true', text: d.attending === false ? '✓' : '○' }), rsvp.notAttendingLabel)
-      )
+      inv.events.map((e) => choicePair(g.name, e, d.attendance, multi))
     );
-    if (d.attending === true && guestQs.length) card.append(el('div', { class: 'guest-questions' }, guestQs.map((q) => questionField(q, d.answers))));
+    if (comingToAny(d.attendance) && guestQs.length) card.append(el('div', { class: 'guest-questions' }, guestQs.map((q) => questionField(q, d.answers))));
     return card;
   };
 
@@ -552,14 +614,18 @@ function formStep() {
       const nameInput = el('input', { type: 'text', id: nameId, autocomplete: 'off', autocapitalize: 'words' });
       nameInput.value = p.name;
       nameInput.addEventListener('input', () => { p.name = nameInput.value; });
-      section.append(el('div', { class: 'guest-card is-yes' },
+      section.append(el('div', { class: `guest-card ${cardClass(p.attendance, inv.events)}` },
         el('div', { class: 'field' }, el('label', { for: nameId, text: `Your guest's full name` }), nameInput),
-        guestQs.map((q) => questionField(q, p.answers)),
+        multi ? inv.events.map((e) => choicePair(p.name || 'your guest', e, p.attendance, true)) : null,
+        el('div', { class: 'guest-questions' }, guestQs.map((q) => questionField(q, p.answers))),
         el('button', { type: 'button', class: 'link-btn', text: `Remove this guest`, onclick: () => { draft.plusOnes.splice(i, 1); redrawKeepingScroll(); } })
       ));
     });
     if (draft.plusOnes.length < inv.plusOnesAllowed) {
-      section.append(el('button', { type: 'button', class: 'btn btn-outline', text: '+ Add a guest', onclick: () => { draft.plusOnes.push({ name: '', answers: {} }); redrawKeepingScroll(`#plus-${draft.plusOnes.length - 1}`); } }));
+      section.append(el('button', { type: 'button', class: 'btn btn-outline', text: '+ Add a guest', onclick: () => {
+        draft.plusOnes.push({ name: '', attendance: Object.fromEntries(inv.events.map((e) => [e.id, true])), answers: {} });
+        redrawKeepingScroll(`#plus-${draft.plusOnes.length - 1}`);
+      } }));
     }
     return section;
   };
@@ -577,11 +643,15 @@ function formStep() {
     drawRsvp();
   });
 
+  const ask = multi
+    ? inv.guests.length > 1 ? 'Please tell us who is coming to each event. Choose an answer for each person.' : 'Please tell us which events you can come to.'
+    : inv.guests.length > 1 ? 'Please tell us who is coming. Choose an answer for each person.' : 'Please tell us if you can come.';
   return el('div', {},
     stepper(1),
     el('div', { class: 'card' },
       el('h2', { text: greeting(inv) }),
-      el('p', { text: inv.guests.length > 1 ? 'Please tell us who is coming. Choose an answer for each person.' : 'Please tell us if you can come.' }),
+      invitedTo(inv),
+      el('p', { text: ask }),
       inv.guests.map(guestCard)
     ),
     plusOneSection(),
@@ -601,10 +671,14 @@ function redrawKeepingScroll(focusSelector) {
 
 function checkDraft(inv, draft) {
   const qs = C.rsvp.questions;
+  const multi = inv.events.length > 1;
+  const choose = `Please choose "${C.rsvp.attendingLabel}" or "${C.rsvp.notAttendingLabel}"`;
   for (const g of inv.guests) {
     const d = draft.guests[g.id];
-    if (typeof d.attending !== 'boolean') return `Please choose "${C.rsvp.attendingLabel}" or "${C.rsvp.notAttendingLabel}" for ${g.name}.`;
-    if (d.attending) {
+    for (const e of inv.events) {
+      if (typeof d.attendance[e.id] !== 'boolean') return multi ? `${choose} for ${g.name} at the ${e.name}.` : `${choose} for ${g.name}.`;
+    }
+    if (comingToAny(d.attendance)) {
       for (const q of qs) if (q.scope === 'guest' && q.required && !d.answers[q.id]) return `Please answer "${q.label}" for ${g.name}.`;
     }
   }
@@ -613,6 +687,7 @@ function checkDraft(inv, draft) {
       if (Object.keys(p.answers).length) return "Please type your guest's name, or remove them.";
       continue;
     }
+    if (!comingToAny(p.attendance)) return `${p.name.trim()} isn't coming to anything. Choose an event for them, or remove them.`;
     for (const q of qs) if (q.scope === 'guest' && q.required && !p.answers[q.id]) return `Please answer "${q.label}" for ${p.name.trim()}.`;
   }
   for (const q of qs) if (q.scope === 'household' && q.required && !draft.answers[q.id]) return `Please answer "${q.label}".`;
@@ -626,8 +701,8 @@ function reviewStep() {
   const send = el('button', { class: 'btn btn-big btn-block', type: 'button', text: 'Send my reply' });
   send.addEventListener('click', () => withBusy(send, async () => {
     const body = {
-      guests: inv.guests.map((g) => ({ id: g.id, attending: draft.guests[g.id].attending, answers: draft.guests[g.id].answers })),
-      plusOnes: draft.plusOnes.filter((p) => p.name.trim()).map((p) => ({ name: p.name.trim(), answers: p.answers })),
+      guests: inv.guests.map((g) => ({ id: g.id, attendance: draft.guests[g.id].attendance, answers: draft.guests[g.id].answers })),
+      plusOnes: draft.plusOnes.filter((p) => p.name.trim()).map((p) => ({ name: p.name.trim(), attendance: p.attendance, answers: p.answers })),
       answers: draft.answers,
     };
     try {

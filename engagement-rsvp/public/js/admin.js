@@ -86,6 +86,22 @@ function guestLine(guests) {
   ]));
 }
 
+const allEvents = () => C.events.items;
+const eventName = (id) => allEvents().find((e) => e.id === id)?.name || id;
+
+// "Pooja only", "Pooja & Engagement Party"
+function eventsLabel(ids) {
+  if (ids.length === allEvents().length && ids.length > 1) return `All: ${ids.map(eventName).join(' & ')}`;
+  return ids.length === 1 && allEvents().length > 1 ? `${eventName(ids[0])} only` : ids.map(eventName).join(' & ');
+}
+
+// Tick boxes for choosing which events an invitation is for.
+function eventChecks(selected, onChange) {
+  return el('div', { class: 'option-list' }, allEvents().map((e) => el('label', {},
+    el('input', { type: 'checkbox', checked: selected.includes(e.id), onchange: (ev) => onChange(e.id, ev.target.checked) }),
+    `${e.name}${e.time ? ` (${e.time})` : ''}`)));
+}
+
 function deadlineText(deadline) {
   if (!deadline) return null;
   const days = daysUntil(deadline);
@@ -98,6 +114,7 @@ function deadlineText(deadline) {
 function householdCard(h) {
   return el('a', { class: `hh ${h.status}`, href: `/admin/guests/${h.id}` },
     el('div', { class: 'hh-top' }, el('span', { class: 'hh-name', text: h.name }), statusBadge(h.status)),
+    allEvents().length > 1 ? el('div', { class: 'event-tags' }, el('span', { class: 'event-tag', text: eventsLabel(h.events) })) : null,
     guestLine(h.guests),
     el('div', { class: 'muted', style: 'font-size:0.9rem' },
       h.respondedAt ? `Replied ${formatDateTime(h.respondedAt)}${h.responseCount > 1 ? ` · changed ${h.responseCount - 1} time${h.responseCount > 2 ? 's' : ''}, last ${formatDateTime(h.updatedAt)}` : ''}` : '',
@@ -123,12 +140,22 @@ async function overviewPage(view) {
   else if (data.email.lastError) parts.push(el('div', { class: 'alert bad' }, `The last update email failed: ${data.email.lastError} `, el('a', { href: '/admin/settings', text: 'Settings' })));
 
   parts.push(el('div', { class: 'stat-grid' },
-    stat(s.coming, 'Coming', 'good', `${s.comingAdults} adult${s.comingAdults === 1 ? '' : 's'}, ${s.comingChildren} child${s.comingChildren === 1 ? '' : 'ren'}${s.extraGuests ? `, incl. ${s.extraGuests} extra guest${s.extraGuests === 1 ? '' : 's'}` : ''}`),
-    stat(s.notComing, 'Not coming'),
-    stat(s.noReply, 'Guests yet to reply'),
     stat(`${s.replied}/${s.households}`, 'Invitations replied'),
+    stat(s.noReply, 'Guests yet to reply'),
     stat(s.overdue, 'Overdue: need chasing', s.overdue ? 'bad' : '')
   ));
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  for (const ev of s.events) {
+    parts.push(
+      el('h2', { style: 'font-size:1.6rem;margin-bottom:6px', text: ev.name }),
+      el('p', { class: 'muted', style: 'margin-bottom:10px', text: `${[ev.date ? longDate(ev.date) : 'Date not set', ev.time].filter(Boolean).join(', ')} · ${plural(ev.invited, 'guest', 'guests')} invited on ${plural(ev.invitations, 'invitation', 'invitations')}` }),
+      el('div', { class: 'stat-grid' },
+        stat(ev.coming, 'Coming', 'good', `${plural(ev.comingAdults, 'adult', 'adults')}, ${plural(ev.comingChildren, 'child', 'children')}`),
+        stat(ev.notComing, 'Not coming'),
+        stat(ev.noReply, 'No reply yet')
+      )
+    );
+  }
 
   parts.push(el('div', { class: 'btn-row', style: 'margin:0 0 26px' },
     el('a', { class: 'btn', href: '/admin/guests/new', text: '+ Add a family or guest' }),
@@ -163,8 +190,11 @@ let listFilter = { q: '', status: 'all' };
 async function guestListPage(view) {
   const { households, stats } = await api('/api/admin/households');
   const search = el('input', { type: 'text', placeholder: 'Search names…', 'aria-label': 'Search names', value: listFilter.q });
+  const eventFilters = allEvents().length > 1
+    ? allEvents().flatMap((e) => [[`in:${e.id}`, `Invited to ${e.name}`], [`only:${e.id}`, `Invited to ${e.name} only`]])
+    : [];
   const filter = el('select', { 'aria-label': 'Show' },
-    [['all', 'Show all'], ['replied', 'Replied'], ['notreplied', 'Not replied'], ['overdue', 'Overdue'], ['coming', 'Has someone coming'], ['notcoming', 'Nobody coming']]
+    [['all', 'Show all'], ['replied', 'Replied'], ['notreplied', 'Not replied'], ['overdue', 'Overdue'], ['coming', 'Has someone coming'], ['notcoming', 'Nobody coming'], ...eventFilters]
       .map(([v, t]) => el('option', { value: v, text: t })));
   filter.value = listFilter.status;
   const list = el('div', { class: 'hh-list' });
@@ -179,6 +209,8 @@ async function guestListPage(view) {
       if (f === 'overdue' && h.status !== 'overdue') return false;
       if (f === 'coming' && !h.guests.some((g) => g.attending === true)) return false;
       if (f === 'notcoming' && (h.status !== 'replied' || h.guests.some((g) => g.attending === true))) return false;
+      if (f.startsWith('in:') && !h.events.includes(f.slice(3))) return false;
+      if (f.startsWith('only:') && (h.events.length !== 1 || h.events[0] !== f.slice(5))) return false;
       if (!listFilter.q) return true;
       return h.name.toLowerCase().includes(listFilter.q) || h.guests.some((g) => g.name.toLowerCase().includes(listFilter.q));
     });
@@ -204,6 +236,7 @@ async function guestListPage(view) {
 }
 
 function bulkDialog() {
+  let events = allEvents().map((e) => e.id);
   const text = el('textarea', { id: 'bulk-text', rows: 10, placeholder: 'Patel family: Raj Patel, Priya Patel, Anil Patel (child)\nSunita Shah, Vikram Shah +1\nJohn Smith' });
   const error = el('div', { class: 'form-error', role: 'alert' });
   const button = el('button', { class: 'btn', type: 'button', text: 'Add to guest list' });
@@ -214,13 +247,16 @@ function bulkDialog() {
       el('li', {}, 'Add ', el('code', { text: '(child)' }), ' after a child’s name.'),
       el('li', {}, 'End with ', el('code', { text: '+1' }), ' or ', el('code', { text: '+2' }), ' to let them bring extra guests.')
     ),
-    el('label', { for: 'bulk-text', text: 'Guest list' }), text, error, el('div', { class: 'btn-row' }, button)
+    el('label', { for: 'bulk-text', text: 'Guest list' }), text,
+    allEvents().length > 1 ? [el('span', { class: 'label', style: 'margin-top:16px', text: 'Everyone on this list is invited to:' }),
+      eventChecks(events, (id, on) => { events = on ? [...events, id] : events.filter((x) => x !== id); })] : null,
+    error, el('div', { class: 'btn-row' }, button)
   );
   const d = openDialog('Add many at once', body);
   text.focus();
   button.addEventListener('click', () => withBusy(button, async () => {
     try {
-      const r = await api('/api/admin/households/bulk', { method: 'POST', body: { text: text.value } });
+      const r = await api('/api/admin/households/bulk', { method: 'POST', body: { text: text.value, events } });
       d.close();
       toast(`Added ${r.added} invitation${r.added === 1 ? '' : 's'} (${r.guests} guests).`, 'success');
       for (const w of r.warnings) toast(w, 'info', 8000);
@@ -235,7 +271,7 @@ function bulkDialog() {
 
 async function householdPage(view, id) {
   const isNew = id === 'new';
-  const data = isNew ? { household: { name: '', guests: [{ name: '', isChild: false }], plusOnes: 0, contactPhone: '', contactEmail: '', notes: '' }, log: [] } : await api(`/api/admin/households/${id}`);
+  const data = isNew ? { household: { name: '', guests: [{ name: '', isChild: false }], plusOnes: 0, events: allEvents().map((e) => e.id), contactPhone: '', contactEmail: '', notes: '' }, log: [] } : await api(`/api/admin/households/${id}`);
   const h = data.household;
   const parts = [el('p', {}, el('a', { href: '/admin/guests', text: '← Guest list' }))];
 
@@ -261,15 +297,21 @@ async function householdPage(view, id) {
   view.replaceChildren(...parts);
 }
 
+const replyWord = (a) => (a === true ? 'Coming' : a === false ? 'Not coming' : 'No reply');
+const replyClass = (a) => (a === true ? 'yes' : a === false ? 'no' : 'none');
+
 function replyCard(h) {
   const card = el('div', { class: 'card' }, el('h2', { text: 'Their reply' }));
+  if (allEvents().length > 1) card.append(el('p', {}, 'Invited to: ', el('strong', { text: h.events.map(eventName).join(' and ') })));
+  const multi = h.events.length > 1;
   if (h.respondedAt) {
     card.append(el('p', { class: 'muted', text: `First replied ${formatDateTime(h.respondedAt)}${h.responseCount > 1 ? `, last changed ${formatDateTime(h.updatedAt)}` : ''}${h.respondedBy?.startsWith('admin:') ? ` (last edit by ${h.respondedBy.slice(6)})` : ''}.` }));
     const qs = C.rsvp.questions;
     card.append(el('ul', { class: 'summary-list' }, h.guests.map((g) => el('li', {},
       el('div', { style: 'display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap' },
         el('strong', { text: g.name + (g.isPlusOne ? ' (extra guest)' : '') }),
-        el('span', { class: `badge ${g.attending === true ? 'yes' : g.attending === false ? 'no' : 'none'}`, text: g.attending === true ? 'Coming' : g.attending === false ? 'Not coming' : 'No reply' })),
+        multi ? null : el('span', { class: `badge ${replyClass(g.attendance[h.events[0]] ?? null)}`, text: replyWord(g.attendance[h.events[0]] ?? null) })),
+      multi ? el('div', { class: 'event-tags', style: 'margin:6px 0' }, h.events.map((id) => el('span', { class: `badge ${replyClass(g.attendance[id] ?? null)}`, text: `${eventName(id)}: ${replyWord(g.attendance[id] ?? null)}` }))) : null,
       qs.filter((q) => q.scope === 'guest' && g.answers[q.id]).map((q) => el('div', { class: 'muted', text: `${q.label}: ${g.answers[q.id]}` }))
     ))));
     for (const q of qs.filter((q) => q.scope === 'household' && h.answers[q.id])) card.append(el('p', {}, el('strong', { text: `${q.label}: ` }), h.answers[q.id]));
@@ -299,8 +341,8 @@ function replyEditor(h) {
   const houseQs = qs.filter((q) => q.scope === 'household');
   const invited = h.guests.filter((g) => !g.isPlusOne);
   const state = {
-    guests: invited.map((g) => ({ id: g.id, name: g.name, attending: g.attending, answers: { ...g.answers } })),
-    plusOnes: h.guests.filter((g) => g.isPlusOne).map((g) => ({ name: g.name, answers: { ...g.answers } })),
+    guests: invited.map((g) => ({ id: g.id, name: g.name, attendance: { ...g.attendance }, answers: { ...g.answers } })),
+    plusOnes: h.guests.filter((g) => g.isPlusOne).map((g) => ({ name: g.name, attendance: { ...g.attendance }, answers: { ...g.answers } })),
     answers: { ...h.answers },
   };
   const qInput = (q, answers) => {
@@ -309,32 +351,42 @@ function replyEditor(h) {
       input = el('select', {}, el('option', { value: '', text: '—' }), (q.type === 'yesno' ? ['Yes', 'No'] : q.options).map((o) => el('option', { value: o, text: o })));
     } else input = el(q.type === 'textarea' ? 'textarea' : 'input', { type: 'text', rows: 2 });
     input.value = answers[q.id] || '';
-    input.addEventListener('input', () => { if (input.value.trim()) answers[q.id] = input.value.trim(); else delete answers[q.id]; });
-    input.addEventListener('change', () => { if (input.value.trim()) answers[q.id] = input.value.trim(); else delete answers[q.id]; });
+    const update = () => { if (input.value.trim()) answers[q.id] = input.value.trim(); else delete answers[q.id]; };
+    input.addEventListener('input', update);
+    input.addEventListener('change', update);
     return el('label', { style: 'font-weight:400' }, el('span', { class: 'label', text: q.label }), input);
   };
+  // One "Coming / Not coming" drop-down per event on the invitation.
+  const eventSelects = (person) => h.events.map((id) => {
+    const sel = el('select', { 'aria-label': `${person.name || 'Guest'}: ${eventName(id)}` },
+      el('option', { value: '', text: 'Choose…' }), el('option', { value: 'yes', text: 'Coming' }), el('option', { value: 'no', text: 'Not coming' }));
+    sel.value = person.attendance[id] === true ? 'yes' : person.attendance[id] === false ? 'no' : '';
+    sel.addEventListener('change', () => {
+      if (sel.value) person.attendance[id] = sel.value === 'yes';
+      else delete person.attendance[id];
+    });
+    return h.events.length > 1 ? el('label', { style: 'font-weight:400;margin-top:8px' }, el('span', { class: 'label', text: eventName(id) }), sel) : sel;
+  });
   const plusBox = el('div', {});
   const drawPlus = () => {
     plusBox.replaceChildren(
       ...state.plusOnes.map((p, i) => {
         const name = el('input', { type: 'text', value: p.name, 'aria-label': 'Extra guest name' });
         name.addEventListener('input', () => { p.name = name.value; });
-        return el('div', { class: 'editor-list-item' }, el('span', { class: 'label', text: 'Extra guest name' }), name, guestQs.map((q) => qInput(q, p.answers)),
+        return el('div', { class: 'editor-list-item' }, el('span', { class: 'label', text: 'Extra guest name' }), name, eventSelects(p), guestQs.map((q) => qInput(q, p.answers)),
           el('button', { class: 'link-btn', type: 'button', text: 'Remove', onclick: () => { state.plusOnes.splice(i, 1); drawPlus(); } }));
       }),
-      state.plusOnes.length < h.plusOnes ? el('button', { class: 'btn btn-outline btn-small', type: 'button', text: '+ Add extra guest', onclick: () => { state.plusOnes.push({ name: '', answers: {} }); drawPlus(); } }) : ''
+      state.plusOnes.length < h.plusOnes ? el('button', { class: 'btn btn-outline btn-small', type: 'button', text: '+ Add extra guest', onclick: () => {
+        state.plusOnes.push({ name: '', attendance: Object.fromEntries(h.events.map((id) => [id, true])), answers: {} });
+        drawPlus();
+      } }) : ''
     );
   };
   drawPlus();
   const error = el('div', { class: 'form-error', role: 'alert' });
   const save = el('button', { class: 'btn', type: 'button', text: 'Save reply' });
   const body = el('div', {},
-    state.guests.map((g) => {
-      const sel = el('select', { 'aria-label': `${g.name} reply` }, el('option', { value: '', text: 'Choose…' }), el('option', { value: 'yes', text: 'Coming' }), el('option', { value: 'no', text: 'Not coming' }));
-      sel.value = g.attending === true ? 'yes' : g.attending === false ? 'no' : '';
-      sel.addEventListener('change', () => { g.attending = sel.value === 'yes' ? true : sel.value === 'no' ? false : null; });
-      return el('div', { class: 'editor-list-item' }, el('strong', { text: g.name }), sel, guestQs.map((q) => qInput(q, g.answers)));
-    }),
+    state.guests.map((g) => el('div', { class: 'editor-list-item' }, el('strong', { text: g.name }), eventSelects(g), guestQs.map((q) => qInput(q, g.answers)))),
     h.plusOnes ? [el('h3', { text: `Extra guests (up to ${h.plusOnes})` }), plusBox] : null,
     houseQs.map((q) => qInput(q, state.answers)),
     error,
@@ -345,7 +397,11 @@ function replyEditor(h) {
     try {
       await api(`/api/admin/households/${h.id}/reply`, {
         method: 'PUT',
-        body: { guests: state.guests.map((g) => ({ id: g.id, attending: g.attending, answers: g.answers })), plusOnes: state.plusOnes.filter((p) => p.name.trim()), answers: state.answers },
+        body: {
+          guests: state.guests.map((g) => ({ id: g.id, attendance: g.attendance, answers: g.answers })),
+          plusOnes: state.plusOnes.filter((p) => p.name.trim()),
+          answers: state.answers,
+        },
       });
       d.close();
       toast('Reply saved.', 'success');
@@ -358,6 +414,7 @@ function replyEditor(h) {
 
 function detailsForm(h, isNew) {
   const guests = h.guests.filter((g) => !g.isPlusOne).map((g) => ({ ...g }));
+  let events = [...h.events];
   const rows = el('div', {});
   const drawRows = (focusLast = false) => {
     rows.replaceChildren(...guests.map((g, i) => {
@@ -380,7 +437,7 @@ function detailsForm(h, isNew) {
   const error = el('div', { class: 'form-error', role: 'alert' });
   const save = el('button', { class: 'btn', type: 'button', text: isNew ? 'Add to guest list' : 'Save details' });
   save.addEventListener('click', () => withBusy(save, async () => {
-    const body = { name: nameInput.value, guests: guests.map((g) => ({ id: g.id, name: g.name, isChild: g.isChild })), plusOnes: Number(plusInput.value) || 0, contactPhone: phone.value, contactEmail: emailInput.value, notes: notes.value };
+    const body = { name: nameInput.value, guests: guests.map((g) => ({ id: g.id, name: g.name, isChild: g.isChild })), plusOnes: Number(plusInput.value) || 0, events, contactPhone: phone.value, contactEmail: emailInput.value, notes: notes.value };
     try {
       const r = await api(isNew ? '/api/admin/households' : `/api/admin/households/${h.id}`, { method: isNew ? 'POST' : 'PUT', body });
       toast(isNew ? 'Added to the guest list.' : 'Saved.', 'success');
@@ -397,6 +454,10 @@ function detailsForm(h, isNew) {
     rows,
     el('button', { class: 'btn btn-outline btn-small', type: 'button', text: '+ Add another person', onclick: () => { guests.push({ name: '', isChild: false }); drawRows(true); } }),
     el('div', { style: 'height:20px' }),
+    allEvents().length > 1 ? el('div', { class: 'field' },
+      el('span', { class: 'label', text: 'Invited to' }),
+      el('span', { class: 'help', text: 'Everyone on this invitation is invited to the events ticked here.' }),
+      eventChecks(events, (eid, on) => { events = on ? [...events, eid] : events.filter((x) => x !== eid); })) : null,
     el('div', { class: 'grid-2' },
       field('Invitation name (optional)', nameInput, 'Shown in your lists and greeting, e.g. "The Patel family". Left blank, the guests’ names are used.'),
       field('Extra guests they may bring', plusInput, '0 means only the people named above.'),
@@ -450,23 +511,50 @@ const pageFields = [
   { key: 'label', label: 'Menu name' },
   { key: 'visible', type: 'checkbox', label: 'Show this page on the website' },
   { key: 'heading', label: 'Page heading' },
+  { key: 'image', type: 'image', label: 'Photo at the top of the page (optional)' },
 ];
 
 const EDITORS = {
   site: {
-    title: 'Names, date & contact',
+    title: 'Names & contact',
     view: '/',
     fields: [
       { key: 'coupleNames', label: 'Your names', help: 'Shown at the top of every page.' },
-      { key: 'eventTitle', label: 'Event name' },
-      { key: 'eventDate', type: 'date', label: 'Date of the party' },
-      { key: 'eventTime', label: 'Time', help: 'e.g. 6:00pm until late' },
+      { key: 'eventTitle', label: 'Website title', help: 'Shown in the browser tab and when the link is shared.' },
       { key: 'contactText', type: 'textarea', label: 'Contact message', help: 'Shown at the bottom of every page and when someone can’t find their name.' },
       { key: 'contactPhone', label: 'Contact phone number' },
       { key: 'contactEmail', label: 'Contact email (shown to guests)' },
       { key: 'footerNote', label: 'Sign-off at the bottom of each page' },
-      { key: 'accentColor', type: 'color', label: 'Main colour (buttons and links)', help: 'Choose a dark colour so text on buttons is easy to read.' },
-      { key: 'backgroundColor', type: 'color', label: 'Background colour' },
+    ],
+  },
+  colours: {
+    section: 'site',
+    title: 'Colours',
+    view: '/',
+    fields: [
+      { key: 'accentColor', type: 'color', label: 'Buttons and links', help: 'Choose a dark colour so button text is easy to read.' },
+      { key: 'buttonTextColor', type: 'color', label: 'Text on buttons' },
+      { key: 'backgroundColor', type: 'color', label: 'Page background' },
+      { key: 'cardColor', type: 'color', label: 'Boxes (cards) on the page' },
+      { key: 'headerColor', type: 'color', label: 'Top bar with the menu' },
+      { key: 'textColor', type: 'color', label: 'Text' },
+      { key: 'headingColor', type: 'color', label: 'Headings and your names' },
+      { key: 'highlightColor', type: 'color', label: 'Decorative lines and highlights' },
+    ],
+  },
+  events: {
+    title: 'Events (Pooja & Party)',
+    view: '/',
+    fields: [
+      { key: 'heading', label: 'Heading above the events on the home page' },
+      { key: 'items', type: 'list', label: 'Events', itemName: 'event', help: 'Each invitation is for one or more of these events. Removing an event also removes its replies from view, so only do that if it’s cancelled.', fields: [
+        { key: 'name', label: 'Event name', help: 'e.g. Pooja' },
+        { key: 'date', type: 'date', label: 'Date' },
+        { key: 'time', label: 'Time', help: 'e.g. 11:00am' },
+        { key: 'details', type: 'textarea', label: 'Details', help: FORMAT_HELP },
+        { key: 'image', type: 'image', label: 'Photo (optional)' },
+        { key: 'showOnHome', type: 'checkbox', default: true, label: 'Show on the home page for everyone', help: 'Untick to keep this event off the public pages. Invited guests still see it when they RSVP.' },
+      ] },
     ],
   },
   home: {
@@ -505,7 +593,6 @@ const EDITORS = {
       { key: 'name', label: 'Venue name' },
       { key: 'address', type: 'textarea', label: 'Address', help: 'One line per row.' },
       { key: 'postcode', label: 'Postcode', help: 'Shown large, for sat navs.' },
-      { key: 'image', type: 'image', label: 'Photo of the venue' },
       { key: 'text', type: 'textarea', label: 'About the venue', help: FORMAT_HELP },
       { key: 'phone', label: 'Venue phone number' },
       { key: 'website', label: 'Venue website' },
@@ -521,6 +608,7 @@ const EDITORS = {
       { key: 'sections', type: 'list', label: 'Sections', itemName: 'section', fields: [
         { key: 'title', label: 'Heading', help: 'e.g. Parking' },
         { key: 'text', type: 'textarea', label: 'Details', help: FORMAT_HELP },
+        { key: 'image', type: 'image', label: 'Photo (optional)', help: 'e.g. a photo of the car park entrance.' },
       ] },
     ],
   },
@@ -545,6 +633,7 @@ const EDITORS = {
       { key: 'allowLateReplies', type: 'checkbox', label: 'Let people who haven’t replied still reply after the deadline' },
       { key: 'label', label: 'Menu name' },
       { key: 'heading', label: 'Page heading' },
+      { key: 'image', type: 'image', label: 'Photo at the top of the page (optional)' },
       { key: 'intro', type: 'textarea', label: 'Introduction' },
       { key: 'questions', type: 'list', label: 'Questions', itemName: 'question', help: '"For each guest who is coming" questions are asked once per person (e.g. dietary needs). "Once per invitation" questions are asked once for the whole family.', fields: [
         { key: 'label', label: 'Question' },
@@ -568,13 +657,20 @@ const EDITORS = {
   },
 };
 
+const MENU_NOTES = {
+  site: 'Your names, website title and contact details',
+  colours: 'Every colour on the website',
+  events: 'Names, dates, times, details and photos of each event',
+  rsvp: 'Deadline, questions and messages',
+};
+
 function websiteMenu(view) {
   view.replaceChildren(
     el('h1', { text: 'Edit website' }),
     el('p', { class: 'muted', text: 'Choose a part of the website to change. Changes show on the site as soon as you save.' }),
     el('div', { class: 'hh-list' }, Object.entries(EDITORS).map(([key, ed]) => el('a', { class: 'hh', href: `/admin/website/${key}` },
       el('span', { class: 'hh-name', text: ed.title }),
-      el('span', { class: 'muted', text: key === 'rsvp' ? 'Deadline, questions and messages' : key === 'site' ? 'Your names, date, colours and contact details' : `The ${ed.title.toLowerCase()} page` })
+      el('span', { class: 'muted', text: MENU_NOTES[key] || `The ${ed.title.toLowerCase()} page` })
     )))
   );
 }
@@ -627,7 +723,11 @@ function fieldInput(spec, obj) {
   else if (spec.type === 'lines') input = el('textarea', { id, rows: 3 });
   else if (spec.type === 'select') input = el('select', { id }, spec.options.map(([v, t]) => el('option', { value: v, text: t })));
   else input = el('input', { id, type: spec.type === 'date' ? 'date' : spec.type === 'color' ? 'color' : 'text' });
-  if (spec.type === 'color') input.style.cssText = 'width:90px;padding:4px;';
+  if (spec.type === 'color') {
+    input.value = value;
+    input.addEventListener('input', () => set(input.value));
+    return el('div', { class: 'colour-row' }, input, el('div', {}, el('label', { for: id, text: spec.label }), help));
+  }
   input.value = spec.type === 'lines' ? (value || []).join('\n') : value ?? '';
   const update = () => set(spec.type === 'lines' ? input.value.split('\n').map((s) => s.trim()).filter(Boolean) : input.value);
   input.addEventListener('input', update);
@@ -652,7 +752,7 @@ function listEditor(spec, obj) {
       )),
       el('button', { class: 'btn btn-outline', type: 'button', text: `+ Add a ${spec.itemName}`, onclick: () => {
         const blank = {};
-        for (const f of spec.fields) blank[f.key] = f.type === 'checkbox' ? false : f.type === 'lines' ? [] : f.type === 'select' ? f.options[0][0] : '';
+        for (const f of spec.fields) blank[f.key] = f.default ?? (f.type === 'checkbox' ? false : f.type === 'lines' ? [] : f.type === 'select' ? f.options[0][0] : '');
         items.push(blank);
         draw();
         box.querySelector('.editor-list-item:last-of-type input, .editor-list-item:last-of-type textarea')?.focus();
@@ -663,8 +763,9 @@ function listEditor(spec, obj) {
   return box;
 }
 
-function contentEditor(view, section) {
-  const ed = EDITORS[section];
+function contentEditor(view, key) {
+  const ed = EDITORS[key];
+  const section = ed.section || key;
   const data = structuredClone(C[section]);
   const save = el('button', { class: 'btn', type: 'button', text: 'Save changes' });
   save.addEventListener('click', () => withBusy(save, async () => {
@@ -683,9 +784,10 @@ function contentEditor(view, section) {
     el('div', { class: 'card' }, ed.fields.map((f) => fieldInput(f, data))),
     el('div', { class: 'sticky-save btn-row' }, save,
       el('a', { class: 'btn btn-outline', href: ed.view, target: '_blank', rel: 'noopener', text: 'View page' }),
-      el('button', { class: 'link-btn', type: 'button', text: 'Reset to starter text', onclick: async () => {
-        if (!(await confirmDialog(`Replace everything in "${ed.title}" with the starter text?`, { confirmLabel: 'Reset', danger: true }))) return;
-        await api(`/api/admin/content/${section}/reset`, { method: 'POST' });
+      el('button', { class: 'link-btn', type: 'button', text: ed.section ? 'Reset to starting colours' : 'Reset to starter text', onclick: async () => {
+        if (!(await confirmDialog(`Put everything in "${ed.title}" back to how it started?`, { confirmLabel: 'Reset', danger: true }))) return;
+        // Editors that share a section (e.g. Colours) only reset their own fields.
+        await api(`/api/admin/content/${section}/reset`, { method: 'POST', body: ed.section ? { keys: ed.fields.map((f) => f.key) } : {} });
         await reloadContent();
         navigate(location.pathname, { replace: true });
       } })

@@ -52,6 +52,9 @@ async function adminClient() {
   return a;
 }
 
+const BOTH = { pooja: true, party: true };
+const NEITHER = { pooja: false, party: false };
+
 async function setRsvp(a, changes) {
   const current = (await a('GET', '/api/content')).body.rsvp;
   const r = await a('PUT', '/api/admin/content/rsvp', { ...current, ...changes });
@@ -103,22 +106,27 @@ test('only people on the guest list can RSVP, for their whole family, and edits 
   assert.equal(invite.responded, false);
   const [raj, priya, anil] = invite.guests;
 
-  // Every person needs an answer.
-  const missing = await guest('POST', '/api/rsvp/reply', { guests: [{ id: raj.id, attending: true }] }, auth);
+  // Every person needs an answer, for every event.
+  const missing = await guest('POST', '/api/rsvp/reply', { guests: [{ id: raj.id, attendance: BOTH }] }, auth);
   assert.equal(missing.status, 400);
+  const halfAnswered = await guest('POST', '/api/rsvp/reply', {
+    guests: [{ id: raj.id, attendance: BOTH }, { id: priya.id, attendance: { pooja: true } }, { id: anil.id, attendance: NEITHER }],
+  }, auth);
+  assert.equal(halfAnswered.status, 400);
+  assert.match(halfAnswered.body.error, /Priya Patel is coming to the Engagement Party/);
 
   // Too many extra guests.
   const tooMany = await guest('POST', '/api/rsvp/reply', {
-    guests: [{ id: raj.id, attending: true }, { id: priya.id, attending: true }, { id: anil.id, attending: true }],
+    guests: [{ id: raj.id, attendance: BOTH }, { id: priya.id, attendance: BOTH }, { id: anil.id, attendance: BOTH }],
     plusOnes: [{ name: 'A B' }, { name: 'C D' }],
   }, auth);
   assert.equal(tooMany.status, 400);
 
   const reply = await guest('POST', '/api/rsvp/reply', {
     guests: [
-      { id: raj.id, attending: true, answers: { dietary: 'Vegetarian' } },
-      { id: priya.id, attending: true },
-      { id: anil.id, attending: false, answers: { dietary: 'ignored when not coming' } },
+      { id: raj.id, attendance: BOTH, answers: { dietary: 'Vegetarian' } },
+      { id: priya.id, attendance: BOTH },
+      { id: anil.id, attendance: NEITHER, answers: { dietary: 'ignored when not coming' } },
     ],
     plusOnes: [{ name: 'Meera Shah', answers: { dietary: 'Vegan' } }],
     answers: { message: 'Congratulations!' },
@@ -131,7 +139,7 @@ test('only people on the guest list can RSVP, for their whole family, and edits 
 
   // Change the reply before the deadline.
   const change = await guest('POST', '/api/rsvp/reply', {
-    guests: [{ id: raj.id, attending: true, answers: { dietary: 'Vegetarian' } }, { id: priya.id, attending: false }, { id: anil.id, attending: false }],
+    guests: [{ id: raj.id, attendance: BOTH, answers: { dietary: 'Vegetarian' } }, { id: priya.id, attendance: { pooja: true, party: false } }, { id: anil.id, attendance: NEITHER }],
     plusOnes: [],
     answers: { message: 'Congratulations!' },
   }, auth);
@@ -141,17 +149,25 @@ test('only people on the guest list can RSVP, for their whole family, and edits 
   const log = (await a('GET', '/api/admin/log')).body.log;
   assert.equal(log.length, 2);
   assert.equal(log[0].action, 'updated');
-  assert.ok(log[0].changes.includes('Priya Patel: Coming → Not coming'));
+  assert.ok(log[0].changes.includes('Priya Patel, Engagement Party: Coming → Not coming'));
+  assert.ok(!log[0].changes.some((c) => c.startsWith('Priya Patel, Pooja')));
   assert.ok(log[0].changes.includes('Meera Shah removed'));
   assert.equal(log[1].action, 'submitted');
-  assert.equal(log[1].summary, '3 coming, 1 not coming');
+  assert.equal(log[1].summary, 'Pooja: 3 coming, 1 not coming · Engagement Party: 3 coming, 1 not coming');
 
   const detail = (await a('GET', `/api/admin/households/${id}`)).body.household;
   assert.equal(detail.status, 'replied');
   assert.equal(detail.responseCount, 2);
 
   const csv = await a('GET', '/api/admin/export.csv');
-  assert.match(csv.body, /Raj Patel","Invited","Adult","Coming","Vegetarian"/);
+  assert.match(csv.body, /"Pooja","Engagement Party"/);
+  assert.match(csv.body, /Raj Patel","Invited","Adult","Coming","Coming","Vegetarian"/);
+  assert.match(csv.body, /Priya Patel","Invited","Adult","Coming","Not coming"/);
+
+  const overview = (await a('GET', '/api/admin/overview')).body.stats.events;
+  const party = overview.find((e) => e.id === 'party');
+  assert.equal(party.coming, 1);
+  assert.equal(party.notComing, 2);
 });
 
 test('after the deadline, replies are locked and non-repliers are flagged as overdue', async () => {
@@ -163,10 +179,10 @@ test('after the deadline, replies are locked and non-repliers are flagged as ove
   const tokenFor = async (name) => ({ 'X-RSVP-Token': (await guest('POST', '/api/rsvp/lookup', { name })).body.matches[0].token });
   const sunita = await tokenFor('Sunita Shah');
   const inv = (await guest('GET', '/api/rsvp/invite', undefined, sunita)).body.invite;
-  assert.equal((await guest('POST', '/api/rsvp/reply', { guests: [{ id: inv.guests[0].id, attending: true }] }, sunita)).status, 200);
+  assert.equal((await guest('POST', '/api/rsvp/reply', { guests: [{ id: inv.guests[0].id, attendance: BOTH }] }, sunita)).status, 200);
 
   await setRsvp(a, { deadline: '2020-01-01', allowLateReplies: false });
-  const late = await guest('POST', '/api/rsvp/reply', { guests: [{ id: inv.guests[0].id, attending: false }] }, sunita);
+  const late = await guest('POST', '/api/rsvp/reply', { guests: [{ id: inv.guests[0].id, attendance: NEITHER }] }, sunita);
   assert.equal(late.status, 403);
   const view = (await guest('GET', '/api/rsvp/invite', undefined, sunita)).body.invite;
   assert.equal(view.canReply, false);
@@ -185,7 +201,7 @@ test('after the deadline, replies are locked and non-repliers are flagged as ove
   assert.equal((await guest('GET', '/api/rsvp/invite', undefined, sunita)).body.invite.canReply, false);
 
   // Admins can still edit any reply after the deadline.
-  const edit = await a('PUT', `/api/admin/households/${replied}/reply`, { guests: [{ id: inv.guests[0].id, attending: false }] });
+  const edit = await a('PUT', `/api/admin/households/${replied}/reply`, { guests: [{ id: inv.guests[0].id, attendance: NEITHER }] });
   assert.equal(edit.status, 200);
   const log = (await a('GET', '/api/admin/log')).body.log;
   assert.equal(log[0].action, 'admin_edit');
@@ -228,12 +244,12 @@ test('custom questions: required and choice answers are checked', async () => {
   const guest = client();
   const auth = { 'X-RSVP-Token': (await guest('POST', '/api/rsvp/lookup', { name: 'Leela Menon' })).body.matches[0].token };
   const gid = (await guest('GET', '/api/rsvp/invite', undefined, auth)).body.invite.guests[0].id;
-  assert.equal((await guest('POST', '/api/rsvp/reply', { guests: [{ id: gid, attending: true }] }, auth)).status, 400);
-  assert.equal((await guest('POST', '/api/rsvp/reply', { guests: [{ id: gid, attending: true, answers: { [q.id]: 'Fish' } }] }, auth)).status, 400);
-  assert.equal((await guest('POST', '/api/rsvp/reply', { guests: [{ id: gid, attending: true, answers: { [q.id]: 'Paneer' } }] }, auth)).status, 200);
+  assert.equal((await guest('POST', '/api/rsvp/reply', { guests: [{ id: gid, attendance: BOTH }] }, auth)).status, 400);
+  assert.equal((await guest('POST', '/api/rsvp/reply', { guests: [{ id: gid, attendance: BOTH, answers: { [q.id]: 'Fish' } }] }, auth)).status, 400);
+  assert.equal((await guest('POST', '/api/rsvp/reply', { guests: [{ id: gid, attendance: BOTH, answers: { [q.id]: 'Paneer' } }] }, auth)).status, 200);
   // Not coming: no questions needed.
   await a('DELETE', `/api/admin/households/${id}/reply`);
-  assert.equal((await guest('POST', '/api/rsvp/reply', { guests: [{ id: gid, attending: false }] }, auth)).status, 200);
+  assert.equal((await guest('POST', '/api/rsvp/reply', { guests: [{ id: gid, attendance: NEITHER }] }, auth)).status, 200);
   await setRsvp(a, { questions: current.questions });
 });
 
@@ -243,6 +259,18 @@ test('a tampered RSVP token is rejected', async () => {
   assert.equal(r.status, 401);
 });
 
+test('update emails show each event when invited to both', () => {
+  const msg = composeEmail({
+    action: 'submitted',
+    summary: 'Pooja: 1 coming, 0 not coming · Engagement Party: 0 coming, 1 not coming',
+    changes: [],
+    snapshot: { household: 'Raj Patel', events: ['Pooja', 'Engagement Party'], answers: [],
+      guests: [{ name: 'Raj Patel', attending: true, events: [{ name: 'Pooja', attending: true }, { name: 'Engagement Party', attending: false }], answers: [] }] },
+  }, 'https://example.test/admin/guests/1');
+  assert.match(msg.text, /Invited to: Pooja and Engagement Party/);
+  assert.match(msg.text, /Raj Patel: ✓ Pooja: Coming · ✗ Engagement Party: Not coming/);
+});
+
 test('update emails list who is coming and what changed', () => {
   const msg = composeEmail({
     action: 'updated',
@@ -250,9 +278,10 @@ test('update emails list who is coming and what changed', () => {
     changes: ['Priya Patel: Coming → Not coming'],
     snapshot: {
       household: 'The Patel family',
+      events: ['Pooja'],
       guests: [
-        { name: 'Raj Patel', attending: true, answers: [{ q: 'Dietary', a: 'Vegetarian' }] },
-        { name: 'Priya Patel', attending: false, answers: [] },
+        { name: 'Raj Patel', attending: true, events: [{ name: 'Pooja', attending: true }], answers: [{ q: 'Dietary', a: 'Vegetarian' }] },
+        { name: 'Priya Patel', attending: false, events: [{ name: 'Pooja', attending: false }], answers: [] },
       ],
       answers: [{ q: 'Message', a: '<b>hi</b>' }],
     },
@@ -266,5 +295,44 @@ test('update emails list who is coming and what changed', () => {
 test('pages are served with the couple’s names', async () => {
   const res = await fetch(`${base}/rsvp`);
   const body = await res.text();
-  assert.match(body, /<title>Ravi &amp; Akshee · Engagement Party<\/title>/);
+  assert.match(body, /<title>Ravi &amp; Akshee · Pooja &amp; Engagement Party<\/title>/);
+});
+
+test('Pooja-only invitations only answer for the Pooja', async () => {
+  const a = await adminClient();
+  const id = (await a('POST', '/api/admin/households', { guests: [{ name: 'Kamla Devi' }], events: ['pooja'] })).body.id;
+  assert.equal((await a('POST', '/api/admin/households', { guests: [{ name: 'X Y' }], events: [] })).status, 400);
+  const guest = client();
+  const auth = { 'X-RSVP-Token': (await guest('POST', '/api/rsvp/lookup', { name: 'Kamla Devi' })).body.matches[0].token };
+  const inv = (await guest('GET', '/api/rsvp/invite', undefined, auth)).body.invite;
+  assert.deepEqual(inv.events.map((e) => e.id), ['pooja']);
+  // An answer for an event they're not invited to is ignored.
+  const r = await guest('POST', '/api/rsvp/reply', { guests: [{ id: inv.guests[0].id, attendance: { pooja: true, party: true } }] }, auth);
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.invite.guests[0].attendance, { pooja: true });
+  const h = (await a('GET', `/api/admin/households/${id}`)).body.household;
+  assert.deepEqual(h.events, ['pooja']);
+  const log = (await a('GET', '/api/admin/log')).body.log;
+  assert.equal(log[0].summary, '1 coming, 0 not coming');
+  const csv = (await a('GET', '/api/admin/export.csv')).body;
+  assert.match(csv, /Kamla Devi","Invited","Adult","Coming","Not invited"/);
+
+  // Bulk add can put a whole list on the Pooja only.
+  await a('POST', '/api/admin/households/bulk', { text: 'Asha Rani\nBimla Rani', events: ['pooja'] });
+  const { households } = (await a('GET', '/api/admin/households')).body;
+  assert.deepEqual(households.find((x) => x.name === 'Bimla Rani').events, ['pooja']);
+});
+
+test('colours can be changed and reset without touching other settings', async () => {
+  const a = await adminClient();
+  const site = (await a('GET', '/api/content')).body.site;
+  const saved = (await a('PUT', '/api/admin/content/site', { ...site, accentColor: '#123456', headingColor: 'red', coupleNames: 'R & A' })).body.site;
+  assert.equal(saved.accentColor, '#123456');
+  assert.equal(saved.headingColor, '#2b2420'); // not a valid colour, so the default is kept
+  const page = await (await fetch(`${base}/`)).text();
+  assert.match(page, /--accent: #123456;/);
+  const reset = (await a('POST', '/api/admin/content/site/reset', { keys: ['accentColor'] })).body.site;
+  assert.equal(reset.accentColor, '#8a6a1f');
+  assert.equal(reset.coupleNames, 'R & A');
+  await a('POST', '/api/admin/content/site/reset', {});
 });

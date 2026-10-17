@@ -1,20 +1,20 @@
-# Ravi & Akshee: engagement party RSVP website
+# Ravi & Akshee: Pooja & engagement party RSVP website
 
-A website for the engagement party, with RSVPs from the guest list and an admin area.
+A website for the **Pooja** (11am) and the **Engagement Party** (6pm) at the Courtyard by Marriott London Heathrow Airport, 1 Nobel Drive, Harlington, Hayes UB3 5EY, with RSVPs from the guest list and an admin area.
 
 **For guests** (big text, big buttons, works on any phone, with a *Larger text* button at the top):
 
-- **Home**, **Our Story**, **Venue** (map, postcode, "Open in Google Maps"), **Getting There** (parking, trains, taxis, step-free access) and **FAQ**.
-- **RSVP:** guests type their name. Only people on your guest list find an invitation. They then tick **Coming** or **Can't come** for each person on their invitation, answer your questions (e.g. dietary needs), add extra guests if you allowed them, check their reply and send it.
+- **Home** (with both events), **Our Story**, **Venue** (map, postcode, "Open in Google Maps"), **Getting There** (parking, trains, taxis, step-free access) and **FAQ**.
+- **RSVP:** guests type their name. Only people on your guest list find an invitation. They see which events their invitation is for, then tick **Coming** or **Can't come** for each person **at each of those events**, answer your questions (e.g. dietary needs), add extra guests if you allowed them, check their reply and send it.
 - Guests can come back and **change their reply until the RSVP deadline**. After that it is locked and they're asked to contact you.
 
 **For you** (log in at `/admin`, or tap **Admin** at the bottom of any page):
 
-- **Overview:** who's coming (adults and children), who isn't, who hasn't replied, and the deadline. After the deadline, families who haven't replied are **highlighted in red** under *Need chasing*, with their phone number. Tick *I have chased them* to keep track.
-- **Guest list:** add a family or group (one invitation), or paste many at once. Each invitation lists everyone on it, how many extra guests they may bring, a phone number and private notes. You can also enter or change a reply for someone (e.g. if they phone you), or clear it.
+- **Overview:** for the Pooja and the Engagement Party separately: who's coming (adults and children), who isn't and who hasn't replied. Also the deadline. After the deadline, families who haven't replied are **highlighted in red** under *Need chasing*, with their phone number. Tick *I have chased them* to keep track.
+- **Guest list:** add a family or group (one invitation), or paste many at once. Each invitation says which events it's for (**Pooja only**, or **Pooja & Engagement Party**), and lists everyone on it, how many extra guests they may bring, a phone number and private notes. You can also enter or change a reply for someone (e.g. if they phone you), or clear it.
 - **Replies log:** every reply and every change, with what changed (e.g. *Priya Patel: Coming → Not coming*).
 - **Email updates:** every new or changed reply is emailed to **Ravi.akshee@gmail.com** (you can add more addresses in *Settings*).
-- **Edit website:** change every part of the site: your names, date, time, colours, photos, the story, venue, travel and parking details, FAQs, the RSVP deadline, RSVP questions and every message guests see.
+- **Edit website:** change every part of the site: your names, the events (names, dates, times, details, photos), **every colour**, a photo for every page (plus each event, story chapter and travel section), the story, venue, travel and parking details, FAQs, the RSVP deadline, RSVP questions and every message guests see.
 - **Download spreadsheet** (one row per guest) and **Download a backup**.
 - **Settings:** add another admin (e.g. Akshee), change your password.
 
@@ -39,6 +39,12 @@ John Smith
 - `Patel family:` at the start is an optional name for the invitation.
 - `(child)` marks a child, so you get adult and child numbers.
 - `+1` or `+2` at the end lets them bring that many extra guests.
+
+Below the box, tick which events everyone on that list is invited to. So add your **Pooja-only** list in one go with only *Pooja* ticked, and your **Pooja & Engagement Party** list with both ticked.
+
+## Events
+
+Both events are set up under **Edit website → Events (Pooja & Party)**. Set each event's **date** there. Each event has *Show on the home page for everyone*. If you'd rather Pooja-only guests didn't see the Engagement Party on the public pages, untick it for the party: guests invited to it still see it when they RSVP.
 
 ## Running it on your own computer
 
@@ -97,11 +103,13 @@ In Render → **Environment**, set `ADMIN_PASSWORD` to a new password and add `A
 
 ## Before you send the link
 
-- [ ] **Edit website → Names, date & contact:** date, time and a contact phone number.
-- [ ] **Edit website → Venue** and **Getting There:** address, postcode, parking.
+- [ ] **Edit website → Events:** set the date of the Pooja and the Engagement Party.
+- [ ] **Edit website → Names & contact:** a contact phone number.
+- [ ] **Edit website → Colours:** pick your colours.
+- [ ] **Edit website → Venue** and **Getting There:** the address is filled in; add parking, trains and taxis.
 - [ ] **Edit website → RSVP page & questions:** set the **RSVP deadline**, and check the questions.
 - [ ] Upload photos for the home page and your story.
-- [ ] Add your guest list.
+- [ ] Add your guest list: the Pooja-only list and the both-events list.
 - [ ] **Settings → Send a test email**, then RSVP once yourself to try it, and clear that reply afterwards (**Guest list → your name → Clear reply**).
 
 ## Project layout

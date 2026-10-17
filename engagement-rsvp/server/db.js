@@ -37,6 +37,7 @@ const SCHEMA = `
   );
 
   -- One invitation: a family or group who reply together.
+  -- events lists the ids of the events they are invited to, as JSON.
   -- answers holds the replies to the family-wide RSVP questions, as JSON.
   CREATE TABLE IF NOT EXISTS households (
     id             SERIAL PRIMARY KEY,
@@ -45,6 +46,7 @@ const SCHEMA = `
     contact_email  TEXT NOT NULL DEFAULT '',
     notes          TEXT NOT NULL DEFAULT '',
     plus_ones      INTEGER NOT NULL DEFAULT 0,
+    events         TEXT NOT NULL DEFAULT '[]',
     answers        TEXT NOT NULL DEFAULT '{}',
     responded_by   TEXT,
     responded_at   TEXT,
@@ -54,7 +56,8 @@ const SCHEMA = `
     created_at     TEXT NOT NULL DEFAULT ${NOW}
   );
 
-  -- attending: NULL = not replied yet, 1 = coming, 0 = not coming.
+  -- attendance: which events the guest is coming to, as JSON {"pooja": true, "party": false}.
+  -- An event missing from it means no reply yet for that event.
   -- Plus-ones are added by the family when they reply (is_plus_one = 1).
   CREATE TABLE IF NOT EXISTS guests (
     id           SERIAL PRIMARY KEY,
@@ -62,7 +65,7 @@ const SCHEMA = `
     name         TEXT NOT NULL,
     is_child     INTEGER NOT NULL DEFAULT 0,
     is_plus_one  INTEGER NOT NULL DEFAULT 0,
-    attending    INTEGER,
+    attendance   TEXT NOT NULL DEFAULT '{}',
     answers      TEXT NOT NULL DEFAULT '{}',
     sort         INTEGER NOT NULL DEFAULT 0,
     created_at   TEXT NOT NULL DEFAULT ${NOW}
@@ -80,6 +83,10 @@ const SCHEMA = `
     snapshot       TEXT NOT NULL DEFAULT '{}',
     created_at     TEXT NOT NULL DEFAULT ${NOW}
   );
+
+  -- Databases created before invitations could be for several events.
+  ALTER TABLE households ADD COLUMN IF NOT EXISTS events TEXT NOT NULL DEFAULT '[]';
+  ALTER TABLE guests ADD COLUMN IF NOT EXISTS attendance TEXT NOT NULL DEFAULT '{}';
 
   CREATE INDEX IF NOT EXISTS idx_guests_household ON guests(household_id);
   CREATE INDEX IF NOT EXISTS idx_log_household ON rsvp_log(household_id);

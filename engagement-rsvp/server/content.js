@@ -65,14 +65,30 @@ function cleanQuestions(questions) {
     });
 }
 
+// Each event keeps a stable id, because invitations and replies refer to it.
+function cleanEvents(items) {
+  const seen = new Set();
+  return items
+    .filter((e) => e.name.trim())
+    .map((e) => {
+      let id = e.id.replace(/[^a-z0-9_-]/gi, '').slice(0, 40);
+      if (!id || seen.has(id)) id = `e_${crypto.randomBytes(4).toString('hex')}`;
+      seen.add(id);
+      return { ...e, id, name: e.name.trim().slice(0, 120), date: DATE_RE.test(e.date) ? e.date : '' };
+    });
+}
+
+const COLOR_KEYS = Object.keys(defaults.site).filter((k) => k.endsWith('Color'));
+
 function normalise(content) {
   const out = conform(defaults, content);
   const { site, rsvp } = out;
-  if (!COLOR_RE.test(site.accentColor)) site.accentColor = defaults.site.accentColor;
-  if (!COLOR_RE.test(site.backgroundColor)) site.backgroundColor = defaults.site.backgroundColor;
-  if (!DATE_RE.test(site.eventDate)) site.eventDate = '';
+  for (const key of COLOR_KEYS) if (!COLOR_RE.test(site[key])) site[key] = defaults.site[key];
   if (!DATE_RE.test(rsvp.deadline)) rsvp.deadline = '';
   rsvp.questions = cleanQuestions(rsvp.questions);
+  out.events.items = cleanEvents(out.events.items);
+  // There must always be at least one event to invite people to.
+  if (!out.events.items.length) out.events.items = structuredClone(defaults.events.items);
   return out;
 }
 
@@ -111,8 +127,12 @@ async function saveSection(section, value) {
   return structuredClone(clean);
 }
 
-async function resetSection(section) {
-  return saveSection(section, structuredClone(defaults[section]));
+// Puts a section back to its starter content, or just some of its fields.
+async function resetSection(section, keys = null) {
+  if (!keys) return saveSection(section, structuredClone(defaults[section]));
+  const value = normalise(await getSetting('content', {}))[section];
+  for (const key of keys) if (key in defaults[section]) value[key] = structuredClone(defaults[section][key]);
+  return saveSection(section, value);
 }
 
-module.exports = { init, refreshIfStale, getContent, saveSection, resetSection, normalise, SECTIONS };
+module.exports = { init, refreshIfStale, getContent, saveSection, resetSection, normalise, SECTIONS, COLOR_KEYS };
