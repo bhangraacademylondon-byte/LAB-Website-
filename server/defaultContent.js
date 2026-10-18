@@ -46,6 +46,8 @@ module.exports = {
     heroSubtitle: 'Authentic Punjabi dance classes for kids and adults in East London. Every Thursday at The Royal Liberty School, Gidea Park.',
     heroImage: '',
     showHeroLogo: true,
+    heroLayout: 'centred',
+    logoAnimation: 'spin-float',
     heroButtons: [
       { label: 'View timetable', link: '/timetable', style: 'Gold' },
       { label: 'Member login', link: '/login', style: 'White' },

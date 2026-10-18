@@ -1,4 +1,5 @@
 import {
+  LOGO_ANIMATIONS, logoAnimationClasses,
   api, html, raw, mount, el, toast, openDialog, confirmDialog, formatDate, formatDateTime, formatTime,
   todayLondon, formError, formData, withBusy, safeImg, safeUrl,
 } from './lib.js';
@@ -996,6 +997,11 @@ const SCHEMAS = {
       { key: 'heroSubtitle', label: 'Sub heading', type: 'textarea' },
       { key: 'heroImage', label: 'Background image (optional)', type: 'image' },
       { key: 'showHeroLogo', label: 'Show the logo in the banner', type: 'bool' },
+      { key: 'heroLayout', label: 'Logo position', type: 'select', options: [
+        { value: 'centred', label: 'Centred, above the heading' },
+        { value: 'side', label: 'Beside the heading (on larger screens)' },
+      ] },
+      { key: 'logoAnimation', label: 'Logo animation', type: 'logoAnimation', hint: 'Pick an option to preview it. Visitors who have turned off motion in their phone or computer settings always see the logo still.' },
       buttonList('heroButtons', 'Banner buttons'),
       h('Highlights'),
       { key: 'showHighlights', label: 'Show the highlights section', type: 'bool' },
@@ -1189,11 +1195,13 @@ function newItem(fields) {
     else if (f.type === 'strings') item[f.key] = [];
     else if (f.type === 'list') item[f.key] = [];
     else if (f.type === 'object') item[f.key] = newItem(f.fields);
-    else if (f.type === 'select') item[f.key] = f.options[0];
+    else if (f.type === 'select') item[f.key] = optionValue(f.options[0]);
     else item[f.key] = '';
   }
   return item;
 }
+
+const optionValue = (o) => (o && typeof o === 'object' ? o.value : o);
 
 function buildField(f, obj, onChange) {
   const id = `f-${Math.random().toString(36).slice(2, 9)}`;
@@ -1221,7 +1229,21 @@ function buildField(f, obj, onChange) {
       return wrap(el('input', { id, type: 'number', min: 1, max: 50, value: obj[f.key] ?? '', oninput: (e) => set(Number(e.target.value) || 0), onchange: (e) => set(Number(e.target.value) || 0) }));
     case 'select':
       return wrap(el('select', { id, onchange: (e) => set(e.target.value) },
-        f.options.map((o) => el('option', { value: o, selected: obj[f.key] === o ? 'selected' : null, text: o }))));
+        f.options.map((o) => el('option', { value: optionValue(o), selected: obj[f.key] === optionValue(o) ? 'selected' : null, text: o.label ?? o }))));
+    case 'logoAnimation': {
+      // Dropdown plus a live preview of the logo with the chosen animation.
+      const logo = safeImg(state.content.site.logo) || '/img/logo.png';
+      const preview = el('div', { class: 'logo-preview' });
+      const show = (value) => {
+        preview.replaceChildren(el('div', { class: `hero-logo-wrap ${logoAnimationClasses(value)}` },
+          el('div', { class: 'hero-logo' }, el('img', { src: logo, alt: '' }))));
+      };
+      const select = el('select', { id, onchange: (e) => { set(e.target.value); show(e.target.value); } },
+        LOGO_ANIMATIONS.map((a) => el('option', { value: a.value, selected: (obj[f.key] || LOGO_ANIMATIONS[0].value) === a.value ? 'selected' : null, text: a.label })));
+      const replay = el('button', { type: 'button', class: 'btn btn-sm btn-outline', text: '↻ Replay', onclick: () => show(select.value) });
+      show(select.value);
+      return wrap(el('div', { class: 'form' }, el('div', { class: 'image-field' }, select, replay), preview));
+    }
     case 'color': {
       const text = el('input', { type: 'text', value: obj[f.key] || '', style: 'max-width:140px', oninput: (e) => { picker.value = e.target.value; set(e.target.value); } });
       const picker = el('input', { id, type: 'color', value: /^#[0-9a-f]{6}$/i.test(obj[f.key]) ? obj[f.key] : '#000000', oninput: (e) => { text.value = e.target.value; set(e.target.value); } });

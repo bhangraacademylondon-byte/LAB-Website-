@@ -1,6 +1,6 @@
 import {
   api, html, raw, mount, esc, safeUrl, safeImg, formatText, toast, formatDate, formatDateTime, formatTime,
-  formError, formData, withBusy, initials, el, openDialog,
+  formError, formData, withBusy, initials, el, openDialog, logoAnimationClasses,
 } from './lib.js';
 
 export const state = { content: null, user: null, stats: null };
@@ -192,7 +192,7 @@ function renderHome() {
   const heroCss = heroImg.replace(/["'()\\\s<>]/g, (c) => `%${c.charCodeAt(0).toString(16).padStart(2, '0')}`);
   const groups = groupByDay(timetable.classes);
   mount(main(), html`
-    <section class="hero ${heroImg ? 'has-image' : ''} ${home.showHeroLogo ? '' : 'no-logo'}" ${raw(heroImg ? `style="background-image:url('${esc(heroCss)}')"` : '')}>
+    <section class="hero ${heroImg ? 'has-image' : ''} ${home.showHeroLogo ? '' : 'no-logo'} ${home.heroLayout === 'side' ? 'layout-side' : 'layout-centred'}" ${raw(heroImg ? `style="background-image:url('${esc(heroCss)}')"` : '')}>
       <div class="container hero-inner">
         <div>
           ${home.heroEyebrow ? html`<span class="eyebrow">${home.heroEyebrow}</span>` : ''}
@@ -200,7 +200,7 @@ function renderHome() {
           <p>${home.heroSubtitle}</p>
           ${buttons(home.heroButtons)}
         </div>
-        ${home.showHeroLogo ? html`<div class="hero-logo"><img src="${safeImg(site.logo) || '/img/logo.png'}" alt="${site.name} logo"></div>` : ''}
+        ${home.showHeroLogo ? html`<div class="hero-logo-wrap ${logoAnimationClasses(home.logoAnimation)}"><div class="hero-logo"><img src="${safeImg(site.logo) || '/img/logo.png'}" alt="${site.name} logo"></div></div>` : ''}
       </div>
     </section>
 

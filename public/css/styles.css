@@ -133,12 +133,13 @@ input[type='color'] { width: 56px; height: 44px; padding: 2px; border: 1.5px sol
 .hero h1 { color: #fff; }
 .hero p { font-size: 1.1rem; color: rgba(255, 255, 255, 0.86); max-width: 560px; }
 .hero .btn-row { margin-top: 28px; }
-.hero-logo { justify-self: center; width: min(360px, 80%); aspect-ratio: 1; border-radius: 50%; background: var(--logo-bg); overflow: hidden; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35), 0 0 0 10px rgba(162, 137, 92, 0.35); }
+.hero-logo-wrap { position: relative; justify-self: center; width: min(360px, 80%); aspect-ratio: 1; }
+.hero-logo { position: relative; width: 100%; height: 100%; border-radius: 50%; background: var(--logo-bg); overflow: hidden; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35), 0 0 0 10px rgba(162, 137, 92, 0.35); }
 .hero-logo img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 .hero .eyebrow { color: var(--accent-light); }
 @media (max-width: 800px) {
   .hero-inner { grid-template-columns: 1fr; text-align: center; padding: 40px 16px 56px; }
-  .hero-logo { order: -1; width: min(200px, 60%); }
+  .hero-logo-wrap { order: -1; width: min(220px, 62%); }
   .hero p { margin-inline: auto; }
   .hero .btn-row { justify-content: center; }
 }
@@ -391,3 +392,50 @@ dialog.lightbox::backdrop { background: rgba(0, 0, 0, 0.85); }
 .policy li, .policy-scroll li { margin-bottom: 6px; }
 .policy-scroll { max-height: 280px; overflow-y: auto; border: 1px solid var(--border); border-radius: 12px; padding: 4px 16px; background: var(--bg-soft); font-size: 0.9rem; }
 .footer-bottom a { text-decoration: underline; }
+
+/* ---------- home banner: logo centred above the text ---------- */
+.hero.layout-centred .hero-inner { grid-template-columns: 1fr; justify-items: center; text-align: center; max-width: 860px; gap: 24px; padding-top: 56px; }
+.hero.layout-centred .hero-logo-wrap { order: -1; width: min(300px, 68%); }
+.hero.layout-centred p { margin-inline: auto; }
+.hero.layout-centred .btn-row { justify-content: center; }
+
+/* ---------- logo animations (chosen in Admin → Home page) ---------- */
+/* Entrance (plays once) on the wrapper, loop on the logo, so both can combine. */
+.enter-spin { animation: logo-spin-in 1.4s cubic-bezier(.2, .8, .2, 1) both; }
+.enter-drop { animation: logo-drop-in 1.1s cubic-bezier(.3, 1.4, .5, 1) both; }
+.enter-zoom { animation: logo-zoom-in 1s cubic-bezier(.2, .8, .2, 1) both; }
+.enter-spin.loop-float .hero-logo, .enter-spin.loop-bounce .hero-logo, .enter-spin.loop-pulse .hero-logo { animation-delay: 1.4s; }
+
+.loop-float .hero-logo { animation: logo-float 4s ease-in-out infinite; }
+.loop-bounce .hero-logo { animation: logo-bounce 1.6s ease-in-out infinite; transform-origin: 50% 100%; }
+.loop-pulse .hero-logo { animation: logo-pulse 3s ease-in-out infinite; }
+
+.loop-orbit::before, .loop-orbit::after { content: ''; position: absolute; border-radius: 50%; pointer-events: none; }
+.loop-orbit::before { inset: -18px; border: 3px dashed var(--accent); opacity: 0.85; animation: logo-rotate 14s linear infinite; }
+.loop-orbit::after { inset: -32px; border: 2px dotted var(--accent-light); opacity: 0.6; animation: logo-rotate 22s linear infinite reverse; }
+
+.loop-shine .hero-logo::after { content: ''; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 236, 190, 0.55) 50%, transparent 65%);
+  background-size: 250% 100%; animation: logo-shine 4.5s ease-in-out infinite; }
+
+@keyframes logo-spin-in { from { opacity: 0; transform: rotate(-360deg) scale(0.3); } to { opacity: 1; transform: none; } }
+@keyframes logo-drop-in { 0% { opacity: 0; transform: translateY(-140px); } 60% { opacity: 1; } 100% { transform: none; } }
+@keyframes logo-zoom-in { from { opacity: 0; transform: scale(1.6); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes logo-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
+@keyframes logo-bounce {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  12% { transform: translateY(-14px) rotate(-3deg); }
+  24% { transform: translateY(0) rotate(0); }
+  36% { transform: translateY(-8px) rotate(3deg); }
+  48% { transform: translateY(0) rotate(0); }
+}
+@keyframes logo-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35), 0 0 0 10px rgba(162, 137, 92, 0.35); }
+  50% { transform: scale(1.04); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35), 0 0 0 14px rgba(201, 180, 138, 0.55), 0 0 60px 10px rgba(201, 180, 138, 0.45); }
+}
+@keyframes logo-rotate { to { transform: rotate(360deg); } }
+@keyframes logo-shine { 0%, 55% { background-position: 150% 0; } 100% { background-position: -100% 0; } }
+
+/* Preview in Admin → Home page */
+.logo-preview { display: flex; align-items: center; justify-content: center; padding: 40px 16px; border-radius: 12px; background: radial-gradient(circle at 80% 20%, #3d3d6b 0%, var(--primary) 45%, var(--primary-dark) 100%); overflow: hidden; }
+.logo-preview .hero-logo-wrap { width: 160px; }
