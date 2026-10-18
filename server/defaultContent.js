@@ -47,7 +47,7 @@ module.exports = {
     heroImage: '',
     showHeroLogo: true,
     heroLayout: 'centred',
-    logoAnimation: 'spin-float',
+    logoAnimation: 'shine',
     heroButtons: [
       { label: 'View timetable', link: '/timetable', style: 'Gold' },
       { label: 'Member login', link: '/login', style: 'White' },
