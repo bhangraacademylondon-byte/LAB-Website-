@@ -1216,9 +1216,9 @@ function buildField(f, obj, onChange) {
         el('input', { type: 'checkbox', checked: obj[f.key], onchange: (e) => set(e.target.checked) }), f.label);
     case 'textarea':
     case 'rich':
-      return wrap(el('textarea', { id, rows: f.type === 'rich' ? 7 : 3, value: obj[f.key] ?? '', oninput: (e) => set(e.target.value) }));
+      return wrap(el('textarea', { id, rows: f.type === 'rich' ? 7 : 3, value: obj[f.key] ?? '', oninput: (e) => set(e.target.value), onchange: (e) => set(e.target.value) }));
     case 'number':
-      return wrap(el('input', { id, type: 'number', min: 1, max: 50, value: obj[f.key] ?? '', oninput: (e) => set(Number(e.target.value) || 0) }));
+      return wrap(el('input', { id, type: 'number', min: 1, max: 50, value: obj[f.key] ?? '', oninput: (e) => set(Number(e.target.value) || 0), onchange: (e) => set(Number(e.target.value) || 0) }));
     case 'select':
       return wrap(el('select', { id, onchange: (e) => set(e.target.value) },
         f.options.map((o) => el('option', { value: o, selected: obj[f.key] === o ? 'selected' : null, text: o }))));
@@ -1259,7 +1259,9 @@ function buildField(f, obj, onChange) {
     case 'list':
       return buildList(f, obj, onChange);
     default:
-      return wrap(el('input', { id, type: f.type || 'text', value: obj[f.key] ?? '', oninput: (e) => set(e.target.value) }));
+      // Listen to "change" as well as "input": Safari's time picker (iPhone/iPad)
+      // may only report the new time on "change".
+      return wrap(el('input', { id, type: f.type || 'text', value: obj[f.key] ?? '', oninput: (e) => set(e.target.value), onchange: (e) => set(e.target.value) }));
   }
 }
 
@@ -1282,7 +1284,7 @@ function buildList(f, obj, onChange) {
         );
         if (isStrings) {
           return el('div', { class: 'image-field' },
-            el('input', { type: 'text', value: item, oninput: (e) => { arr[i] = e.target.value; onChange(); } }),
+            el('input', { type: 'text', value: item, oninput: (e) => { arr[i] = e.target.value; onChange(); }, onchange: (e) => { arr[i] = e.target.value; onChange(); } }),
             actions);
         }
         const title = el('strong', { text: item[f.titleKey] || `New ${f.itemLabel}` });
@@ -1360,7 +1362,9 @@ async function contentEditor(root, section) {
         await saveSection(section, schema.root ? holder.$ : draftAll[section]);
         setDirty(false);
         toast('Saved! The website has been updated.', 'success');
-        if (schema.root) contentEditor(root, section);
+        const y = window.scrollY;
+        await contentEditor(root, section);
+        window.scrollTo(0, y);
       } catch (err) {
         toast(err.message, 'error');
       }
