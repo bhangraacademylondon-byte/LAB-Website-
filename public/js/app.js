@@ -286,6 +286,21 @@ function renderService(key) {
       <div class="tg3 svc-gallery">${[0, 1, 2].map(() => html`<a class="tile t-cream svc-photo svc-empty" href="/admin/content/${key}">+ Add a photo in Admin</a>`)}</div>
       <p class="small muted" style="margin-top:10px">Only admins see this until photos are added.</p>`}
     </section>` : ''}`);
+
+  // The title's longest word always fits the tile, whatever the phone's text size setting.
+  const title = main().querySelector('.svc-hero h1');
+  const fit = () => {
+    title.style.fontSize = '';
+    let size = parseFloat(getComputedStyle(title).fontSize);
+    while (title.scrollWidth > title.clientWidth + 1 && size > 20) {
+      size -= 2;
+      title.style.fontSize = `${size}px`;
+    }
+  };
+  fit();
+  document.fonts?.ready.then(fit);
+  addEventListener('resize', fit);
+  onLeave(() => removeEventListener('resize', fit));
 }
 
 function renderAbout() {
