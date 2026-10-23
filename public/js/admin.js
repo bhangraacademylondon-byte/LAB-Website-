@@ -1451,6 +1451,35 @@ function jsonEditor(root) {
 
 // ---------- instagram ----------
 
+// What the website actually receives: how many posts, with thumbnails, so a
+// connection that works but brings no pictures is easy to spot.
+async function instagramPreview(box) {
+  if (!box) return;
+  let feed;
+  try {
+    feed = await api(`/api/instagram?t=${Date.now()}`);
+  } catch (err) {
+    mount(box, html`<div class="notice warn">Could not load the posts: ${err.message}</div>`);
+    return;
+  }
+  const posts = (feed.posts || []).filter((p) => safeImg(p.image));
+  if (!posts.length) {
+    mount(box, html`<div class="notice warn"><strong>Connected, but no posts came through.</strong> ${feed.error || ''}
+      Check that the Instagram account has posts and is a public Professional account, and that the Behold feed shows posts on behold.so. Then press “Check for new posts now”.</div>`);
+    return;
+  }
+  mount(box, html`
+    <p class="small"><strong>${posts.length} ${posts.length === 1 ? 'post' : 'posts'} received.</strong> The newest:</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px">
+      ${posts.slice(0, 8).map((p) => html`<a href="${safeUrl(p.permalink)}" target="_blank" rel="noopener" style="display:block;aspect-ratio:1;border-radius:12px;overflow:hidden;background:var(--cream)"><img src="${safeImg(p.image)}" alt="${p.caption ? p.caption.slice(0, 80) : 'Instagram post'}" loading="lazy" style="width:100%;height:100%;object-fit:cover" data-ig-thumb></a>`)}
+    </div>
+    <p class="muted small" id="ig-broken" hidden>Some pictures could not be loaded from Instagram. Press “Check for new posts now” to fetch fresh links.</p>`);
+  box.querySelectorAll('[data-ig-thumb]').forEach((img) => img.addEventListener('error', () => {
+    img.style.opacity = '0';
+    box.querySelector('#ig-broken').hidden = false;
+  }));
+}
+
 async function instagramPage(root) {
   const status = await api('/api/admin/instagram');
   const expires = status.expiresAt ? new Date(status.expiresAt) : null;
@@ -1470,7 +1499,8 @@ async function instagramPage(root) {
           <button class="btn btn-sm btn-primary" id="ig-refresh">Check for new posts now</button>
           ${!status.fromEnv ? html`<button class="btn btn-sm btn-danger" id="ig-disconnect">Disconnect</button>` : ''}
           <a class="btn btn-sm btn-outline" href="/gallery" target="_blank" rel="noopener">View gallery ↗</a>
-        </div>`
+        </div>
+        <div id="ig-preview" style="margin-top:18px"><p class="muted small">Loading the latest posts…</p></div>`
       : html`<p>⚪ Not connected yet. Until you connect, the Gallery page shows a "Follow on Instagram" button and any extra photos you add under <a href="/admin/content/gallery">Gallery</a>.</p>`}
     </div>
 
@@ -1520,6 +1550,7 @@ async function instagramPage(root) {
       });
     });
   }
+  instagramPreview(root.querySelector('#ig-preview'));
   root.querySelector('#ig-refresh')?.addEventListener('click', async (e) => {
     await withBusy(e.target, async () => {
       const r = await api('/api/admin/instagram/refresh', { method: 'POST' });

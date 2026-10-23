@@ -13,9 +13,27 @@ test.describe('home page', () => {
     await expect(page.locator('.home-acts').getByRole('link', { name: 'Get directions', exact: true })).toHaveAttribute('href', /google\.com\/maps/);
   });
 
-  test('fits one screen with no page scroll', async ({ page }) => {
-    const overflow = await page.evaluate(() => ({ x: document.documentElement.scrollWidth - innerWidth, y: document.documentElement.scrollHeight - innerHeight }));
-    expect(overflow).toEqual({ x: 0, y: 0 });
+  test('fits one screen on a computer; on a phone the picture wall stays visible and the page scrolls to the footer', async ({ page, isMobile }) => {
+    await page.locator('.m-grid').waitFor();
+    const m = await page.evaluate(() => ({
+      x: document.documentElement.scrollWidth - innerWidth,
+      y: document.documentElement.scrollHeight - innerHeight,
+      wall: document.querySelector('.m-grid').getBoundingClientRect().height,
+    }));
+    expect(m.x).toBe(0);
+    if (isMobile) {
+      expect(m.wall).toBeGreaterThanOrEqual(300);
+      await expect(page.locator('.site-foot')).toBeVisible();
+    } else {
+      expect(m.y).toBe(0);
+    }
+  });
+
+  test('on a short phone screen the picture wall is not squeezed out', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 553 });
+    await page.reload();
+    const wall = await page.locator('.m-grid').evaluate((el) => el.getBoundingClientRect().height);
+    expect(wall).toBeGreaterThanOrEqual(300);
   });
 
   test('the picture wall moves, and the pause button stops it', async ({ page }) => {

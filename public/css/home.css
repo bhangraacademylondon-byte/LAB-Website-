@@ -9,8 +9,10 @@
 @media (min-width: 900px) and (min-height: 540px) and (min-aspect-ratio: 21/20) { :root { --home-mode: tab-l; } }
 @media (min-width: 1097px) and (min-aspect-ratio: 27/25) { :root { --home-mode: desk; } }
 
-body.on-home { overflow: hidden; }
-body.on-home .announcement, body.on-home .ticker, body.on-home .site-foot { display: none !important; }
+/* Wide screens show the home page as one screen; phones and portrait tablets scroll on to the footer. */
+html.desk body.on-home, html.tab-l body.on-home { overflow: hidden; }
+body.on-home .announcement { display: none !important; }
+html.desk body.on-home .ticker, html.desk body.on-home .site-foot, html.tab-l body.on-home .ticker, html.tab-l body.on-home .site-foot { display: none !important; }
 .home2 { --col: 205.33px; --gap: 13px; --pitch: 282.5px; --r: 22px; --tm: 16px; background: var(--paper); }
 
 /* ---------- the tile wall ---------- */
@@ -89,7 +91,7 @@ html.desk .home2 .menu-inner ul { columns: 2; padding: 14px 22px 22px 26px; }
 html.desk .home2 .contact-us { border-left: 1px solid var(--line); padding: 22px 22px 22px 28px; }
 
 /* ---------- portrait tablets: header, the name, then a band of tiles ---------- */
-html.tab-p .home2 { position: fixed; inset: 0; display: grid; grid-template-rows: auto auto 1fr; overflow: hidden; height: 100svh; }
+html.tab-p .home2 { position: relative; display: grid; grid-template-rows: auto auto minmax(max(420px, 42svh), 1fr); overflow: hidden; min-height: 100svh; }
 html.tab-p .home2 .hdr { position: relative; grid-row: 1; }
 html.tab-p .home-hero { position: relative; grid-row: 2; padding: clamp(28px, 5vw, 56px) clamp(20px, 6vw, 72px) 28px; }
 html.tab-p .home-hero h1 { font-size: calc(clamp(56px, 10vw, 80px) * var(--hs, 1)); line-height: .94; }
@@ -98,8 +100,8 @@ html.tab-p .m-grid { position: relative; grid-row: 3; --gw: calc(100vw - 2 * cla
 html.tab-p .m-col.c1 { top: calc(var(--pitch) * -.35); } html.tab-p .m-col.c2 { top: calc(var(--pitch) * -.7); } html.tab-p .m-col.c3 { top: calc(var(--pitch) * -.2); }
 html.tab-p .motion-btn { right: calc(clamp(20px, 4vw, 40px) + 12px); bottom: 14px; }
 
-/* ---------- phones: the name first, the tiles below, no page scroll ---------- */
-html.mob .home2 { position: fixed; inset: 0; display: flex; flex-direction: column; height: 100svh; overflow: hidden; padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); }
+/* ---------- phones: the name first, the tiles below; the page scrolls if it needs to ---------- */
+html.mob .home2 { position: relative; display: flex; flex-direction: column; min-height: 100svh; overflow: hidden; padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); }
 html.mob .home2 .hdr { position: relative; margin: 0 var(--tm); }
 html.mob .home2 .hdr-main { height: 68px; padding: 0 12px 0 14px; gap: 12px; }
 html.mob .home2 .lab-logo img { width: 40px; height: 40px; }
@@ -116,7 +118,7 @@ html.mob .home-lede { font-size: 15.5px; line-height: 1.45; margin-top: 16px; pa
 html.mob .home-acts { margin-top: 14px; }
 html.mob .home-acts .cta-ring, html.mob .home-acts .go-link { display: none; }
 html.mob .home-acts .call-pill { display: inline-grid; margin-left: 4px; }
-html.mob .m-grid { position: relative; order: 2; flex: 1; min-height: 0; margin: 0 var(--tm); --gw: calc(100vw - 2 * var(--tm)); --gap: 8px; --col: calc((var(--gw) - 2 * var(--gap)) / 3); --pitch: calc(var(--col) * 1.376); --r: 16px; }
+html.mob .m-grid { position: relative; order: 2; flex: 1 0 auto; min-height: max(340px, 46svh); margin: 0 var(--tm); --gw: calc(100vw - 2 * var(--tm)); --gap: 8px; --col: calc((var(--gw) - 2 * var(--gap)) / 3); --pitch: calc(var(--col) * 1.376); --r: 16px; }
 html.mob .m-col.c1 { top: calc(var(--pitch) * -.25); } html.mob .m-col.c2 { top: calc(var(--pitch) * -.62); } html.mob .m-col.c3 { top: calc(var(--pitch) * -.1); }
 html.mob .motion-btn { right: calc(var(--tm) + 10px); bottom: calc(10px + env(safe-area-inset-bottom)); width: 40px; height: 40px; }
 /* Landscape phones: the name on the left, the tiles on the right. */
