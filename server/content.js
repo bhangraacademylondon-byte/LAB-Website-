@@ -82,6 +82,7 @@ function slugify(value) {
 const RETIRED_DEFAULTS = [
   ['pricing', 'notes', 'Payment is cash only at the class.'],
   ['pricing', 'notes', 'Pay at the class by cash or card.'],
+  ...require('./retiredDefaults'),
 ];
 
 function normalise(content) {
@@ -123,7 +124,7 @@ function normalise(content) {
 
   // Wording we have since corrected, replaced only where it was never edited.
   for (const [section, key, old] of RETIRED_DEFAULTS) {
-    if (merged[section][key] === old) merged[section][key] = defaults[section][key];
+    if (JSON.stringify(merged[section][key]) === JSON.stringify(old)) merged[section][key] = structuredClone(defaults[section][key]);
   }
   // An empty version would let everyone skip the privacy policy, so never allow it.
   merged.privacy.version = String(merged.privacy.version || '').trim().slice(0, 40) || defaults.privacy.version;

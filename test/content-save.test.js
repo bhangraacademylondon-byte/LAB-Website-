@@ -96,3 +96,18 @@ test('phone numbers saved before names existed get Ravi and Gurdeep, and old pay
   assert.match(now.pricing.notes, /cash or card.*not transferable/);
   assert.equal(now.pricing.payment, 'Cash or card');
 });
+
+test('the old Performances and Workshops wording is replaced where it was never edited', async () => {
+  const admin = await adminClient();
+  const fresh = (await admin('GET', '/api/content')).body;
+  await setSetting('content', {
+    ...fresh,
+    performances: { ...fresh.performances, introTitle: 'Bringing culture to your event', featureTitle: 'Our own heading' },
+    workshops: { ...fresh.workshops, listTitle: 'Great for' },
+  });
+  await new Promise((r) => setTimeout(r, 2100));
+  const now = (await admin('GET', '/api/content')).body;
+  assert.equal(now.performances.introTitle, 'Bhangra at your celebration');
+  assert.equal(now.performances.featureTitle, 'Our own heading', 'edited wording is kept');
+  assert.equal(now.workshops.listTitle, "Who it's for");
+});
