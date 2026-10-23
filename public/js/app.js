@@ -142,7 +142,7 @@ function renderFooter() {
   const ticker = document.getElementById('ticker');
   ticker.hidden = !facts.length;
   ticker.setAttribute('aria-label', facts.join('. '));
-  mount(ticker, html`<div class="ticker-track" aria-hidden="true">${[1, 2, 3, 4].map(() => html`<span>${facts.join(' · ')} · </span>`)}</div>`);
+  mount(ticker, html`<div class="ticker-track" aria-hidden="true">${[1, 2, 3, 4].map(() => html`<span>${facts.join(' · ')}</span>`)}</div>`);
 
   mount('#footer', html`
     <div>
