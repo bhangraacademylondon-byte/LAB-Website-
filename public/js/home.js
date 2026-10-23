@@ -189,7 +189,9 @@ export function renderHome(ctx) {
   run(stage.querySelector('.home-lede'), [{ opacity: 0, transform: 'translateY(14px)' }, { opacity: 1, transform: 'none' }], { duration: 800, delay: 700, easing: QUART });
   stage.querySelectorAll('.home-acts > *').forEach((el, i) => run(el, [{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }], { duration: 700, delay: 820 + i * 70, easing: QUART }));
   const HANDOFF = 2100;
-  const lead = 3.42 * (HANDOFF / 1000) * 0.5 + 8;
+  // How far a column drifts while gliding in, so it hands over to the endless drift without a jump.
+  const drift = parseFloat(getComputedStyle(stage).getPropertyValue('--drift')) || 17.5;
+  const lead = (50 / drift) * (HANDOFF / 1000) * 0.5 + 8;
   stage.querySelectorAll('.m-col').forEach((col, i) => {
     if (getComputedStyle(col).display === 'none') return;
     const up = /\b(c2|x1|x3)\b/.test(col.className);

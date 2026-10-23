@@ -307,7 +307,7 @@
       },
       {
         "name": "tile-drift",
-        "value": "14.6s linear infinite, alternating up and down",
+        "value": "17.5s linear infinite, alternating up and down; wall edges fade over 64px (44px on phones)",
         "purpose": "Home tile wall columns; pausable."
       },
       {

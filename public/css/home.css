@@ -13,20 +13,21 @@
 html.desk body.on-home, html.tab-l body.on-home { overflow: hidden; }
 body.on-home .announcement { display: none !important; }
 html.desk body.on-home .ticker, html.desk body.on-home .site-foot, html.tab-l body.on-home .ticker, html.tab-l body.on-home .site-foot { display: none !important; }
-.home2 { --col: 205.33px; --gap: 13px; --pitch: 282.5px; --r: 22px; --tm: 16px; background: var(--paper); }
+.home2 { --drift: 17.5s; --col: 205.33px; --gap: 13px; --pitch: 282.5px; --r: 22px; --tm: 16px; background: var(--paper); }
 
 /* ---------- the tile wall ---------- */
-.m-grid { position: absolute; z-index: 1; overflow: hidden; }
-.m-col { position: absolute; width: var(--col); display: flex; flex-direction: column; gap: var(--gap); animation: colDown 14.6s linear infinite; will-change: transform; }
+/* The wall's top and bottom edges fade into the page rather than cutting off. */
+.m-grid { position: absolute; z-index: 1; overflow: hidden; --fade: 64px; -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--fade), #000 calc(100% - var(--fade)), transparent); mask-image: linear-gradient(to bottom, transparent, #000 var(--fade), #000 calc(100% - var(--fade)), transparent); }
+.m-col { position: absolute; width: var(--col); display: flex; flex-direction: column; gap: var(--gap); animation: colDown var(--drift) linear infinite; will-change: transform; }
 .m-col.c2, .m-col.x1, .m-col.x3 { animation-name: colUp; }
 @keyframes colDown { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(0, -50%, 0); } }
 @keyframes colUp { from { transform: translate3d(0, -50%, 0); } to { transform: translate3d(0, 0, 0); } }
-.m-col.c1 { left: 0; top: 86px; }
-.m-col.c2 { left: calc(var(--col) + var(--gap)); top: -11.5px; }
-.m-col.c3 { left: calc(2 * (var(--col) + var(--gap))); top: 86.5px; }
-.m-col.x1 { left: calc(-1 * (var(--col) + var(--gap))); top: -40px; }
-.m-col.x2 { left: calc(-2 * (var(--col) + var(--gap))); top: 40px; }
-.m-col.x3 { left: calc(-3 * (var(--col) + var(--gap))); top: -80px; }
+.m-col.c1 { left: var(--shift, 0px); top: 86px; }
+.m-col.c2 { left: calc(var(--shift, 0px) + var(--col) + var(--gap)); top: -11.5px; }
+.m-col.c3 { left: calc(var(--shift, 0px) + 2 * (var(--col) + var(--gap))); top: 86.5px; }
+.m-col.x1 { left: calc(var(--shift, 0px) - (var(--col) + var(--gap))); top: -40px; }
+.m-col.x2 { left: calc(var(--shift, 0px) - 2 * (var(--col) + var(--gap))); top: 40px; }
+.m-col.x3 { left: calc(var(--shift, 0px) - 3 * (var(--col) + var(--gap))); top: -80px; }
 .m-col.x1, .m-col.x2, .m-col.x3 { display: none; }
 html.desk.ex1 .m-col.x1, html.desk.ex2 .m-col.x1, html.desk.ex2 .m-col.x2, html.desk.ex3 .m-col.x1, html.desk.ex3 .m-col.x2, html.desk.ex3 .m-col.x3 { display: flex; }
 .m-cell { position: relative; flex: none; container-type: inline-size; height: calc(var(--pitch) - var(--gap)); border-radius: var(--r); overflow: hidden; isolation: isolate; }
@@ -76,7 +77,9 @@ html.desk.ex1 .m-col.x1, html.desk.ex2 .m-col.x1, html.desk.ex2 .m-col.x2, html.
 
 /* ---------- desktop and landscape tablets: a 1280 x 800 canvas, scaled to fill ---------- */
 html.desk .home2, html.tab-l .home2 { position: fixed; left: 0; top: 0; transform-origin: 0 0; transform: scale(var(--s, 1)); width: calc(var(--W, 1280) * 1px); height: calc(var(--H, 800) * 1px); overflow: hidden; }
-html.desk .m-grid, html.tab-l .m-grid { right: 62px; top: 0; bottom: 0; width: calc(3 * var(--col) + 2 * var(--gap)); overflow: visible; }
+html.desk .m-grid, html.tab-l .m-grid { right: 62px; top: 0; bottom: 0; --shift: calc(var(--ex, 0) * (var(--col) + var(--gap))); width: calc(var(--shift) + 3 * var(--col) + 2 * var(--gap)); }
+/* Extra columns on very wide screens sit inside the wall's box, so the edge fade covers them too. */
+html.desk.ex1 .m-grid { --ex: 1; } html.desk.ex2 .m-grid { --ex: 2; } html.desk.ex3 .m-grid { --ex: 3; }
 html.desk .home2 .hdr, html.tab-l .home2 .hdr { position: absolute; left: 40px; right: 40px; top: 0; margin: 0; z-index: 5; }
 html.desk .home-hero, html.tab-l .home-hero { left: 86px; top: calc(160px + (var(--H, 800) - 800) * .5px); width: 500px; }
 html.desk .home-lede, html.tab-l .home-lede { width: 460px; }
@@ -118,7 +121,7 @@ html.mob .home-lede { font-size: 15.5px; line-height: 1.45; margin-top: 16px; pa
 html.mob .home-acts { margin-top: 14px; }
 html.mob .home-acts .cta-ring, html.mob .home-acts .go-link { display: none; }
 html.mob .home-acts .call-pill { display: inline-grid; margin-left: 4px; }
-html.mob .m-grid { position: relative; order: 2; flex: 1 0 auto; min-height: max(340px, 46svh); margin: 0 var(--tm); --gw: calc(100vw - 2 * var(--tm)); --gap: 8px; --col: calc((var(--gw) - 2 * var(--gap)) / 3); --pitch: calc(var(--col) * 1.376); --r: 16px; }
+html.mob .m-grid { position: relative; order: 2; flex: 1 0 auto; min-height: max(340px, 46svh); margin: 0 var(--tm); --fade: 44px; --gw: calc(100vw - 2 * var(--tm)); --gap: 8px; --col: calc((var(--gw) - 2 * var(--gap)) / 3); --pitch: calc(var(--col) * 1.376); --r: 16px; }
 html.mob .m-col.c1 { top: calc(var(--pitch) * -.25); } html.mob .m-col.c2 { top: calc(var(--pitch) * -.62); } html.mob .m-col.c3 { top: calc(var(--pitch) * -.1); }
 html.mob .motion-btn { right: calc(var(--tm) + 10px); bottom: calc(10px + env(safe-area-inset-bottom)); width: 40px; height: 40px; }
 /* Landscape phones: the name on the left, the tiles on the right. */
