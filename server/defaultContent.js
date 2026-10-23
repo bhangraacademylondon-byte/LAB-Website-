@@ -243,11 +243,15 @@ We will only share information with anyone else if the law requires it (for exam
 ## Other services our website uses
 
 - **Instagram:** our Gallery page shows posts from the academy's own Instagram account. We do not send any member information to Instagram.
-- **Google Fonts and Google Maps:** our pages load fonts and a map from Google. Google will receive your device's IP address when this happens, under Google's own privacy policy.
+- **Google Maps:** our Timetable and Contact pages show a map from Google. Google will receive your device's IP address when the map loads, under Google's own privacy policy.
 
 ## Cookies
 
 We use one essential cookie to keep you logged in. It does not track you and is not used for advertising. We do not use analytics or advertising cookies.
+
+## Visitor statistics
+
+To see how the website is used, we count page visits: which pages are viewed, for how long, which main buttons are pressed (such as "Get directions"), the website or app a visitor came from, and whether they are on a phone, tablet or computer. This is done **without cookies** and nothing is stored on your device. We do not keep your IP address or any details that identify you: each visitor is counted using a scrambled code that changes every day, so nobody can be followed from one day to the next. If your browser is set to "do not track" or Global Privacy Control, you are not counted. The figures are only seen by LAB administrators and are deleted after 13 months. We rely on our legitimate interest in understanding how the website is used so we can improve it.
 
 ## How long we keep your information
 

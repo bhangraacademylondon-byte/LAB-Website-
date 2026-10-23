@@ -108,6 +108,28 @@ const SCHEMA = `
     accepted_at    TEXT NOT NULL DEFAULT ${NOW}
   );
 
+  -- Visitor statistics (see visitors.js). "visitor" is a hash that changes
+  -- every day, so it cannot be linked to a person or across days.
+  CREATE TABLE IF NOT EXISTS page_views (
+    id       SERIAL PRIMARY KEY,
+    view_id  TEXT NOT NULL UNIQUE,
+    day      TEXT NOT NULL,
+    visitor  TEXT NOT NULL,
+    path     TEXT NOT NULL,
+    source   TEXT,
+    device   TEXT NOT NULL,
+    seconds  INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS site_events (
+    id      SERIAL PRIMARY KEY,
+    day     TEXT NOT NULL,
+    visitor TEXT NOT NULL,
+    name    TEXT NOT NULL,
+    path    TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_views_day ON page_views(day);
+  CREATE INDEX IF NOT EXISTS idx_events_day ON site_events(day);
+
   CREATE INDEX IF NOT EXISTS idx_debriefs_date ON class_debriefs(class_date);
   CREATE INDEX IF NOT EXISTS idx_attendance_user ON attendance(user_id);
   CREATE INDEX IF NOT EXISTS idx_sessions_date ON class_sessions(date);

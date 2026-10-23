@@ -20,6 +20,7 @@ const NAV = [
   { path: 'members', label: 'Members', icon: '👥' },
   { path: 'debriefs', label: 'Class debriefs', icon: '📝' },
   { heading: 'Website', admin: true },
+  { path: 'visitors', label: 'Visitors', icon: '📈', admin: true },
   { path: 'content/site', label: 'Site & branding', icon: '🎨', admin: true },
   { path: 'content/nav', label: 'Menu tabs', icon: '🧭', admin: true },
   { path: 'content/home', label: 'Home page', icon: '🏡', admin: true },
@@ -59,7 +60,7 @@ function head(title, actions = '') {
 export async function render(parts) {
   const [section = '', sub, id] = parts;
   document.title = `Admin | ${state.content.site.name}`;
-  const adminOnly = ['content', 'instagram', 'messages'];
+  const adminOnly = ['content', 'instagram', 'messages', 'visitors'];
   if (adminOnly.includes(section) && !isAdmin()) return navigate('/admin', { replace: true });
 
   if (section === '') return dashboard(layout(''));
@@ -76,6 +77,7 @@ export async function render(parts) {
   if (section === 'content') return contentEditor(layout(`content/${sub}`), sub, id);
   if (section === 'instagram') return instagramPage(layout('instagram'));
   if (section === 'messages') return messagesPage(layout('messages'));
+  if (section === 'visitors') return visitorsPage(layout('visitors'));
   navigate('/admin', { replace: true });
 }
 
@@ -284,7 +286,7 @@ async function scanner(root) {
             <h3>Manual check-in</h3>
             <p class="muted small">No phone? Type their member ID or search by name.</p>
             <form id="manual-form" class="form">
-              <input name="q" type="search" placeholder="Member ID or name" autocomplete="off" autocapitalize="characters">
+              <input name="q" type="search" placeholder="Member ID or name" aria-label="Member ID or name" autocomplete="off" autocapitalize="characters">
             </form>
             <ul class="list" id="manual-results"></ul>
           </div>
@@ -623,7 +625,7 @@ async function debriefForm(root, { id = null } = {}) {
         <div class="check-grid">
           ${teachers.map((t) => html`<label class="checkbox"><input type="checkbox" name="ranBy" value="${t.name}" ${raw(ranBy.includes(t.name) ? 'checked' : '')}> ${t.name}</label>`)}
         </div>
-        <input name="ranByOther" value="${otherNames}" placeholder="Anyone else (separate names with commas)" style="margin-top:10px">
+        <input name="ranByOther" value="${otherNames}" placeholder="Anyone else (separate names with commas)" aria-label="Anyone else who ran the class" style="margin-top:10px">
       </fieldset>
       <div class="form-row">
         <label class="field"><span>Number of attendees</span><input name="attendeeCount" type="number" inputmode="numeric" min="0" step="1" value="${values.attendeeCount}" required>
@@ -717,7 +719,7 @@ async function membersList(root) {
   mount(root, html`
     ${head('Members', html`<button class="btn btn-accent" id="add-member">+ Add member</button>`)}
     <form id="member-search" style="margin-bottom:16px">
-      <input type="search" name="q" value="${q}" placeholder="Search by name, email, phone or member ID">
+      <input type="search" name="q" value="${q}" placeholder="Search by name, email, phone or member ID" aria-label="Search members">
     </form>
     <p class="muted small">${members.length} ${members.length === 1 ? 'person' : 'people'}</p>
     ${members.length ? html`
@@ -1270,7 +1272,7 @@ function buildList(f, obj, onChange) {
         );
         if (isStrings) {
           return el('div', { class: 'image-field' },
-            el('input', { type: 'text', value: item, oninput: (e) => { arr[i] = e.target.value; onChange(); }, onchange: (e) => { arr[i] = e.target.value; onChange(); } }),
+            el('input', { type: 'text', value: item, 'aria-label': `${f.label}: ${f.itemLabel || 'item'} ${i + 1}`, oninput: (e) => { arr[i] = e.target.value; onChange(); }, onchange: (e) => { arr[i] = e.target.value; onChange(); } }),
             actions);
         }
         const title = el('strong', { text: item[f.titleKey] || `New ${f.itemLabel}` });
@@ -1568,4 +1570,187 @@ async function messagesPage(root) {
       messagesPage(root);
     }
   });
+}
+
+// ---------- visitors ----------
+
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const EVENT_LABELS = { directions: 'Get directions', calendar: 'Add to my calendar', call: 'Call us', join: 'Join the LAB', instagram: 'Instagram link', contact: 'Contact form sent' };
+const DEVICE_LABELS = { phone: 'Phone', computer: 'Computer', tablet: 'Tablet' };
+
+const count = (n) => Number(n || 0).toLocaleString('en-GB');
+const duration = (s) => `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
+const dayOf = (iso) => new Date(`${iso}T12:00:00Z`);
+
+function pageName(path) {
+  const { nav, customPages } = state.content;
+  const fixed = { '/': 'Home', '/login': 'Log in', '/register': 'Join the LAB', '/account': 'My account', '/privacy': 'Privacy policy', '/privacy-consent': 'Privacy agreement' };
+  if (fixed[path]) return fixed[path];
+  if (path.startsWith('/p/')) return customPages.find((p) => p.slug === path.slice(3))?.title || path;
+  return nav.find((n) => `/${n.id}` === path)?.label || path;
+}
+
+// "▲ 18% on the 30 days before", or nothing when there is no earlier period to compare with.
+function change(now, before, days) {
+  if (!before) return '';
+  const pct = Math.round(((now - before) / before) * 100);
+  const span = days === 365 ? 'the 12 months before' : `the ${days} days before`;
+  if (!pct) return html`<small>Same as ${span}</small>`;
+  return html`<small><span class="${pct > 0 ? 'up' : 'down'}">${pct > 0 ? '▲' : '▼'} ${Math.abs(pct)}%</span> on ${span}</small>`;
+}
+
+// A list of labelled bars, each as long as its share of the largest.
+function barRows(rows) {
+  const top = Math.max(1, ...rows.map((r) => r.n));
+  const total = rows.reduce((a, r) => a + r.n, 0) || 1;
+  if (!rows.some((r) => r.n)) return html`<li class="none">Nothing counted yet.</li>`;
+  return rows.map((r) => html`
+    <li><span>${r.label}</span><span class="n">${count(r.n)}<small>${Math.round((r.n / total) * 100)}%</small></span>
+      <div class="vz-meter" aria-hidden="true"><i style="width:${(r.n / top) * 100}%"></i></div></li>`);
+}
+
+// Round steps for the chart's scale lines (1, 2 or 5 times a power of ten), about four of them.
+function scaleSteps(v) {
+  const rough = Math.max(1, v) / 4;
+  const mag = 10 ** Math.floor(Math.log10(rough));
+  const step = Math.max(1, [1, 2, 5, 10].map((m) => m * mag).find((m) => m >= rough));
+  const top = Math.max(step, Math.ceil(v / step) * step);
+  return { top, lines: Array.from({ length: top / step }, (_, i) => (i + 1) * step) };
+}
+
+async function visitorsPage(root) {
+  const classDays = new Set((state.content.timetable.classes || []).map((c) => c?.day).filter(Boolean));
+  let range = 30;
+  let body = null;
+
+  const draw = (v) => {
+    const { now, before, series, byMonth } = v;
+    const empty = !now.views && !before.views;
+    const { top: max, lines } = scaleSteps(Math.max(...series.map((r) => r.people)));
+    const compare = (a, b) => (v.comparable ? change(a, b, range) : '');
+    const isClassDay = (r) => !byMonth && classDays.has(WEEKDAYS[(dayOf(r.k).getUTCDay() + 6) % 7]);
+    const label = (r) => (byMonth
+      ? new Date(`${r.k}-15T12:00:00Z`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })
+      : dayOf(r.k).toLocaleDateString('en-GB', series.length <= 7 ? { weekday: 'short', timeZone: 'UTC' } : { day: 'numeric', month: 'short', timeZone: 'UTC' }));
+    const longLabel = (r) => (byMonth
+      ? new Date(`${r.k}-15T12:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+      : dayOf(r.k).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }));
+    const showAxis = (i) => byMonth || series.length <= 7 || i % 7 === (series.length - 1) % 7;
+    const labelBar = (r) => r.people > 0 && (byMonth || series.length <= 7 || isClassDay(r));
+
+    // Class days against the rest, when there is enough to say something.
+    let callout = '';
+    if (!byMonth && classDays.size) {
+      const on = series.filter(isClassDay);
+      const offDays = series.filter((r) => !isClassDay(r));
+      const avg = (rows) => rows.reduce((a, r) => a + r.people, 0) / (rows.length || 1);
+      const ratio = avg(offDays) ? avg(on) / avg(offDays) : 0;
+      const names = [...classDays].map((d) => `${d}s`).join(' and ');
+      const howMuch = ratio >= 2.5 ? `${Math.round(ratio)} times as many visitors as` : ratio >= 1.8 ? 'about twice as many visitors as' : `about ${Math.round((ratio - 1) * 100)}% more visitors than`;
+      if (on.length && ratio >= 1.3) callout = `${names} (class night) bring ${howMuch} other days.`;
+    }
+
+    const weekRows = WEEKDAYS.map((d, i) => ({ label: d, n: v.weekdays.find((w) => w.dow === i + 1)?.n || 0 })).sort((a, b) => b.n - a.n);
+    const deviceRows = ['phone', 'computer', 'tablet'].map((k) => ({ label: DEVICE_LABELS[k], n: v.devices.find((d) => d.label === k)?.n || 0 }));
+    const eventRows = Object.entries(EVENT_LABELS).map(([k, l]) => ({ label: l, n: v.events[k] || 0 })).sort((a, b) => b.n - a.n);
+    const pagesTop = Math.max(1, ...v.pages.map((p) => p.views));
+    const perVisit = now.people ? (now.views / now.people).toFixed(1) : '0';
+
+    mount(body, html`
+      ${empty ? html`<p class="vz-empty">No visits counted yet. Figures appear here as people visit the website (your own visits as an admin or teacher are not counted).</p>` : ''}
+      <div class="vz-stats">
+        <div class="vz-stat"><b>${count(now.people)}</b><span>People visited</span>${compare(now.people, before.people)}</div>
+        <div class="vz-stat"><b>${count(now.views)}</b><span>Pages viewed</span>${compare(now.views, before.views)}</div>
+        <div class="vz-stat"><b>${duration(now.visitSeconds)}</b><span>Average visit</span><small>${perVisit} pages a visit</small></div>
+        <div class="vz-stat"><b>${count(now.joined)}</b><span>Joined the LAB</span><small>${now.people ? `${((now.joined / now.people) * 100).toFixed(1)}% of visitors signed up` : 'New member accounts'}</small></div>
+      </div>
+
+      <section class="vz-card">
+        <h2>People visiting each ${byMonth ? 'month' : 'day'}</h2>
+        <p class="note">Hover over or tap a bar for its numbers.${!byMonth && classDays.size && series.length > 7 ? ' Class days are labelled.' : ''}</p>
+        <div class="vz-days" id="vz-days" style="--n:${series.length}" role="group" aria-label="People visiting each ${byMonth ? 'month' : 'day'}">
+          ${lines.map((g) => html`<div class="grid" style="bottom:calc((100% - 22px) * ${g / max})"><i>${count(g)}</i></div>`)}
+          ${series.map((r, i) => html`
+            <div class="vz-day" tabindex="0" data-i="${i}" role="img" aria-label="${`${longLabel(r)}: ${count(r.people)} ${r.people === 1 ? 'person' : 'people'}, ${count(r.views)} pages`}">
+              <div class="bar" style="height:${(r.people / max) * 100}%"></div>
+              ${labelBar(r) ? html`<span class="lab" style="bottom:calc(${(r.people / max) * 100}% + 4px)">${count(r.people)}</span>` : ''}
+            </div>`)}
+          <div class="vz-tip" id="vz-tip" aria-hidden="true" hidden></div>
+        </div>
+        <div class="vz-axis" style="--n:${series.length}" aria-hidden="true">${series.map((r, i) => html`<span class="${showAxis(i) ? 'k' : ''}">${showAxis(i) ? label(r) : ''}</span>`)}</div>
+        <p class="vz-callout">${callout}</p>
+      </section>
+
+      <section class="vz-card">
+        <h2>Most popular pages</h2>
+        <p class="note">Time on page counts only while the page is open on screen.</p>
+        ${v.pages.length ? html`
+          <table class="vz-table">
+            <thead><tr><th scope="col">Page</th><th scope="col" class="n">Views</th><th scope="col" class="n hide-s">People</th><th scope="col" class="n">Avg. time</th></tr></thead>
+            <tbody>${v.pages.map((p) => html`
+              <tr><td class="pg"><b>${pageName(p.path)}</b><small>${p.path}</small><div class="vz-meter" aria-hidden="true"><i style="width:${(p.views / pagesTop) * 100}%"></i></div></td>
+                <td class="n">${count(p.views)}</td><td class="n hide-s">${count(p.people)}</td><td class="n">${p.seconds ? duration(p.seconds) : '–'}</td></tr>`)}
+            </tbody>
+          </table>` : html`<p class="muted" style="margin:0">Nothing counted yet.</p>`}
+      </section>
+
+      <div class="vz-two">
+        <section class="vz-card"><h2>Where visitors came from</h2><p class="note">The site or app they clicked through from.</p><ul class="vz-rows">${barRows(v.sources.map((s) => ({ label: s.label, n: s.n })))}</ul></section>
+        <section class="vz-card"><h2>Buttons pressed</h2><p class="note">How often each main action was used.</p><ul class="vz-rows">${barRows(eventRows)}</ul></section>
+      </div>
+      <div class="vz-two">
+        <section class="vz-card"><h2>Phone or computer</h2><p class="note">Share of visitors on each kind of device.</p><ul class="vz-rows">${barRows(deviceRows)}</ul></section>
+        <section class="vz-card"><h2>Busiest days</h2><p class="note">When people visit, across the week.</p><ul class="vz-rows">${barRows(weekRows)}</ul></section>
+      </div>`);
+
+    // One tooltip, filled with text (never HTML) for the bar under the pointer or focus.
+    const box = body.querySelector('#vz-days');
+    const tip = body.querySelector('#vz-tip');
+    const show = (col) => {
+      const r = series[Number(col.dataset.i)];
+      const when = longLabel(r);
+      const strong = document.createElement('b');
+      strong.textContent = `${count(r.people)} ${r.people === 1 ? 'person' : 'people'}`;
+      tip.replaceChildren(strong, document.createTextNode(`${count(r.views)} pages · ${when}`));
+      tip.hidden = false;
+      const bar = col.querySelector('.bar');
+      const left = Math.min(Math.max(col.offsetLeft + col.offsetWidth / 2, tip.offsetWidth / 2), box.clientWidth - tip.offsetWidth / 2);
+      tip.style.left = `${left}px`;
+      tip.style.top = `${col.offsetTop + col.offsetHeight - bar.offsetHeight}px`;
+    };
+    box.querySelectorAll('.vz-day').forEach((col) => {
+      col.addEventListener('pointerenter', () => show(col));
+      col.addEventListener('focus', () => show(col));
+      col.addEventListener('pointerleave', () => { tip.hidden = true; });
+      col.addEventListener('blur', () => { tip.hidden = true; });
+    });
+  };
+
+  const load = async () => {
+    body?.classList.add('is-loading');
+    const v = await api(`/api/admin/visitors?range=${range}`);
+    body.classList.remove('is-loading');
+    draw(v);
+    root.querySelector('#vz-csv').href = `/api/admin/visitors.csv?range=${range}`;
+  };
+
+  mount(root, html`
+    ${head('Visitors', html`<a class="btn btn-ghost" id="vz-csv" href="/api/admin/visitors.csv?range=30" download>Download CSV</a>`)}
+    <div class="vz-filters" role="group" aria-label="Time range">
+      ${[[7, 'Last 7 days'], [30, 'Last 30 days'], [365, 'Last 12 months']].map(([d, l]) => html`<button type="button" data-range="${d}" aria-pressed="${String(d === range)}">${l}</button>`)}
+    </div>
+    <div class="vz-body" id="vz-body"></div>
+    <div class="vz-privacy"><span aria-hidden="true">🔒</span><p style="margin:0"><b>Counted without cookies.</b> Nothing is saved on visitors' phones or computers and no names, emails or exact addresses are kept. Each visitor is counted using a scrambled code that changes every day, so nobody can be followed from one day to the next, and someone who visits on two days counts twice. Admin and teacher visits are not counted, nor are browsers set to "do not track". Figures older than 13 months are deleted automatically.</p></div>`);
+  body = root.querySelector('#vz-body');
+  root.querySelectorAll('[data-range]').forEach((b) => b.addEventListener('click', async () => {
+    range = Number(b.dataset.range);
+    root.querySelectorAll('[data-range]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    try {
+      await load();
+    } catch (err) {
+      body.classList.remove('is-loading');
+      toast(err.message, 'error');
+    }
+  }));
+  await load();
 }

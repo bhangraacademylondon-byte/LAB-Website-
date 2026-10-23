@@ -11,6 +11,7 @@ const { db, init: initDb, isUniqueViolation, DATA_DIR, DATABASE_URL } = require(
 const storage = require('./storage');
 const auth = require('./auth');
 const content = require('./content');
+const visitors = require('./visitors');
 const instagram = require('./instagram');
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -171,8 +172,8 @@ app.use(async (req, res, next) => {
     [
       "default-src 'self'",
       "script-src 'self'",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "font-src 'self' https://fonts.gstatic.com",
+      "style-src 'self' 'unsafe-inline'",
+      "font-src 'self'",
       "img-src 'self' data: blob: https:",
       "media-src 'self' blob: https:",
       "frame-src https://www.google.com https://maps.google.com",
@@ -209,6 +210,7 @@ const PRIVACY_EXEMPT = new Set([
   'GET /me', 'POST /me/privacy', 'GET /me/export', 'POST /me/delete',
   'POST /auth/logout', 'POST /auth/login', 'POST /auth/register',
   'GET /content', 'GET /instagram', 'POST /contact',
+  'POST /v', 'POST /v/time', 'POST /v/event',
 ]);
 app.use('/api', async (req, res, next) => {
   if (!req.user || req.user.role === 'admin' || PRIVACY_EXEMPT.has(`${req.method} ${req.path}`)) return next();
@@ -255,6 +257,16 @@ function rateLimiter(max, windowMs) {
 }
 const allowContact = rateLimiter(5, 3600_000);
 const allowRegister = rateLimiter(10, 3600_000);
+
+// Visitor statistics (see visitors.js). Always answers 204 so a failure never troubles the page.
+const allowStats = rateLimiter(600, 3600_000);
+const stat = (record) => async (req, res) => {
+  if (allowStats(req.ip)) await record(req, req.body || {}).catch((err) => console.error('Visitor stats:', err.message));
+  res.status(204).end();
+};
+app.post('/api/v', stat(visitors.recordView));
+app.post('/api/v/time', stat(visitors.recordTime));
+app.post('/api/v/event', stat(visitors.recordEvent));
 
 app.post('/api/contact', async (req, res) => {
   if (!content.getContent().contact.formEnabled) throw new HttpError(400, 'The contact form is turned off.');
@@ -868,6 +880,15 @@ admin.delete('/messages/:id', async (req, res) => {
   res.json({ ok: true });
 });
 
+admin.get('/visitors', async (req, res) => {
+  res.json(await visitors.summary(Number(req.query.range)));
+});
+
+admin.get('/visitors.csv', async (req, res) => {
+  const s = await visitors.summary(Number(req.query.range));
+  sendCsv(res, `visitors-${s.from}-to-${s.to}.csv`, [s.byMonth ? 'Month' : 'Date', 'People', 'Pages viewed'], s.series.map((r) => [r.k, r.people, r.views]));
+});
+
 app.use('/api/admin', admin);
 
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found.' }));
@@ -875,7 +896,6 @@ app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found.' }));
 // ---------- static files & SPA ----------
 
 app.use('/uploads', express.static(storage.UPLOAD_DIR, { maxAge: '30d', immutable: true }));
-// Literata typeface for the home page (SIL Open Font License), served from the npm package.
 // Self-hosted typefaces for the home page (SIL Open Font License).
 for (const face of ['archivo', 'inter']) {
   app.use(`/fonts/${face}`, express.static(path.join(path.dirname(require.resolve(`@fontsource-variable/${face}/package.json`)), 'files'), { maxAge: '365d', immutable: true }));

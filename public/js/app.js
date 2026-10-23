@@ -8,6 +8,7 @@ import {
   marked, twoLines, ICON, directions, goLink,
 } from './classes.js';
 import { blurFade, numberTickers, enableRipples, confetti } from './effects.js';
+import { trackPage, trackEvent } from './track.js';
 
 export const state = { content: null, user: null, stats: null };
 
@@ -552,6 +553,7 @@ function renderContact() {
         await api('/api/contact', { method: 'POST', body: formData(form) });
         form.reset();
         confetti(button);
+        trackEvent('contact');
         toast(contact.successMessage || 'Message sent', 'success', 5000);
       } catch (err) {
         formError(form, err.message);
@@ -1009,8 +1011,15 @@ async function route() {
     if (routes[path]) {
       const id = path === '/' ? 'home' : path.slice(1);
       if (navItem(id) && !navItem(id).visible && id !== 'home') renderNotFound();
-      else await routes[path]();
-    } else if (path.startsWith('/p/')) renderCustomPage(decodeURIComponent(path.slice(3)));
+      else {
+        await routes[path]();
+        // Counted only if the page didn't send the visitor elsewhere (e.g. to log in).
+        if ((location.pathname.replace(/\/+$/, '') || '/') === path) trackPage(path);
+      }
+    } else if (path.startsWith('/p/')) {
+      renderCustomPage(decodeURIComponent(path.slice(3)));
+      trackPage(path);
+    }
     else if (path === '/admin' || path.startsWith('/admin/')) {
       if (!state.user) return navigate(`/login?next=${encodeURIComponent(path)}`, { replace: true });
       if (state.user.role === 'member') return renderNotFound();
