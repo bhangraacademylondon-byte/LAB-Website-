@@ -152,5 +152,160 @@ module.exports = [
     "workshops",
     "galleryTitle",
     "Workshops in action"
+  ],
+  [
+    "performances",
+    "title",
+    "Book a performance"
+  ],
+  [
+    "performances",
+    "tagline",
+    "Big energy for your big day"
+  ],
+  [
+    "performances",
+    "introTitle",
+    "Bhangra at your celebration"
+  ],
+  [
+    "performances",
+    "intro",
+    "Want your guests on their feet? Our dancers arrive in full Punjabi dress, with the props to match, and fill the room with the joy of bhangra.\n\nMost sets run for about ten minutes, and we can send anything from a duo to a troupe of sixteen. Tell us about the day you have in mind and we'll shape the set around it."
+  ],
+  [
+    "performances",
+    "listTitle",
+    "Where we dance"
+  ],
+  [
+    "performances",
+    "items",
+    [
+      "Weddings, sangeets and mehndis",
+      "Birthdays and anniversaries",
+      "Melas and summer festivals",
+      "Community and civic celebrations",
+      "Office parties and company events",
+      "Vaisakhi, Diwali and Lohri"
+    ]
+  ],
+  [
+    "performances",
+    "facts",
+    [
+      {
+        "label": "Set length",
+        "value": "About ten minutes"
+      },
+      {
+        "label": "Team size",
+        "value": "A duo up to sixteen"
+      },
+      {
+        "label": "Costume",
+        "value": "Full Punjabi dress"
+      }
+    ]
+  ],
+  [
+    "performances",
+    "featureTitle",
+    "Bhangra for businesses"
+  ],
+  [
+    "performances",
+    "featureSubtitle",
+    "Planning a staff party, away day or culture week?"
+  ],
+  [
+    "performances",
+    "featureText",
+    "Start with a short set from our dancers, then hand the floor to your colleagues for a quick lesson of their own. It's a fun, inclusive way to mark Vaisakhi or Diwali at work, and everyone goes home knowing a few moves."
+  ],
+  [
+    "performances",
+    "buttonLabel",
+    "Ask us about a performance"
+  ],
+  [
+    "performances",
+    "galleryTitle",
+    "Moments from the stage"
+  ],
+  [
+    "workshops",
+    "tagline",
+    "Your first bhangra steps start here"
+  ],
+  [
+    "workshops",
+    "introTitle",
+    "Learn to dance bhangra"
+  ],
+  [
+    "workshops",
+    "intro",
+    "In a single session our teachers take your group from standing still to dancing a short bhangra routine together. We break every move down, share a little of the story behind the dance, and keep the pace fun so nobody gets left behind.\n\nEveryone can join in, whatever their age or fitness, and no dance experience is needed."
+  ],
+  [
+    "workshops",
+    "listTitle",
+    "Who it's for"
+  ],
+  [
+    "workshops",
+    "items",
+    [
+      "Schools, colleges and universities",
+      "Company team days",
+      "Couples and families before a wedding",
+      "Youth clubs and community groups",
+      "Cultural days and festivals",
+      "Birthday and celebration parties"
+    ]
+  ],
+  [
+    "workshops",
+    "facts",
+    [
+      {
+        "label": "Session",
+        "value": "Shaped around your group"
+      },
+      {
+        "label": "Experience",
+        "value": "None needed"
+      },
+      {
+        "label": "Location",
+        "value": "We come to you"
+      }
+    ]
+  ],
+  [
+    "workshops",
+    "featureTitle",
+    "Team days with a difference"
+  ],
+  [
+    "workshops",
+    "featureSubtitle",
+    "Better than another meeting"
+  ],
+  [
+    "workshops",
+    "featureText",
+    "A lively, laughter-filled session that gets colleagues moving together. Book a workshop on its own, or pair it with a performance from our dancers to open your event."
+  ],
+  [
+    "workshops",
+    "buttonLabel",
+    "Ask us about a workshop"
+  ],
+  [
+    "workshops",
+    "galleryTitle",
+    "Inside our workshops"
   ]
 ];
