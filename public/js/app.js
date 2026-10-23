@@ -4,7 +4,7 @@ import {
 } from './lib.js';
 import { renderHome as renderHomePage } from './home.js';
 import {
-  nextClass, untilText, longDate, icsFor, keepPostcode, mapsHref, telHref, firstPlan, classDays, clockFace,
+  nextClass, untilText, longDate, icsFor, keepPostcode, mapsHref, telHref, firstPlan, classDays, clockFace, contacts,
   marked, twoLines, ICON, directions, goLink,
 } from './classes.js';
 import { blurFade, numberTickers, enableRipples, confetti } from './effects.js';
@@ -52,7 +52,7 @@ function menuNote(id) {
     return `${days.length === 1 ? `${days[0]}s` : 'Weekly'}, ${formatTime(classes[0].start)}`;
   }
   const plan = firstPlan(pricing);
-  if (id === 'pricing' && plan) return `${plan.price} ${plan.period || ''}`.trim();
+  if (id === 'pricing' && plan) return [`${plan.price} ${plan.period || ''}`.trim(), pricing.payment].filter(Boolean).join(' · ');
   return '';
 }
 
@@ -74,19 +74,16 @@ function renderHeader() {
     ${featured.map((n) => html`<a href="${pageHref(n.id)}"${current(pageHref(n.id))}>${n.label}</a>`)}
     <a href="${own.href}"${current(own.href)}>${own.label}</a>`);
 
-  const phone = (site.phones || []).filter(Boolean)[0];
+  const people = contacts(site);
   const call = document.getElementById('call-btn');
-  call.hidden = !phone;
-  if (phone) {
-    call.href = telHref(phone);
-    call.setAttribute('aria-label', `Call us on ${phone}`);
-  }
+  call.hidden = !people.length;
+  call.setAttribute('aria-haspopup', people.length > 1 ? 'dialog' : 'false');
+  call.setAttribute('aria-label', people.length === 1 ? `Call ${people[0].name || 'us'} on ${people[0].phone}` : 'Call us');
   mount('#hdr-cta', directions(site, { shimmer: true }));
 
   // The menu: every page, the member links, and how to reach the academy.
   let i = 0;
   const item = (label, href, note = '') => html`<li style="--i:${i++}"><a href="${href}"${current(href)}>${label}${note ? html` <small>${note}</small>` : ''}</a></li>`;
-  const phones = (site.phones || []).filter(Boolean);
   const insta = safeUrl(site.socials?.instagram);
   const handle = String(site.socials?.instagram || '').replace(/\/+$/, '').split('/').pop();
   mount('#menu-inner', html`
@@ -102,7 +99,7 @@ function renderHeader() {
     </ul>
     <div class="contact-us" style="--i:${i}">
       <h2>${state.content.contact.title}</h2>
-      ${phones.map((p) => html`<a class="tel" href="${telHref(p)}">${ICON.phone}${p}</a>`)}
+      ${people.map((c) => html`<a class="tel" href="${telHref(c.phone)}">${ICON.phone}<span>${c.name ? html`<b>${c.name}</b> ` : ''}${c.phone}</span></a>`)}
       ${site.email ? html`<a class="tel" href="mailto:${site.email}">${ICON.mail}${site.email}</a>` : ''}
       ${site.address ? html`<p>${keepPostcode(site.address)}</p>` : ''}
       ${insta !== '#' && site.socials?.instagram ? html`<a class="ig" href="${insta}" target="_blank" rel="noopener">${ICON.insta}@${handle}</a>` : ''}
@@ -139,6 +136,7 @@ function renderFooter() {
     classes[0] ? formatTime(classes[0].start) : '',
     site.address,
     plan ? `${plan.price} ${plan.period || ''}`.trim() : '',
+    pricing.payment,
     classes[0]?.ages || '',
   ].filter(Boolean);
   const ticker = document.getElementById('ticker');
@@ -154,7 +152,7 @@ function renderFooter() {
     <div>
       <h2>${site.footerContactTitle || 'Contact us'}</h2>
       <ul>
-        ${(site.phones || []).filter(Boolean).map((p) => html`<li><a href="${telHref(p)}">${p}</a></li>`)}
+        ${contacts(site).map((c) => html`<li><a href="${telHref(c.phone)}">${c.name ? `${c.name}: ` : ''}${c.phone}</a></li>`)}
         ${site.email ? html`<li><a href="mailto:${site.email}">${site.email}</a></li>` : ''}
         ${site.address ? html`<li>${keepPostcode(site.address)}</li>` : ''}
       </ul>
@@ -507,7 +505,7 @@ async function renderGallery() {
 function renderContact() {
   const { contact, site } = state.content;
   setTitle(contact.title);
-  const phones = (site.phones || []).filter(Boolean);
+  const phones = contacts(site);
   const handle = String(site.socials?.instagram || '').replace(/\/+$/, '').split('/').pop();
   mount(main(), html`
     ${pageHead(contact.title, contact.intro)}
@@ -533,7 +531,7 @@ function renderContact() {
       <div style="display:grid;gap:var(--gap)">
         <div class="tile t-deep tile-card">
           <span class="tile-no">${contact.detailsTitle}</span>
-          ${phones.map((p) => html`<a href="${telHref(p)}" style="display:flex;gap:12px;align-items:center;font:800 26px/1 var(--display);text-decoration:none"><span style="width:20px;display:grid">${ICON.phone}</span>${p}</a>`)}
+          ${phones.map((c) => html`<a href="${telHref(c.phone)}" style="display:flex;gap:12px;align-items:center;text-decoration:none"><span style="width:20px;display:grid">${ICON.phone}</span><span>${c.name ? html`<small style="display:block;font:600 14px/1.2 var(--sans);opacity:.8;margin-bottom:4px">${c.name}</small>` : ''}<span style="font:800 26px/1 var(--display)">${c.phone}</span></span></a>`)}
           ${site.email ? html`<a href="mailto:${site.email}" style="display:flex;gap:12px;align-items:center;font-weight:600;text-decoration:none"><span style="width:20px;display:grid">${ICON.mail}</span>${site.email}</a>` : ''}
           ${site.address ? html`<p style="opacity:.82">${keepPostcode(site.address)}</p>` : ''}
           ${handle ? html`<a href="${safeUrl(site.socials.instagram)}" target="_blank" rel="noopener" style="display:flex;gap:8px;align-items:center;text-decoration:none"><span style="width:18px;display:grid">${ICON.insta}</span>@${handle}</a>` : ''}
@@ -987,6 +985,7 @@ async function route() {
     cleanup = null;
   }
   closeMenu();
+  closeCallChooser();
   const path = location.pathname.replace(/\/+$/, '') || '/';
   renderHeader();
   const navItem = (id) => state.content.nav.find((n) => n.id === id);
@@ -1051,6 +1050,49 @@ export async function reloadContent() {
   renderFooter();
 }
 
+// ----- the Call button: one number rings straight away; with more, choose who to call -----
+
+let callPop = null;
+
+function closeCallChooser(returnFocus = false) {
+  if (!callPop) return;
+  const { box, trigger } = callPop;
+  callPop = null;
+  box.remove();
+  trigger.setAttribute('aria-expanded', 'false');
+  if (returnFocus) trigger.focus();
+}
+
+function openCallChooser(trigger) {
+  const people = contacts(state.content.site);
+  if (!people.length) return;
+  if (people.length === 1) {
+    trackEvent('call');
+    location.href = telHref(people[0].phone);
+    return;
+  }
+  const again = callPop?.trigger === trigger;
+  closeCallChooser();
+  if (again) return;
+  const box = el('div', { class: 'call-pop', role: 'dialog', 'aria-label': 'Who would you like to call?' });
+  mount(box, html`
+    <p class="call-pop-title">Who would you like to call?</p>
+    ${people.map((c) => html`<a href="${telHref(c.phone)}">${ICON.phone}<span>${c.name ? html`<b>${c.name}</b>` : ''}<span>${c.phone}</span></span></a>`)}`);
+  document.body.appendChild(box);
+  // Below the button, kept on screen; above it if there is no room underneath.
+  const r = trigger.getBoundingClientRect();
+  const w = box.offsetWidth;
+  const h = box.offsetHeight;
+  const left = Math.min(Math.max(16, r.right - w), innerWidth - w - 16);
+  const top = r.bottom + 10 + h > innerHeight - 16 ? Math.max(16, r.top - 10 - h) : r.bottom + 10;
+  box.style.left = `${left}px`;
+  box.style.top = `${top}px`;
+  trigger.setAttribute('aria-expanded', 'true');
+  callPop = { box, trigger };
+  box.querySelector('a')?.focus({ preventScroll: true });
+  box.addEventListener('click', (e) => { if (e.target.closest('a')) setTimeout(() => closeCallChooser(), 0); });
+}
+
 function setMenu(open, viaKey = false) {
   const hdr = document.getElementById('hdr');
   const btn = document.getElementById('menu-toggle');
@@ -1093,7 +1135,13 @@ async function start() {
   });
   document.addEventListener('click', (e) => {
     if (hdr.hasAttribute('data-open') && !hdr.contains(e.target)) setMenu(false);
+    const call = e.target.closest('[data-call]');
+    if (call) openCallChooser(call);
+    else if (callPop && !callPop.box.contains(e.target)) closeCallChooser();
   });
+  addEventListener('keydown', (e) => { if (e.key === 'Escape' && callPop) closeCallChooser(true); });
+  addEventListener('scroll', () => closeCallChooser(), { passive: true });
+  addEventListener('resize', () => closeCallChooser());
   enableRipples();
   try {
     const [content, me] = await Promise.all([api('/api/content'), api('/api/me')]);

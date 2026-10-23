@@ -373,3 +373,16 @@ dialog { border-radius: var(--r); }
 .vz-empty { margin: 0 0 14px; padding: 16px 20px; border-radius: 22px; background: #fff; box-shadow: 0 0 0 1px rgba(22,22,44,.08); font: 400 15px/1.5 var(--sans); color: #3a3a4a; }
 .vz-rows li.none { display: block; font-weight: 400; color: #5d5c66; }
 @media (prefers-reduced-motion: reduce) { .vz-days .bar, .vz-body { transition: none; } }
+
+/* ---------- who to call ---------- */
+button.call-btn { border: 0; padding: 0; cursor: pointer; }
+.call-pop { position: fixed; z-index: 60; width: min(300px, calc(100vw - 32px)); padding: 10px; border-radius: 22px; background: #fff; color: var(--ink); box-shadow: 0 0 0 1px var(--line), 0 24px 48px -20px rgba(22, 22, 44, .45); transform-origin: top right; animation: popIn 180ms var(--ease-out); }
+.call-pop-title { margin: 6px 10px 8px; font: 600 14px var(--sans); color: #5d5c66; }
+.call-pop a { display: flex; align-items: center; gap: 14px; padding: 12px; border-radius: 16px; color: var(--ink); text-decoration: none; }
+.call-pop a:hover, .call-pop a:focus-visible { background: var(--cream); }
+.call-pop a > svg { flex: none; width: 40px; height: 40px; padding: 11px; border-radius: 50%; background: var(--ink); color: var(--gold); }
+.call-pop b { display: block; font: 800 18px/1.1 var(--sans); }
+.call-pop a span span { display: block; margin-top: 3px; font: 500 15px var(--sans); color: #3a3a4a; font-variant-numeric: tabular-nums; }
+.contact-us .tel b { font-weight: 800; margin-right: 6px; }
+@keyframes popIn { from { opacity: 0; transform: scale(.96) translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) { .call-pop { animation: none; } }

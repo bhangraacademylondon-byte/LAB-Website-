@@ -70,7 +70,8 @@ export function splitAddress(address) {
 
 export const mapsHref = (site) => (site.mapQuery ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(site.mapQuery)}` : '');
 export const telHref = (phone) => `tel:${String(phone || '').replace(/[^\d+]/g, '')}`;
-export const firstPhone = (site) => (site.phones || []).filter(Boolean)[0] || '';
+// The people to phone, each with a name and number.
+export const contacts = (site) => (site.contacts || []).filter((c) => c && c.phone);
 export const firstPlan = (pricing) => (pricing.plans || []).find((p) => p && p.price);
 export const classDays = (classes) => [...new Set((classes || []).map((c) => c.day).filter(Boolean))];
 // "7:30pm" -> "7:30", for big figures where the suffix sits beside them.

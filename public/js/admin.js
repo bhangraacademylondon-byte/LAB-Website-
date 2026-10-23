@@ -961,7 +961,10 @@ const SCHEMAS = {
       { key: 'logo', label: 'Logo', type: 'image' },
       h('Contact details'),
       { key: 'email', label: 'Email address', type: 'email' },
-      { key: 'phones', label: 'Phone numbers', type: 'strings', itemLabel: 'phone number' },
+      { key: 'contacts', label: 'Phone numbers', type: 'list', itemLabel: 'person', titleKey: 'name', hint: 'The Call button lets visitors choose who to ring. The name shows next to the number.', fields: [
+        { key: 'name', label: 'Name' },
+        { key: 'phone', label: 'Phone number', type: 'tel' },
+      ] },
       { key: 'address', label: 'Address', type: 'textarea' },
       { key: 'mapQuery', label: 'Map location', hint: 'Address or postcode to show on the Google map.' },
       { key: 'socials', label: 'Social media links', type: 'object', fields: [
@@ -1056,6 +1059,7 @@ const SCHEMAS = {
         { key: 'highlight', label: 'Highlight this option', type: 'bool' },
       ] },
       { key: 'highlightBadge', label: 'Badge text on the highlighted option' },
+      { key: 'payment', label: 'How people can pay', hint: 'A short phrase shown with the price in the menu and the strip above the footer, e.g. "Cash or card".' },
       { key: 'notes', label: 'Notes', type: 'rich' },
       singleButton('ctaButton', 'Button under the prices'),
     ],

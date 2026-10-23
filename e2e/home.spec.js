@@ -64,9 +64,21 @@ test.describe('home page', () => {
     await expect(btn).toHaveAttribute('aria-expanded', 'true');
     const menu = page.locator('#menu-inner');
     await expect(menu.getByRole('link', { name: /Pricing/ })).toBeVisible();
-    await expect(menu.locator('.contact-us')).toContainText('07851 564285');
+    await expect(menu.locator('.contact-us')).toContainText('Ravi 07851 564285');
+    await expect(menu.locator('.contact-us')).toContainText('Gurdeep 07538 687118');
     await page.keyboard.press('Escape');
     await expect(btn).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  test('Call us lets you choose Ravi or Gurdeep', async ({ page, isMobile }) => {
+    test.skip(!isMobile, 'The Call buttons are for phones; computers list the numbers in the menu.');
+    await page.locator('.home-acts [data-call]').click();
+    const pop = page.getByRole('dialog', { name: 'Who would you like to call?' });
+    await expect(pop).toBeVisible();
+    await expect(pop.getByRole('link', { name: /Ravi/ })).toHaveAttribute('href', 'tel:07851564285');
+    await expect(pop.getByRole('link', { name: /Gurdeep/ })).toHaveAttribute('href', 'tel:07538687118');
+    await page.keyboard.press('Escape');
+    await expect(pop).toHaveCount(0);
   });
 
   test('leaving the home page puts the header back and lets pages scroll', async ({ page }) => {

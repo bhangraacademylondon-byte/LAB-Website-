@@ -4,7 +4,7 @@
 // Everything shown comes from the content edited in Admin.
 
 import { api, html, raw, mount, safeImg, formatTime } from './lib.js';
-import { classDays, firstPlan, firstPhone, telHref, splitAddress, marked, directions, goLink, ICON } from './classes.js';
+import { classDays, firstPlan, contacts, splitAddress, marked, directions, goLink, ICON } from './classes.js';
 
 const MODES = ['desk', 'mob', 'mob-l', 'tab', 'tab-l', 'tab-p'];
 // Brand pictures fill the photo tiles until Instagram posts arrive (or if there are none).
@@ -59,7 +59,7 @@ export function renderHome(ctx) {
   const classes = (timetable.classes || []).filter((c) => c && c.name);
   const days = classDays(classes);
   const plan = firstPlan(pricing);
-  const phone = firstPhone(site);
+  const phones = contacts(site);
   const [, area] = splitAddress(site.address);
   const words = String(home.heroTitle || site.name).trim().split(/\s+/);
   const rotate = (home.tileWords || []).filter(Boolean);
@@ -106,7 +106,7 @@ export function renderHome(ctx) {
         ${home.heroSubtitle ? html`<p class="home-lede">${marked(home.heroSubtitle)}</p>` : ''}
         <div class="home-acts">
           ${directions(site, { shimmer: true })}
-          ${phone ? html`<a class="cta-pill light call-pill" href="${telHref(phone)}">${ICON.phone}Call us</a>` : ''}
+          ${phones.length ? html`<button class="cta-pill light call-pill" type="button" data-call aria-haspopup="${phones.length > 1 ? 'dialog' : 'false'}">${ICON.phone}Call us</button>` : ''}
           ${goLink(state.content.nav.find((n) => n.id === 'timetable')?.label || 'Timetable', '/timetable')}
         </div>
       </section>

@@ -79,6 +79,10 @@ function slugify(value) {
     .slice(0, 60);
 }
 
+const RETIRED_DEFAULTS = [
+  ['pricing', 'notes', 'Payment is cash only at the class.'],
+];
+
 function normalise(content) {
   const merged = mergeDefaults(defaults, isPlainObject(content) ? content : {});
   for (const key of Object.keys(merged)) if (!SECTIONS.includes(key)) delete merged[key];
@@ -101,6 +105,25 @@ function normalise(content) {
     });
   }
   merged.nav = normaliseNav(merged.nav, merged.customPages);
+
+  // Phone numbers became named contacts. Content saved before then has only the
+  // numbers: keep them, naming each from the defaults where the number matches.
+  const savedSite = isPlainObject(content?.site) ? content.site : {};
+  const digits = (p) => String(p || '').replace(/\D/g, '');
+  if (!Array.isArray(savedSite.contacts) && Array.isArray(savedSite.phones)) {
+    merged.site.contacts = savedSite.phones
+      .filter((p) => typeof p === 'string' && p.trim())
+      .map((phone) => ({ name: defaults.site.contacts.find((c) => digits(c.phone) === digits(phone))?.name || '', phone }));
+  }
+  merged.site.contacts = merged.site.contacts
+    .map((c) => ({ name: String(c.name || '').trim(), phone: String(c.phone || '').trim() }))
+    .filter((c) => digits(c.phone));
+  delete merged.site.phones;
+
+  // Wording we have since corrected, replaced only where it was never edited.
+  for (const [section, key, old] of RETIRED_DEFAULTS) {
+    if (merged[section][key] === old) merged[section][key] = defaults[section][key];
+  }
   // An empty version would let everyone skip the privacy policy, so never allow it.
   merged.privacy.version = String(merged.privacy.version || '').trim().slice(0, 40) || defaults.privacy.version;
   return merged;

@@ -13,7 +13,11 @@ module.exports = {
     headingFont: 'Poppins',
     bodyFont: 'Poppins',
     email: '',
-    phones: ['07851 564285', '07538 687118'],
+    // Who to phone. The Call button offers each of them.
+    contacts: [
+      { name: 'Ravi', phone: '07851 564285' },
+      { name: 'Gurdeep', phone: '07538 687118' },
+    ],
     address: 'The Royal Liberty School, Gidea Park, RM2 6HJ',
     mapQuery: 'The Royal Liberty School, Gidea Park, RM2 6HJ',
     socials: {
@@ -128,7 +132,9 @@ module.exports = {
       { name: 'Private lessons', price: 'Ask us', period: 'per session', description: 'One-to-one or group tuition, e.g. wedding dances.', features: ['Choreography to your song', 'Flexible times'], highlight: false },
     ],
     highlightBadge: 'Most popular',
-    notes: 'Payment is cash only at the class.',
+    // A short line shown with the price around the site, e.g. in the menu.
+    payment: 'Cash or card',
+    notes: 'Pay at the class by cash or card.',
     ctaButton: { label: 'Ask about private lessons', link: '/contact' },
   },
 

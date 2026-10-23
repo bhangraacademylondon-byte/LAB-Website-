@@ -74,3 +74,25 @@ test('content changed by another running copy of the app is picked up', async ()
   await new Promise((r) => setTimeout(r, 2100));
   assert.equal((await admin('GET', '/api/content')).body.contact.title, 'Saved elsewhere');
 });
+
+test('phone numbers saved before names existed get Ravi and Gurdeep, and old payment wording is updated', async () => {
+  const admin = await adminClient();
+  const fresh = (await admin('GET', '/api/content')).body;
+  const { contacts, ...site } = fresh.site;
+  // Content as it was saved before: numbers only, in a different order, plus one new number.
+  await setSetting('content', {
+    ...fresh,
+    site: { ...site, phones: ['07538 687118', '07851564285', '020 7946 0000'] },
+    pricing: { ...fresh.pricing, notes: 'Payment is cash only at the class.' },
+  });
+  await new Promise((r) => setTimeout(r, 2100));
+  const now = (await admin('GET', '/api/content')).body;
+  assert.deepEqual(now.site.contacts, [
+    { name: 'Gurdeep', phone: '07538 687118' },
+    { name: 'Ravi', phone: '07851564285' },
+    { name: '', phone: '020 7946 0000' },
+  ]);
+  assert.equal(now.site.phones, undefined);
+  assert.equal(now.pricing.notes, 'Pay at the class by cash or card.');
+  assert.equal(now.pricing.payment, 'Cash or card');
+});
