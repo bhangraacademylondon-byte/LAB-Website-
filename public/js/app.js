@@ -802,6 +802,124 @@ export function monthlyChart(monthly) {
     </div>`;
 }
 
+// ----- paying for a class online (Monzo payment link) -----
+
+const PAY_STATUS = { claimed: 'Paid online', received: 'Paid online ✓ checked', not_received: 'Not received', cash: 'Paid cash', card: 'Paid card' };
+const payLabel = (p) => (p.method === 'online' ? PAY_STATUS[p.status] : PAY_STATUS[p.method]);
+const isPaid = (p) => p && p.status !== 'not_received' && p.status !== 'started';
+const classDate = (iso, opts = { weekday: 'long', day: 'numeric', month: 'long' }) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-GB', { ...opts, timeZone: 'UTC' });
+
+async function payForClass(box) {
+  let data;
+  try {
+    data = await api('/api/me/payments');
+  } catch {
+    return;
+  }
+  const { payOnline, dates } = data;
+  if (!payOnline.enabled && !data.payments.length) return;
+  box.hidden = false;
+  let pending = data.pending;
+  let chosen = dates.find((d) => !isPaid(data.payments.find((p) => p.date === d))) || dates[0];
+
+  const history = () => (data.payments.length ? html`
+    <div class="tile t-white tile-card">
+      <h3>Payment history</h3>
+      <ul class="pay-list">${data.payments.map((p) => html`
+        <li><span><b>${classDate(p.date, { weekday: 'short', day: 'numeric', month: 'long' })}</b><small>${p.method === 'online' ? p.reference : 'At the door'}</small></span>
+          <span class="pay-badge ${isPaid(p) ? '' : 'bad'}">${payLabel(p)}</span></li>`)}</ul>
+    </div>` : '');
+
+  const draw = () => {
+    const paidFor = (d) => data.payments.find((p) => p.date === d && isPaid(p));
+    let main;
+    if (pending) {
+      main = html`
+        <div class="tile t-cream tile-card pay-card" id="pay-confirm">
+          <h3>Did your payment go through?</h3>
+          <p>${payOnline.amount} for <b>${classDate(pending.date)}</b>, reference <b>${pending.reference}</b>.</p>
+          <div class="pay-shot">📸 <span><b>Take a screenshot of Monzo's payment confirmation</b>, just in case your account doesn't update. Show it to a teacher if you need to.</span></div>
+          <div class="p-actions"><button class="cta-pill" type="button" id="pay-yes">Yes, I've paid</button><button class="cta-pill light" type="button" id="pay-no">No, not yet</button></div>
+          <p class="small muted" style="margin:0">Only tap "Yes" once Monzo shows the payment as complete. Payments are checked against Monzo.</p>
+        </div>`;
+    } else if (payOnline.enabled && dates.length) {
+      const done = paidFor(chosen);
+      main = html`
+        <div class="tile t-white tile-card pay-card">
+          <h3>Pay for a class</h3>
+          <label class="field"><span>Which class are you paying for?</span>
+            <select id="pay-date">${dates.map((d, k) => html`<option value="${d}" ${raw(d === chosen ? 'selected' : '')}>${classDate(d)}${k === 0 ? ' (next class)' : ''}${paidFor(d) ? ' · paid ✓' : ''}</option>`)}</select></label>
+          ${done ? html`
+            <p class="pay-done"><span class="pay-badge">✓ ${payLabel(done)}</span> You're all set for ${classDate(chosen, { weekday: 'long', day: 'numeric', month: 'long' })}. Just show your QR code at the door.</p>`
+          : html`
+            <div class="pay-ref"><small>Put this in the Monzo payment note</small><div><b id="pay-ref">…</b><button type="button" class="pay-copy" id="pay-copy">Copy</button></div></div>
+            <div class="pay-shot">📸 <span>After paying, <b>take a screenshot of the confirmation</b>, just in case your account doesn't update.</span></div>
+            <div><a class="cta-pill gold" id="pay-go" href="${payOnline.link}" target="_blank" rel="noopener">Pay ${payOnline.amount} with Monzo</a></div>
+            <p class="small muted" style="margin:0">Opens Monzo's secure payment page. If you miss the class, the payment stays on this date.</p>`}
+        </div>`;
+    }
+    mount(box, html`<div class="tg2 p-split" style="align-items:start">${main || ''}${history()}</div>`);
+    wire();
+  };
+
+  // The reference for the chosen date, as the server will record it.
+  const refFor = (d) => {
+    const u = state.user;
+    const [, m, day] = d.split('-').map(Number);
+    const base = `${u.memberId} ${String(day).padStart(2, '0')}${['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][m - 1]}`;
+    const words = u.name.toUpperCase().replace(/[^A-Z\s'-]/g, '').split(/\s+/).filter(Boolean);
+    const room = 30 - base.length - 1;
+    const name = [words.join(' '), words.length > 1 ? `${words[0]} ${words.at(-1)[0]}` : words[0] || '', words.map((w) => w[0]).join('')].find((o) => o && o.length <= room) || '';
+    return name ? `${base} ${name}` : base;
+  };
+
+  const wire = () => {
+    const sel = box.querySelector('#pay-date');
+    sel?.addEventListener('change', () => { chosen = sel.value; draw(); });
+    const ref = box.querySelector('#pay-ref');
+    if (ref) ref.textContent = refFor(chosen);
+    box.querySelector('#pay-copy')?.addEventListener('click', async (e) => {
+      try {
+        await navigator.clipboard.writeText(ref.textContent);
+        e.target.textContent = 'Copied';
+      } catch {
+        toast('Select the reference and copy it', 'error');
+      }
+    });
+    box.querySelector('#pay-go')?.addEventListener('click', async () => {
+      // The link opens Monzo in a new tab; the payment is recorded as started meanwhile.
+      try {
+        const r = await api('/api/me/payments', { method: 'POST', body: { date: chosen } });
+        pending = { id: r.payment.id, date: r.payment.date, reference: r.payment.reference };
+        draw();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    });
+    box.querySelector('#pay-yes')?.addEventListener('click', async (e) => {
+      await withBusy(e.target, async () => {
+        try {
+          const r = await api(`/api/me/payments/${pending.id}/confirm`, { method: 'POST' });
+          data.payments = r.payments;
+          chosen = pending.date;
+          pending = null;
+          confetti(e.target);
+          toast('Thanks! Your class is paid for.', 'success');
+          draw();
+        } catch (err) {
+          toast(err.message, 'error');
+        }
+      });
+    });
+    box.querySelector('#pay-no')?.addEventListener('click', async () => {
+      await api(`/api/me/payments/${pending.id}`, { method: 'DELETE' }).catch(() => {});
+      pending = null;
+      draw();
+    });
+  };
+  draw();
+}
+
 async function renderAccount() {
   if (!state.user) return navigate('/login?next=/account', { replace: true });
   setTitle('My account');
@@ -830,6 +948,7 @@ async function renderAccount() {
       </div>
     </section>
     <div class="no-print">
+      <section class="p-sec" id="pay-section" hidden></section>
       <section class="p-sec tg2 p-split" style="align-items:stretch" data-fade>
         <div class="tile t-deep tile-card">
           <span class="tile-no">Classes attended</span>
@@ -886,6 +1005,7 @@ async function renderAccount() {
 
   document.getElementById('logout').addEventListener('click', logout);
   document.getElementById('print-card').addEventListener('click', () => window.print());
+  payForClass(document.getElementById('pay-section'));
   document.getElementById('delete-account').addEventListener('click', deleteAccountDialog);
   const profile = document.getElementById('profile-form');
   profile.addEventListener('submit', async (e) => {

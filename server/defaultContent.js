@@ -134,6 +134,9 @@ module.exports = {
     highlightBadge: 'Most popular',
     // A short line shown with the price around the site, e.g. in the menu.
     payment: 'Cash or card',
+    // Members can pay for a class date online through this link (leave blank to turn it off).
+    payLink: 'https://monzo.com/pay/r/london-academy-of-bhangra_HF8dxahnyoRKtg',
+    payAmount: '£7',
     notes: 'Pay at the class by cash or card.',
     ctaButton: { label: 'Ask about private lessons', link: '/contact' },
   },
@@ -195,6 +198,7 @@ When you create an account or attend classes we collect:
 - **Account details:** your name, email address, phone number (optional), password (stored in encrypted form so nobody can read it) and the short bio you choose to write.
 - **Your member ID and QR code**, which we use to register you at classes.
 - **Attendance records:** which classes you attended and when, and which teacher checked you in.
+- **Payment records:** which classes you paid for, how (online, cash or card), the payment reference, and whether an online payment was received. We never see or store your card or bank details: online payments are made on Monzo's own secure page.
 - **For members under 16:** the name, email address and phone number of a parent or guardian, and a record of their consent.
 - **Your privacy choices:** which version of this policy you accepted and when.
 - **Messages** you send us through the contact form.

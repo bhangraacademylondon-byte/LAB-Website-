@@ -108,6 +108,24 @@ const SCHEMA = `
     accepted_at    TEXT NOT NULL DEFAULT ${NOW}
   );
 
+  -- Payments for a class date (see payments.js). method: online, cash or card.
+  -- status: started (gone to Monzo), claimed (member says paid), received, not_received.
+  CREATE TABLE IF NOT EXISTS class_payments (
+    id           SERIAL PRIMARY KEY,
+    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    class_date   TEXT NOT NULL,
+    method       TEXT NOT NULL CHECK (method IN ('online', 'cash', 'card')),
+    status       TEXT NOT NULL CHECK (status IN ('started', 'claimed', 'received', 'not_received')),
+    amount_pence INTEGER NOT NULL DEFAULT 0,
+    reference    TEXT NOT NULL DEFAULT '',
+    created_at   TEXT NOT NULL DEFAULT ${NOW},
+    claimed_at   TEXT,
+    checked_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    checked_at   TEXT,
+    UNIQUE (user_id, class_date)
+  );
+  CREATE INDEX IF NOT EXISTS idx_payments_date ON class_payments(class_date);
+
   -- Visitor statistics (see visitors.js). "visitor" is a hash that changes
   -- every day, so it cannot be linked to a person or across days.
   CREATE TABLE IF NOT EXISTS page_views (

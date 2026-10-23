@@ -17,6 +17,7 @@ const NAV = [
   { path: '', label: 'Dashboard', icon: '🏠' },
   { path: 'scanner', label: 'QR scanner', icon: '📷' },
   { path: 'sessions', label: 'Sessions', icon: '📅' },
+  { path: 'payments', label: 'Payments', icon: '💷' },
   { path: 'members', label: 'Members', icon: '👥' },
   { path: 'debriefs', label: 'Class debriefs', icon: '📝' },
   { heading: 'Website', admin: true },
@@ -66,6 +67,7 @@ export async function render(parts) {
   if (section === '') return dashboard(layout(''));
   if (section === 'scanner') return scanner(layout('scanner'));
   if (section === 'sessions') return sub ? sessionDetail(layout('sessions'), sub) : sessionsList(layout('sessions'));
+  if (section === 'payments') return paymentsPage(layout('payments'));
   if (section === 'members') return sub ? memberDetail(layout('members'), sub) : membersList(layout('members'));
   if (section === 'debriefs') {
     const root = layout('debriefs');
@@ -333,11 +335,12 @@ async function scanner(root) {
         const r = await api(`/api/staff/sessions/${session.id}/attendance`, { method: 'POST', body });
         if (r.status === 'recorded') {
           beep(true);
-          showResult('ok', '✅', html`<strong>${r.member.name}</strong> checked in<br><span class="small">${r.member.memberId} · ${r.stats.total} ${r.stats.total === 1 ? 'class' : 'classes'} total</span>`);
+          showResult('ok', '✅', html`<strong>${r.member.name}</strong> checked in<br><span class="small">${r.member.memberId} · ${r.stats.total} ${r.stats.total === 1 ? 'class' : 'classes'} total</span>${paymentLine(r.payment, r.member.id, r.date)}`);
         } else {
           beep(true);
-          showResult('warn', 'ℹ️', html`<strong>${r.member.name}</strong> is already checked in`);
+          showResult('warn', 'ℹ️', html`<strong>${r.member.name}</strong> is already checked in${paymentLine(r.payment, r.member.id, r.date)}`);
         }
+        wireDoorPay(resultBox, () => checkIn(body));
         refresh();
       } catch (err) {
         beep(false);
@@ -481,6 +484,23 @@ async function sessionsList(root) {
   }));
 }
 
+// On a class's page: who paid, and who's checked in without paying (with cash / card buttons).
+async function sessionPayments(box, session, attendees) {
+  const { payments } = await api(`/api/staff/payments?date=${session.date}`);
+  const unpaid = attendees.filter((a) => !payPaid(payments.find((p) => p.userId === a.id)));
+  mount(box, html`
+    <div class="admin-head" style="margin-bottom:8px"><h3 style="margin:0">Payments</h3><a class="btn btn-sm btn-ghost" href="/admin/payments?date=${session.date}">All payments →</a></div>
+    ${paySummary(payments)}
+    ${unpaid.length ? html`
+      <h4 style="margin:0 0 6px">Checked in, not paid (${unpaid.length})</h4>
+      <ul class="pay-list">${unpaid.map((a) => html`<li><span><b>${a.name}</b><small>${a.memberId}</small></span>${paymentLine(null, a.id, session.date)}</li>`)}</ul>` : ''}
+    <h4 style="margin:14px 0 6px">Paid (${payments.filter(payPaid).length})</h4>
+    <div id="session-pay-rows">${payRows(payments)}</div>`);
+  const reload = () => sessionPayments(box, session, attendees);
+  wireDoorPay(box, reload);
+  wirePayRows(box.querySelector('#session-pay-rows'), reload);
+}
+
 async function sessionDetail(root, id) {
   const { session, attendees } = await api(`/api/staff/sessions/${id}`);
   mount(root, html`
@@ -497,6 +517,10 @@ async function sessionDetail(root, id) {
             <div><a href="/admin/members/${a.id}"><strong>${a.name}</strong></a><div class="meta">${a.memberId} · ${formatDateTime(a.scannedAt)} · ${a.method}${a.scannedBy ? ` by ${a.scannedBy}` : ''}</div></div>
             <button class="icon-btn danger" data-remove="${a.id}" aria-label="Remove">✕</button>
           </li>`)}</ul>` : html`<p class="muted">No one has been checked in yet.</p>`}
+      </div>
+      <div class="card" id="session-pay">
+        <h3>Payments</h3>
+        <p class="muted small">Loading…</p>
       </div>
       <div class="card">
         <h3>Edit session</h3>
@@ -515,6 +539,7 @@ async function sessionDetail(root, id) {
         </form>
       </div>
     </div>`);
+  sessionPayments(root.querySelector('#session-pay'), session, attendees);
   root.querySelector('.grid').addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-remove]');
     if (!btn) return;
@@ -539,6 +564,106 @@ async function sessionDetail(root, id) {
     toast('Session deleted');
     navigate('/admin/sessions');
   });
+}
+
+// ---------- payments ----------
+
+const PAY_LABELS = { claimed: 'Paid online', received: 'Paid online ✓', not_received: 'Not received' };
+const payPaid = (p) => p && p.status !== 'not_received' && p.status !== 'started';
+const payText = (p) => (p.method === 'online' ? PAY_LABELS[p.status] : p.method === 'cash' ? 'Paid cash' : 'Paid card');
+const classDay = (iso, opts = { weekday: 'long', day: 'numeric', month: 'long' }) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-GB', { ...opts, timeZone: 'UTC' });
+
+// Under a scan: whether they've paid for this class, or buttons to record cash or card.
+function paymentLine(p, userId, date) {
+  if (payPaid(p)) return html`<div style="margin-top:8px"><span class="pay-badge">✓ ${payText(p)}${p.method === 'online' ? ' for tonight' : ''}</span></div>`;
+  return html`<div style="margin-top:8px"><span class="pay-badge bad">${p?.status === 'not_received' ? 'Online payment not received · ' : ''}Pay at the door</span>
+    <span class="pay-acts" style="margin-top:6px;display:flex;justify-content:flex-start"><button type="button" data-door="cash" data-user="${userId}" data-date="${date}">Paid cash</button><button type="button" data-door="card" data-user="${userId}" data-date="${date}">Paid card</button></span></div>`;
+}
+
+function wireDoorPay(box, after) {
+  box.querySelectorAll('[data-door]').forEach((b) => b.addEventListener('click', async () => {
+    try {
+      await api('/api/staff/payments', { method: 'POST', body: { userId: Number(b.dataset.user), date: b.dataset.date, method: b.dataset.door } });
+      toast(`Recorded: paid ${b.dataset.door}`, 'success');
+      after?.();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  }));
+}
+
+function paySummary(list) {
+  const online = list.filter((p) => p.method === 'online' && payPaid(p));
+  const door = list.filter((p) => p.method !== 'online');
+  const notRec = list.filter((p) => p.status === 'not_received');
+  const expected = online.reduce((a, p) => a + (p.amountPence || 0), 0);
+  return html`<div class="pay-sum">
+    <div><b>${online.length}</b>Paid online</div>
+    <div><b>${online.filter((p) => p.status === 'received').length}</b>Checked in Monzo</div>
+    <div><b>${door.length}</b>Cash or card at the door</div>
+    <div><b>${(expected / 100).toLocaleString('en-GB', { style: 'currency', currency: 'GBP' })}</b>Expected in Monzo${notRec.length ? ` · ${notRec.length} not received` : ''}</div>
+  </div>`;
+}
+
+function payRows(list) {
+  if (!list.length) return html`<p class="muted" style="margin:0">Nobody has paid for this class yet.</p>`;
+  return html`<ul class="pay-list">${list.map((p) => html`
+    <li>
+      <span><b>${p.name}</b><small>${p.method === 'online' ? p.reference : `${p.method === 'cash' ? 'Cash' : 'Card'} at the door`} · ${p.attended ? 'checked in' : 'not checked in'}${p.checkedBy ? ` · ${p.method === 'online' ? 'checked' : 'recorded'} by ${p.checkedBy}` : ''}</small></span>
+      ${p.method === 'online' ? html`
+        <span class="pay-acts" role="group" aria-label="Checked in Monzo?">
+          <button type="button" data-pay="${p.id}" data-status="received" aria-pressed="${String(p.status === 'received')}">Received</button>
+          <button type="button" class="no" data-pay="${p.id}" data-status="not_received" aria-pressed="${String(p.status === 'not_received')}">Not received</button>
+        </span>`
+      : html`<span class="pay-acts"><span class="pay-badge">${payText(p)}</span><button type="button" data-undo="${p.id}" aria-label="Undo ${p.name}'s payment">Undo</button></span>`}
+    </li>`)}</ul>`;
+}
+
+function wirePayRows(box, reload) {
+  box.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-pay], [data-undo]');
+    if (!b) return;
+    try {
+      if (b.dataset.undo) {
+        if (!(await confirmDialog('Undo this door payment?', { confirmLabel: 'Undo', danger: true }))) return;
+        await api(`/api/staff/payments/${b.dataset.undo}`, { method: 'DELETE' });
+      } else {
+        // Pressing the chosen button again takes the check back off.
+        const status = b.getAttribute('aria-pressed') === 'true' ? 'claimed' : b.dataset.status;
+        await api(`/api/staff/payments/${b.dataset.pay}`, { method: 'PATCH', body: { status } });
+      }
+      reload();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  });
+}
+
+async function paymentsPage(root, date = new URLSearchParams(location.search).get('date')) {
+  const v = await api(`/api/staff/payments${date ? `?date=${date}` : ''}`);
+  const day = date || (v.dates.includes(todayLondon()) ? todayLondon() : v.dates[0] || v.date);
+  const data = day === v.date ? v : await api(`/api/staff/payments?date=${day}`);
+  const options = [...new Set([...data.dates, day])].sort();
+  mount(root, html`
+    ${head('Payments')}
+    <p class="muted" style="margin-top:-12px">Who has paid for each class. Online payments are marked paid when the member confirms in their account${data.payOnline.enabled ? '' : ' (online payment is switched off in Admin → Pricing)'}; whoever checks Monzo can tick them off.</p>
+    <div class="card" style="margin-bottom:16px">
+      <label class="field" style="max-width:340px"><span>Class date</span>
+        <select id="pay-day">${options.map((d) => html`<option value="${d}" ${raw(d === day ? 'selected' : '')}>${classDay(d)}</option>`)}</select></label>
+      <label class="field" style="max-width:340px;margin-top:8px"><span>Or another date</span><input type="date" id="pay-other" value="${day}"></label>
+    </div>
+    ${paySummary(data.payments)}
+    <div class="card" id="pay-rows">
+      <h3 style="margin-top:0">${classDay(day)}</h3>
+      ${payRows(data.payments)}
+    </div>`);
+  const go = (d) => {
+    history.replaceState(null, '', `/admin/payments?date=${d}`);
+    paymentsPage(root, d);
+  };
+  root.querySelector('#pay-day').addEventListener('change', (e) => go(e.target.value));
+  root.querySelector('#pay-other').addEventListener('change', (e) => e.target.value && go(e.target.value));
+  wirePayRows(root.querySelector('#pay-rows'), () => paymentsPage(root, day));
 }
 
 // ---------- class debriefs ----------
@@ -1059,6 +1184,8 @@ const SCHEMAS = {
         { key: 'highlight', label: 'Highlight this option', type: 'bool' },
       ] },
       { key: 'highlightBadge', label: 'Badge text on the highlighted option' },
+      { key: 'payLink', label: 'Online payment link (Monzo)', type: 'url', hint: 'Members choose a class date in their account and pay through this link. Leave blank to turn online payment off.' },
+      { key: 'payAmount', label: 'Price of a class paid online', hint: 'e.g. £7' },
       { key: 'payment', label: 'How people can pay', hint: 'A short phrase shown with the price in the menu and the strip above the footer, e.g. "Cash or card".' },
       { key: 'notes', label: 'Notes', type: 'rich' },
       singleButton('ctaButton', 'Button under the prices'),

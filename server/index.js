@@ -12,6 +12,7 @@ const storage = require('./storage');
 const auth = require('./auth');
 const content = require('./content');
 const visitors = require('./visitors');
+const payments = require('./payments');
 const instagram = require('./instagram');
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -118,8 +119,8 @@ async function memberStats(userId) {
 }
 
 async function memberAttendance(userId, limit = 200) {
-  return (await db.all(`SELECT s.id AS sessionId, s.title, s.date, s.start_time AS startTime, s.end_time AS endTime,
-              s.location, a.method, a.created_at AS scannedAt
+  return (await db.all(`SELECT s.id AS "sessionId", s.title, s.date, s.start_time AS "startTime", s.end_time AS "endTime",
+              s.location, a.method, a.created_at AS "scannedAt"
          FROM attendance a JOIN class_sessions s ON s.id = a.session_id
         WHERE a.user_id = ? ORDER BY s.date DESC, s.start_time DESC LIMIT ?`, userId, limit));
 }
@@ -355,8 +356,9 @@ app.get('/api/me/export', auth.requireRole('member'), async (req, res) => {
     exportedAt: new Date().toISOString(),
     account: { ...publicUser(u), privacyRequired: undefined },
     attendance: await memberAttendance(u.id, 100000),
-    privacyConsents: (await db.all('SELECT version, under_16 AS under16, guardian_name AS guardianName, guardian_email AS guardianEmail, accepted_at AS acceptedAt FROM privacy_consents WHERE user_id = ? ORDER BY id', u.id)),
-    messagesSent: u.email ? (await db.all('SELECT subject, body, created_at AS sentAt FROM messages WHERE lower(email) = lower(?) ORDER BY id', u.email)) : [],
+    payments: await payments.forMember(u.id),
+    privacyConsents: (await db.all('SELECT version, under_16 AS under16, guardian_name AS "guardianName", guardian_email AS "guardianEmail", accepted_at AS "acceptedAt" FROM privacy_consents WHERE user_id = ? ORDER BY id', u.id)),
+    messagesSent: u.email ? (await db.all('SELECT subject, body, created_at AS "sentAt" FROM messages WHERE lower(email) = lower(?) ORDER BY id', u.email)) : [],
   };
   res.setHeader('Content-Disposition', `attachment; filename="lab-my-data-${u.member_id}.json"`);
   res.setHeader('Cache-Control', 'no-store');
@@ -403,6 +405,61 @@ app.post('/api/me/password', auth.requireRole('member'), async (req, res) => {
   (await db.run('UPDATE users SET password_hash = ? WHERE id = ?', auth.hashPassword(next), req.user.id));
   await auth.destroyAllSessionsFor(req.user.id);
   await auth.createSession(res, req, req.user.id);
+  res.json({ ok: true });
+});
+
+// ---------- member: paying for a class ----------
+
+function payOnline() {
+  const { pricing } = content.getContent();
+  const link = safeHttpsUrl(pricing.payLink);
+  return { enabled: Boolean(link), link, amount: pricing.payAmount || '', amountPence: payments.pence(pricing.payAmount) };
+}
+
+function safeHttpsUrl(url) {
+  try {
+    const u = new URL(String(url || '').trim());
+    return u.protocol === 'https:' ? u.toString() : '';
+  } catch {
+    return '';
+  }
+}
+
+app.get('/api/me/payments', auth.requireRole('member'), async (req, res) => {
+  const dates = payments.upcomingDates(content.getContent().timetable.classes);
+  // A payment they started but haven't confirmed yet (e.g. they closed the page while in Monzo).
+  const pending = await db.get(`SELECT id, class_date AS date, reference FROM class_payments WHERE user_id = ? AND status = 'started' AND class_date >= ? ORDER BY created_at DESC LIMIT 1`, req.user.id, payments.londonToday());
+  res.json({ payOnline: payOnline(), dates, payments: await payments.forMember(req.user.id), pending: pending || null });
+});
+
+// Starting a payment for a class date: records it and gives the Monzo reference.
+app.post('/api/me/payments', auth.requireRole('member'), async (req, res) => {
+  const pay = payOnline();
+  if (!pay.enabled) throw new HttpError(400, 'Online payment is not available at the moment. Please pay at the class.');
+  const date = str(req.body.date, 10);
+  if (!payments.upcomingDates(content.getContent().timetable.classes).includes(date)) throw new HttpError(400, 'Please choose one of the upcoming class dates.');
+  const existing = await payments.find(req.user.id, date);
+  if (existing && existing.status !== 'started' && existing.status !== 'not_received') throw new HttpError(409, 'You have already paid for that class.');
+  const ref = payments.reference(req.user, date);
+  await db.run(
+    `INSERT INTO class_payments (user_id, class_date, method, status, amount_pence, reference) VALUES (?, ?, 'online', 'started', ?, ?)
+     ON CONFLICT (user_id, class_date) DO UPDATE SET method = 'online', status = 'started', amount_pence = EXCLUDED.amount_pence,
+       reference = EXCLUDED.reference, claimed_at = NULL, checked_by = NULL, checked_at = NULL`,
+    req.user.id, date, pay.amountPence, ref
+  );
+  res.json({ payment: await payments.find(req.user.id, date), link: pay.link });
+});
+
+// "Yes, I've paid": the class now shows as paid in their account and on the teachers' list.
+app.post('/api/me/payments/:id/confirm', auth.requireRole('member'), async (req, res) => {
+  const r = await db.run(`UPDATE class_payments SET status = 'claimed', claimed_at = ${db.NOW} WHERE id = ? AND user_id = ? AND status = 'started'`, Number(req.params.id), req.user.id);
+  if (!r.changes) throw new HttpError(404, 'That payment was not found.');
+  res.json({ payments: await payments.forMember(req.user.id) });
+});
+
+// "No, not yet": forget the unfinished payment.
+app.delete('/api/me/payments/:id', auth.requireRole('member'), async (req, res) => {
+  await db.run("DELETE FROM class_payments WHERE id = ? AND user_id = ? AND status = 'started'", Number(req.params.id), req.user.id);
   res.json({ ok: true });
 });
 
@@ -466,7 +523,7 @@ async function loadSession(id) {
 }
 
 async function sessionAttendees(sessionId) {
-  return (await db.all(`SELECT u.id, u.member_id AS memberId, u.name, a.method, a.created_at AS scannedAt, sb.name AS scannedBy
+  return (await db.all(`SELECT u.id, u.member_id AS "memberId", u.name, a.method, a.created_at AS "scannedAt", sb.name AS "scannedBy"
          FROM attendance a JOIN users u ON u.id = a.user_id
          LEFT JOIN users sb ON sb.id = a.scanned_by
         WHERE a.session_id = ? ORDER BY a.created_at DESC`, sessionId));
@@ -520,6 +577,8 @@ staff.post('/sessions/:id/attendance', async (req, res) => {
     status: info.changes ? 'recorded' : 'already',
     member: { id: member.id, memberId: member.member_id, name: member.name },
     stats: await memberStats(member.id),
+    payment: (await payments.find(member.id, session.date)) || null,
+    date: session.date,
     count: (await db.get('SELECT COUNT(*) AS n FROM attendance WHERE session_id = ?', session.id)).n,
   });
 });
@@ -648,6 +707,47 @@ function readDebrief(body) {
   if (pence === null) throw new HttpError(400, 'Please enter the LAB pouch balance in pounds, e.g. 125.50');
   return { ranBy: [...new Set(ranBy)].join(', ').slice(0, 500), classDate, classTitle, attendeeCount, pence, feedback };
 }
+
+// Who has paid for a class date: online (and whether it's been checked in Monzo) and at the door.
+staff.get('/payments', async (req, res) => {
+  const date = DATE_RE.test(req.query.date || '') ? req.query.date : todayInfo().date;
+  const dates = payments.upcomingDates(content.getContent().timetable.classes);
+  res.json({ date, dates, payOnline: payOnline(), payments: await payments.forDate(date) });
+});
+
+// Check an online payment against Monzo.
+staff.patch('/payments/:id', async (req, res) => {
+  const status = req.body.status;
+  if (!['received', 'not_received', 'claimed'].includes(status)) throw new HttpError(400, 'Unknown payment status.');
+  const r = await db.run(
+    `UPDATE class_payments SET status = ?, checked_by = ?, checked_at = ${db.NOW} WHERE id = ? AND method = 'online' AND status <> 'started'`,
+    status, status === 'claimed' ? null : req.user.id, Number(req.params.id)
+  );
+  if (!r.changes) throw new HttpError(404, 'That payment was not found.');
+  res.json({ ok: true });
+});
+
+// Cash or card at the door. Replaces an online payment that was not received.
+staff.post('/payments', async (req, res) => {
+  const date = str(req.body.date, 10);
+  const method = req.body.method;
+  if (!DATE_RE.test(date) || !['cash', 'card'].includes(method)) throw new HttpError(400, 'Invalid payment.');
+  const member = await db.get('SELECT id FROM users WHERE id = ?', Number(req.body.userId));
+  if (!member) throw new HttpError(404, 'Member not found.');
+  await db.run(
+    `INSERT INTO class_payments (user_id, class_date, method, status, amount_pence, checked_by, checked_at) VALUES (?, ?, ?, 'received', ?, ?, ${db.NOW})
+     ON CONFLICT (user_id, class_date) DO UPDATE SET method = EXCLUDED.method, status = 'received', amount_pence = EXCLUDED.amount_pence,
+       reference = '', checked_by = EXCLUDED.checked_by, checked_at = EXCLUDED.checked_at`,
+    member.id, date, method, payOnline().amountPence || payments.pence(content.getContent().pricing.plans?.[0]?.price), req.user.id
+  );
+  res.json({ payment: await payments.find(member.id, date) });
+});
+
+// Undo a door payment recorded by mistake.
+staff.delete('/payments/:id', async (req, res) => {
+  await db.run("DELETE FROM class_payments WHERE id = ? AND method IN ('cash', 'card')", Number(req.params.id));
+  res.json({ ok: true });
+});
 
 staff.get('/teachers', async (_req, res) => {
   const teachers = (await db.all("SELECT id, name FROM users WHERE role IN ('instructor', 'admin') AND active = 1 ORDER BY lower(name)"));
