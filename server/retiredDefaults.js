@@ -130,11 +130,6 @@ module.exports = [
   ],
   [
     "workshops",
-    "featureTitle",
-    "Workshops for workplaces"
-  ],
-  [
-    "workshops",
     "featureSubtitle",
     "Get your staff away from their desks"
   ],
@@ -152,11 +147,6 @@ module.exports = [
     "workshops",
     "galleryTitle",
     "Workshops in action"
-  ],
-  [
-    "performances",
-    "title",
-    "Book a performance"
   ],
   [
     "performances",
@@ -307,5 +297,150 @@ module.exports = [
     "workshops",
     "galleryTitle",
     "Inside our workshops"
+  ],
+  [
+    "performances",
+    "title",
+    "Book us to perform"
+  ],
+  [
+    "performances",
+    "tagline",
+    "Weddings, parties, festivals and work events"
+  ],
+  [
+    "performances",
+    "introTitle",
+    "Bhangra at your event"
+  ],
+  [
+    "performances",
+    "intro",
+    "If you want a bhangra performance at your event, get in touch. We'll come in full Punjabi outfits and bring our props with us.\n\nA performance is usually about 10 minutes, and we can bring anywhere between 2 and 16 dancers depending on what you're after. Let us know what you've got planned and we'll work it out with you."
+  ],
+  [
+    "performances",
+    "listTitle",
+    "We can perform at"
+  ],
+  [
+    "performances",
+    "items",
+    [
+      "Weddings, sangeets and mehndis",
+      "Birthday parties",
+      "Melas and festivals",
+      "Community and council events",
+      "Work parties",
+      "Vaisakhi, Diwali and Lohri"
+    ]
+  ],
+  [
+    "performances",
+    "facts",
+    [
+      {
+        "label": "Length",
+        "value": "About 10 minutes"
+      },
+      {
+        "label": "Dancers",
+        "value": "2 to 16"
+      },
+      {
+        "label": "Outfits",
+        "value": "Full Punjabi outfits"
+      }
+    ]
+  ],
+  [
+    "performances",
+    "featureTitle",
+    "Work events"
+  ],
+  [
+    "performances",
+    "featureSubtitle",
+    "Got a staff party or culture day coming up?"
+  ],
+  [
+    "performances",
+    "featureText",
+    "We can do a short performance and then teach your team a few steps afterwards. It works really well for Vaisakhi or Diwali celebrations at work."
+  ],
+  [
+    "performances",
+    "buttonLabel",
+    "Get in touch"
+  ],
+  [
+    "workshops",
+    "tagline",
+    "For schools, workplaces and groups"
+  ],
+  [
+    "workshops",
+    "introTitle",
+    "What happens in a workshop"
+  ],
+  [
+    "workshops",
+    "intro",
+    "We teach your group a short bhangra routine, one step at a time, and by the end everyone dances it together. We'll also tell you a bit about where bhangra comes from.\n\nYou don't need any dance experience. Kids and adults are both welcome, just like at our Thursday classes."
+  ],
+  [
+    "workshops",
+    "listTitle",
+    "Good for"
+  ],
+  [
+    "workshops",
+    "items",
+    [
+      "Schools and colleges",
+      "Work team days",
+      "Families getting ready for a wedding",
+      "Youth and community groups",
+      "Cultural days",
+      "Birthday parties"
+    ]
+  ],
+  [
+    "workshops",
+    "facts",
+    [
+      {
+        "label": "Length",
+        "value": "Up to you"
+      },
+      {
+        "label": "Experience",
+        "value": "None needed"
+      },
+      {
+        "label": "Where",
+        "value": "We come to you"
+      }
+    ]
+  ],
+  [
+    "workshops",
+    "featureTitle",
+    "Workshops at work"
+  ],
+  [
+    "workshops",
+    "featureSubtitle",
+    "Want to try something different with your team?"
+  ],
+  [
+    "workshops",
+    "featureText",
+    "We can run a workshop at your office or event venue, on its own or after a performance. It's a good way to get everyone up and moving."
+  ],
+  [
+    "workshops",
+    "buttonLabel",
+    "Get in touch"
   ]
 ];

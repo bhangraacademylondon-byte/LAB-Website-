@@ -107,7 +107,7 @@ test('the old Performances and Workshops wording is replaced where it was never 
   });
   await new Promise((r) => setTimeout(r, 2100));
   const now = (await admin('GET', '/api/content')).body;
-  assert.equal(now.performances.introTitle, 'Bhangra at your event');
+  assert.equal(now.performances.introTitle, 'Make your event unforgettable');
   assert.equal(now.performances.featureTitle, 'Our own heading', 'edited wording is kept');
-  assert.equal(now.workshops.listTitle, 'Good for');
+  assert.equal(now.workshops.listTitle, 'Perfect for');
 });
