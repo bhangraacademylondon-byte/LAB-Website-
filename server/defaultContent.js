@@ -42,7 +42,7 @@ module.exports = {
     { id: 'gallery', label: 'Gallery', visible: true },
     { id: 'performances', label: 'Performances', visible: true },
     { id: 'workshops', label: 'Workshops', visible: true },
-    { id: 'contact', label: 'Contact', visible: true },
+    { id: 'contact', label: 'Contact us', visible: true },
   ],
 
   home: {

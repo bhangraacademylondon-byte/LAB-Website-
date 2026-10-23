@@ -74,14 +74,14 @@ test.describe('home page', () => {
     await expect(page.locator('.m-cell.ph.is-photo').first()).toBeAttached();
   });
 
-  test('the menu opens with every page and the phone numbers, and closes with Escape', async ({ page }) => {
+  test('the menu opens with every page and a Contact us link, and closes with Escape', async ({ page }) => {
     const btn = page.locator('#menu-toggle');
     await btn.click();
     await expect(btn).toHaveAttribute('aria-expanded', 'true');
     const menu = page.locator('#menu-inner');
     await expect(menu.getByRole('link', { name: /Pricing/ })).toBeVisible();
-    await expect(menu.locator('.contact-us')).toContainText('Ravi 07851 564285');
-    await expect(menu.locator('.contact-us')).toContainText('Gurdeep 07538 687118');
+    await expect(menu.getByRole('link', { name: 'Contact us' })).toHaveAttribute('href', '/contact');
+    await expect(menu).not.toContainText('07851 564285');
     await page.keyboard.press('Escape');
     await expect(btn).toHaveAttribute('aria-expanded', 'false');
   });

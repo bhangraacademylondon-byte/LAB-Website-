@@ -88,9 +88,8 @@ html.desk .home2 .mnav-links, html.desk .home2 .hdr-cta .cta-pill { display: fle
 html.desk .home2 .hdr-cta { display: flex; }
 html.desk .home2 .call-btn { display: none; }
 html.desk .home2 .hdr-main { height: 102px; padding: 0 20px 0 26px; }
-html.desk .home2 .menu-inner { grid-template-columns: 1.4fr 1fr; padding: 8px 8px 8px 0; }
-html.desk .home2 .menu-inner ul { columns: 2; padding: 14px 22px 22px 26px; }
-html.desk .home2 .contact-us { border-left: 1px solid var(--line); padding: 22px 22px 22px 28px; }
+html.desk .home2 .menu-inner { grid-template-columns: minmax(0, 1fr); padding: 8px 8px 8px 0; }
+html.desk .home2 .mgroups { grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 18px 22px 22px 26px; }
 
 /* ---------- portrait tablets: header, the name, then a band of tiles ---------- */
 html.tab-p .home2 { position: relative; display: grid; grid-template-rows: auto auto minmax(max(420px, 42svh), 1fr); overflow: hidden; min-height: 100svh; }

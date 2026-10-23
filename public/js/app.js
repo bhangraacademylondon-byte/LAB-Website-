@@ -81,28 +81,27 @@ function renderHeader() {
   call.setAttribute('aria-label', people.length === 1 ? `Call ${people[0].name || 'us'} on ${people[0].phone}` : 'Call us');
   mount('#hdr-cta', directions(site, { shimmer: true }));
 
-  // The menu: every page, the member links, and how to reach the academy.
+  // The menu, in three groups: classes, booking us, and about the academy (which
+  // also takes any extra pages and the Contact page, where the details live).
   let i = 0;
   const item = (label, href, note = '') => html`<li style="--i:${i++}"><a href="${href}"${current(href)}>${label}${note ? html` <small>${note}</small>` : ''}</a></li>`;
-  const insta = safeUrl(site.socials?.instagram);
-  const handle = String(site.socials?.instagram || '').replace(/\/+$/, '').split('/').pop();
+  const inGroup = (ids) => visible.filter((n) => ids.includes(n.id));
+  const classes = inGroup(['timetable', 'pricing']);
+  const booking = inGroup(['performances', 'workshops']);
+  const rest = visible.filter((n) => !classes.includes(n) && !booking.includes(n));
+  const group = (title, body, extra = '') => html`
+    <div class="mgroup"><h3>${title}</h3><ul>${body}</ul>${extra}</div>`;
+  const account = u
+    ? html`<p class="msmall">${u.role !== 'member' ? html`<a href="/admin">${u.role === 'admin' ? 'Admin' : 'Teacher'}</a><span aria-hidden="true">·</span>` : ''}<button type="button" id="menu-logout">Log out</button></p>`
+    : html`<p class="msmall">Already a member? <a href="/login">${site.loginButtonLabel || 'Member login'}</a></p>`;
   mount('#menu-inner', html`
-    <ul>
-      ${visible.map((n) => item(n.label, pageHref(n.id), menuNote(n.id)))}
-      ${u ? html`
-        ${item(site.accountButtonLabel || 'My account', '/account', 'Your pass and classes')}
-        ${u.role !== 'member' ? item(u.role === 'admin' ? 'Admin' : 'Teacher', '/admin') : ''}
-        <li style="--i:${i++}"><button type="button" id="menu-logout">Log out</button></li>`
-      : html`
-        ${members.allowRegistration ? item('Join the LAB', '/register', 'Get your member pass') : ''}
-        ${item(site.loginButtonLabel || 'Member login', '/login')}`}
-    </ul>
-    <div class="contact-us" style="--i:${i}">
-      <h2>${state.content.contact.title}</h2>
-      ${people.map((c) => html`<a class="tel" href="${telHref(c.phone)}">${ICON.phone}<span>${c.name ? html`<b>${c.name}</b> ` : ''}${c.phone}</span></a>`)}
-      ${site.email ? html`<a class="tel" href="mailto:${site.email}">${ICON.mail}${site.email}</a>` : ''}
-      ${site.address ? html`<p>${keepPostcode(site.address)}</p>` : ''}
-      ${insta !== '#' && site.socials?.instagram ? html`<a class="ig" href="${insta}" target="_blank" rel="noopener">${ICON.insta}@${handle}</a>` : ''}
+    <div class="mgroups">
+      ${group('Classes', html`
+        ${classes.map((n) => item(n.label, pageHref(n.id), menuNote(n.id)))}
+        ${u ? item(site.accountButtonLabel || 'My account', '/account', 'Your pass and classes')
+          : members.allowRegistration ? item('Join the LAB', '/register', 'Get your member pass') : ''}`, account)}
+      ${booking.length ? group('Book us', booking.map((n) => item(n.label, pageHref(n.id)))) : ''}
+      ${rest.length ? group('About LAB', rest.map((n) => item(n.label, pageHref(n.id), menuNote(n.id)))) : ''}
     </div>`);
   document.getElementById('menu-logout')?.addEventListener('click', logout);
 

@@ -59,7 +59,9 @@ function normaliseNav(nav, customPages) {
   for (const item of items) {
     if (!known.has(item.id) || seen.has(item.id)) continue;
     seen.add(item.id);
-    out.push({ id: item.id, label: String(item.label || item.id), visible: item.visible !== false });
+    // The Contact tab's old default name becomes "Contact us"; a name an admin chose stays.
+    const label = item.id === 'contact' && item.label === 'Contact' ? 'Contact us' : String(item.label || item.id);
+    out.push({ id: item.id, label, visible: item.visible !== false });
   }
   // Any page missing from the nav list (e.g. a newly added custom page) is appended.
   for (const id of known) {

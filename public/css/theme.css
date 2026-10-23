@@ -449,3 +449,21 @@ button.call-btn { border: 0; padding: 0; cursor: pointer; }
 @media (max-width: 960px) { .svc-feature { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 620px) { .svc-facts { grid-template-columns: minmax(0, 1fr) !important; } .svc-hero { min-height: 300px; padding: 32px 16px; } .svc-hero h1 { font-size: 9.6vw; } }
 .svc-intro .p-body p + p, .svc-intro .p-body br + br { margin-top: 12px; }
+
+/* ---------- the menu, grouped ---------- */
+.menu-inner { grid-template-columns: minmax(0, 1fr); }
+.mgroups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 28px; padding: 18px 22px 22px 26px; }
+.mgroup h3 { margin: 0 0 6px; font: 700 12px var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--gold-text); }
+.menu-inner .mgroup ul { columns: 1; padding: 0; margin: 0; }
+.menu-inner .mgroup li a, .menu-inner .mgroup li button { font-size: 22px; padding: 12px 2px; }
+.msmall { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 2px 0; font: 500 14px var(--sans); color: var(--muted); }
+.msmall a, .msmall button { font: 600 14px var(--sans); color: var(--ink); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.msmall a:hover, .msmall button:hover { color: var(--gold-text); }
+@media (max-width: 960px) {
+  .menu-inner { grid-template-columns: minmax(0, 1fr); }
+  .mgroups { grid-template-columns: minmax(0, 1fr); row-gap: 18px; padding: 12px 18px 18px; }
+  .menu-inner .mgroup li a, .menu-inner .mgroup li button { font-size: 20px; padding: 10px 2px; }
+  .menu-inner .mgroup li small { font-size: 12px; }
+}
+.menu-inner .mgroup li a { flex-wrap: wrap; row-gap: 2px; }
+.menu-inner .mgroup li a small { margin-left: auto; white-space: nowrap; }
