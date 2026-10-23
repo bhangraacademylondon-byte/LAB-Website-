@@ -18,7 +18,8 @@ function fit() {
   root.classList.add(mode);
   if (mode.startsWith('tab')) root.classList.add('tab');
   if (mode.startsWith('mob')) root.classList.add('mob');
-  const vw = innerWidth;
+  // The page's visible area, not counting a scroll bar.
+  const vw = root.clientWidth;
   const vh = innerHeight;
   const st = root.style;
   if (mode === 'desk' || mode === 'tab-l') {

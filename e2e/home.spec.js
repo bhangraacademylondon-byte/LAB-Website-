@@ -13,7 +13,7 @@ test.describe('home page', () => {
     await expect(page.locator('.home-acts').getByRole('link', { name: 'Get directions', exact: true })).toHaveAttribute('href', /google\.com\/maps/);
   });
 
-  test('fits one screen on a computer; on a phone the picture wall stays visible and the page scrolls to the footer', async ({ page, isMobile }) => {
+  test('the first screen is the home composition; the picture wall stays visible and the page scrolls to the footer', async ({ page, isMobile }) => {
     await page.locator('.m-grid').waitFor();
     const m = await page.evaluate(() => ({
       x: document.documentElement.scrollWidth - innerWidth,
@@ -21,12 +21,28 @@ test.describe('home page', () => {
       wall: document.querySelector('.m-grid').getBoundingClientRect().height,
     }));
     expect(m.x).toBe(0);
-    if (isMobile) {
-      expect(m.wall).toBeGreaterThanOrEqual(300);
-      await expect(page.locator('.site-foot')).toBeVisible();
-    } else {
-      expect(m.y).toBe(0);
+    expect(m.y).toBeGreaterThan(200);
+    expect(m.wall).toBeGreaterThanOrEqual(300);
+    if (!isMobile) {
+      // On a computer the composition fills exactly the first screen; the footer starts below it.
+      const footTop = await page.locator('.ticker').evaluate((el) => el.getBoundingClientRect().top);
+      expect(footTop).toBeGreaterThanOrEqual(await page.evaluate(() => innerHeight));
     }
+    await page.locator('.site-foot').scrollIntoViewIfNeeded();
+    await expect(page.locator('.site-foot')).toBeVisible();
+  });
+
+  test('with reduced motion (common on work and remote computers) the wall still drifts, and can be paused', async ({ browser }) => {
+    const ctx = await browser.newContext({ reducedMotion: 'reduce', viewport: { width: 1440, height: 900 } });
+    const p = await ctx.newPage();
+    await p.goto('/');
+    const col = p.locator('.m-col.c1');
+    const y = () => col.evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).m42);
+    const a = await y();
+    await p.waitForTimeout(800);
+    expect(Math.abs((await y()) - a)).toBeGreaterThan(2);
+    await expect(p.locator('#motion-btn')).toBeVisible();
+    await ctx.close();
   });
 
   test('on a short phone screen the picture wall is not squeezed out', async ({ page }) => {

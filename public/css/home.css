@@ -9,10 +9,9 @@
 @media (min-width: 900px) and (min-height: 540px) and (min-aspect-ratio: 21/20) { :root { --home-mode: tab-l; } }
 @media (min-width: 1097px) and (min-aspect-ratio: 27/25) { :root { --home-mode: desk; } }
 
-/* Wide screens show the home page as one screen; phones and portrait tablets scroll on to the footer. */
-html.desk body.on-home, html.tab-l body.on-home { overflow: hidden; }
+/* The first screen is the home page's composition; below it the page scrolls on to the footer. */
 body.on-home .announcement { display: none !important; }
-html.desk body.on-home .ticker, html.desk body.on-home .site-foot, html.tab-l body.on-home .ticker, html.tab-l body.on-home .site-foot { display: none !important; }
+html.desk body.on-home main, html.tab-l body.on-home main { position: relative; flex: none; height: 100vh; height: 100svh; overflow: hidden; }
 .home2 { --drift: 17.5s; --col: 205.33px; --gap: 13px; --pitch: 282.5px; --r: 22px; --tm: 16px; background: var(--paper); }
 
 /* ---------- the tile wall ---------- */
@@ -76,7 +75,7 @@ html.desk.ex1 .m-col.x1, html.desk.ex2 .m-col.x1, html.desk.ex2 .m-col.x2, html.
 .home-acts .call-pill { display: none; }
 
 /* ---------- desktop and landscape tablets: a 1280 x 800 canvas, scaled to fill ---------- */
-html.desk .home2, html.tab-l .home2 { position: fixed; left: 0; top: 0; transform-origin: 0 0; transform: scale(var(--s, 1)); width: calc(var(--W, 1280) * 1px); height: calc(var(--H, 800) * 1px); overflow: hidden; }
+html.desk .home2, html.tab-l .home2 { position: absolute; left: 0; top: 0; transform-origin: 0 0; transform: scale(var(--s, 1)); width: calc(var(--W, 1280) * 1px); height: calc(var(--H, 800) * 1px); overflow: hidden; }
 html.desk .m-grid, html.tab-l .m-grid { right: 62px; top: 0; bottom: 0; --shift: calc(var(--ex, 0) * (var(--col) + var(--gap))); width: calc(var(--shift) + 3 * var(--col) + 2 * var(--gap)); }
 /* Extra columns on very wide screens sit inside the wall's box, so the edge fade covers them too. */
 html.desk.ex1 .m-grid { --ex: 1; } html.desk.ex2 .m-grid { --ex: 2; } html.desk.ex3 .m-grid { --ex: 3; }
@@ -131,9 +130,11 @@ html.mob-l .home-hero { grid-column: 1; grid-row: 2; align-self: center; }
 html.mob-l .home-hero h1 { font-size: calc(clamp(32px, 7vh, 56px) * var(--hs, 1)); }
 html.mob-l .m-grid { grid-column: 2; grid-row: 1 / -1; margin: 0 var(--tm) 0 0; --gw: calc(var(--lgw, 44vw) - var(--tm) - env(safe-area-inset-right)); z-index: 1; }
 
+/* Reduced motion (often switched on by remote and work computers): the wall still drifts,
+   at half speed and with its pause button, but the entrance and shine are left out. */
 @media (prefers-reduced-motion: reduce) {
-  .m-col { animation: none; }
-  .motion-btn { display: none; }
+  .m-col { animation: colDown calc(var(--drift) * 2) linear infinite !important; }
+  .m-col.c2, .m-col.x1, .m-col.x3 { animation-name: colUp !important; }
   .home-hero h1 > span.tile-word::before { animation: none; display: none; }
 }
 /* Landscape tablets: the canvas keeps the header's Get directions; the links live in the menu. */
