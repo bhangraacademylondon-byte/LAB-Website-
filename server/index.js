@@ -875,6 +875,11 @@ app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found.' }));
 // ---------- static files & SPA ----------
 
 app.use('/uploads', express.static(storage.UPLOAD_DIR, { maxAge: '30d', immutable: true }));
+// Literata typeface for the home page (SIL Open Font License), served from the npm package.
+// Self-hosted typefaces for the home page (SIL Open Font License).
+for (const face of ['archivo', 'inter']) {
+  app.use(`/fonts/${face}`, express.static(path.join(path.dirname(require.resolve(`@fontsource-variable/${face}/package.json`)), 'files'), { maxAge: '365d', immutable: true }));
+}
 app.get('/vendor/html5-qrcode.min.js', async (_req, res) => {
   res.sendFile(require.resolve('html5-qrcode/html5-qrcode.min.js'), { maxAge: '7d' });
 });

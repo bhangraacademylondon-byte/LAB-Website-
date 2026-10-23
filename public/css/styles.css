@@ -51,7 +51,7 @@ p { margin: 0 0 1em; }
 .skip-link:focus { left: 8px; }
 
 /* ---------- announcement & header ---------- */
-.announcement { background: var(--accent); color: #fff; text-align: center; padding: 8px 16px; font-size: 0.9rem; font-weight: 500; }
+.announcement { background: var(--accent); color: #1b1b30; text-align: center; padding: 8px 16px; font-size: 0.9rem; font-weight: 500; }
 
 .site-header { position: sticky; top: 0; z-index: 50; background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
 .header-inner { display: flex; align-items: center; justify-content: space-between; height: var(--header-h); gap: 16px; }
@@ -62,7 +62,7 @@ p { margin: 0 0 1em; }
 .site-nav ul { list-style: none; margin: 0; padding: 0; display: flex; gap: 4px; }
 .site-nav a { display: block; padding: 8px 12px; border-radius: 8px; text-decoration: none; color: var(--text); font-weight: 500; font-size: 0.95rem; }
 .site-nav a:hover { background: var(--bg-soft); color: var(--primary); }
-.site-nav a[aria-current='page'] { color: var(--accent); }
+.site-nav a[aria-current='page'] { color: var(--primary); text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 6px; }
 .site-nav .nav-account .btn { padding: 6px 14px; font-size: 0.85rem; }
 .site-nav .nav-account .btn-primary, .site-nav .nav-account .btn-primary:hover { color: #fff; }
 .site-nav .nav-account .btn-outline { color: var(--primary); }
@@ -330,7 +330,7 @@ dialog::backdrop { background: rgba(20, 20, 40, 0.55); }
 .footer-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 32px; }
 .footer-grid ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
 .footer-brand { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
-.footer-brand img { width: 56px; height: 56px; border-radius: 50%; background: var(--logo-bg); box-shadow: 0 0 0 2px rgba(162, 137, 92, 0.6); }
+.footer-brand img { width: 56px; height: 56px; border-radius: 50%; background: var(--logo-bg); border: 2px solid rgba(162, 137, 92, 0.6); }
 .footer-bottom { grid-column: 1 / -1; border-top: 1px solid rgba(255, 255, 255, 0.12); padding-top: 16px; font-size: 0.85rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 @media (max-width: 760px) { .footer-grid { grid-template-columns: 1fr; gap: 24px; } }
 

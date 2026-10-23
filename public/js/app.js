@@ -1,54 +1,27 @@
 import {
   api, html, raw, mount, esc, safeUrl, safeImg, formatText, toast, formatDate, formatDateTime, formatTime,
-  formError, formData, withBusy, initials, el, openDialog, logoAnimationClasses,
+  formError, formData, withBusy, initials, el, openDialog,
 } from './lib.js';
+import { renderHome as renderHomePage } from './home.js';
+import {
+  nextClass, untilText, longDate, icsFor, keepPostcode, mapsHref, telHref, firstPlan, classDays, clockFace,
+  marked, twoLines, ICON, directions, goLink,
+} from './classes.js';
+import { blurFade, numberTickers, enableRipples, confetti } from './effects.js';
 
 export const state = { content: null, user: null, stats: null };
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const main = () => document.getElementById('main');
 
-// ---------- theme & layout ----------
-
-const FONTS = ['Poppins', 'Montserrat', 'Lato', 'Open Sans', 'Raleway', 'Nunito', 'Playfair Display', 'Merriweather', 'Oswald', 'Bebas Neue'];
-const loadedFonts = new Set(['Poppins']);
-
-function loadFont(name) {
-  if (!FONTS.includes(name) || loadedFonts.has(name)) return;
-  loadedFonts.add(name);
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(name)}:wght@400;500;600;700;800&display=swap`;
-  document.head.appendChild(link);
-}
-
-function shade(hex, amount) {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
-  if (!m) return null;
-  const n = parseInt(m[1], 16);
-  const ch = (shift) => Math.max(0, Math.min(255, Math.round(((n >> shift) & 255) * (1 + amount))));
-  return `#${[16, 8, 0].map((s) => ch(s).toString(16).padStart(2, '0')).join('')}`;
-}
+// ---------- header, menu & footer ----------
 
 function applyTheme() {
   const { site } = state.content;
-  const root = document.documentElement.style;
-  if (shade(site.primaryColor, 0)) {
-    root.setProperty('--primary', site.primaryColor);
-    root.setProperty('--primary-dark', shade(site.primaryColor, -0.32));
-  }
-  if (shade(site.accentColor, 0)) {
-    root.setProperty('--accent', site.accentColor);
-    root.setProperty('--accent-light', shade(site.accentColor, 0.28));
-  }
-  for (const [prop, font] of [['--font-heading', site.headingFont], ['--font-body', site.bodyFont]]) {
-    const name = FONTS.includes(font) ? font : 'Poppins';
-    loadFont(name);
-    root.setProperty(prop, `'${name}'`);
-  }
-  const logo = safeImg(site.logo) || '/img/logo.png';
-  document.getElementById('brand-logo').src = logo;
+  document.getElementById('brand-logo').src = safeImg(site.logo) || '/img/logo.png';
+  document.getElementById('brand-short').textContent = site.shortName || site.name;
   document.getElementById('brand-name').textContent = site.name;
+  document.getElementById('brand').setAttribute('aria-label', `${site.name}, home`);
 }
 
 function pageHref(id) {
@@ -69,21 +42,71 @@ function buttons(list, extraClass = '') {
   })}</div>`;
 }
 
-function renderHeader() {
-  const { nav, home, site } = state.content;
-  const path = location.pathname;
-  mount('#nav-list', nav.filter((n) => n.visible).map((n) => {
-    const href = pageHref(n.id);
-    const current = href === path || (href !== '/' && path.startsWith(href + '/'));
-    return html`<li><a href="${href}"${raw(current ? ' aria-current="page"' : '')}>${n.label}</a></li>`;
-  }));
+// A short note beside a page in the menu ("Thursdays, 7:30pm", "£7 per class").
+function menuNote(id) {
+  const { timetable, pricing } = state.content;
+  const classes = (timetable.classes || []).filter((c) => c && c.name);
+  if (id === 'timetable' && classes.length) {
+    const days = classDays(classes);
+    return `${days.length === 1 ? `${days[0]}s` : 'Weekly'}, ${formatTime(classes[0].start)}`;
+  }
+  const plan = firstPlan(pricing);
+  if (id === 'pricing' && plan) return `${plan.price} ${plan.period || ''}`.trim();
+  return '';
+}
 
+function renderHeader() {
+  const { nav, home, site, members } = state.content;
+  const path = location.pathname;
+  const visible = nav.filter((n) => n.visible && n.id !== 'home');
+  const isCurrent = (href) => href === path || (href !== '/' && path.startsWith(href + '/'));
+  const current = (href) => raw(isCurrent(href) ? ' aria-current="page"' : '');
   const u = state.user;
-  mount('#nav-account', u
-    ? html`
-        ${u.role !== 'member' ? html`<a class="btn btn-sm btn-outline" href="/admin">${u.role === 'admin' ? 'Admin' : 'Teacher'}</a>` : ''}
-        <a class="btn btn-sm btn-primary" href="/account">${site.accountButtonLabel || 'My account'}</a>`
-    : html`<a class="btn btn-sm btn-primary" href="/login">${site.loginButtonLabel || 'Member login'}</a>`);
+
+  // On wide screens: the timetable first, then the gallery and joining (or your account).
+  const lead = visible.find((n) => n.id === 'timetable');
+  const featured = visible.filter((n) => n.id === 'gallery');
+  const own = u ? { label: site.accountButtonLabel || 'My account', href: '/account' }
+    : members.allowRegistration ? { label: 'Join the LAB', href: '/register' } : { label: site.loginButtonLabel || 'Member login', href: '/login' };
+  mount('#mnav-links', html`
+    ${lead ? html`<a class="first" href="${pageHref(lead.id)}"${current(pageHref(lead.id))}>${lead.label} <span class="circ" aria-hidden="true">${ICON.arrow}</span></a><span class="sep" aria-hidden="true"></span>` : ''}
+    ${featured.map((n) => html`<a href="${pageHref(n.id)}"${current(pageHref(n.id))}>${n.label}</a>`)}
+    <a href="${own.href}"${current(own.href)}>${own.label}</a>`);
+
+  const phone = (site.phones || []).filter(Boolean)[0];
+  const call = document.getElementById('call-btn');
+  call.hidden = !phone;
+  if (phone) {
+    call.href = telHref(phone);
+    call.setAttribute('aria-label', `Call us on ${phone}`);
+  }
+  mount('#hdr-cta', directions(site, { shimmer: true }));
+
+  // The menu: every page, the member links, and how to reach the academy.
+  let i = 0;
+  const item = (label, href, note = '') => html`<li style="--i:${i++}"><a href="${href}"${current(href)}>${label}${note ? html` <small>${note}</small>` : ''}</a></li>`;
+  const phones = (site.phones || []).filter(Boolean);
+  const insta = safeUrl(site.socials?.instagram);
+  const handle = String(site.socials?.instagram || '').replace(/\/+$/, '').split('/').pop();
+  mount('#menu-inner', html`
+    <ul>
+      ${visible.map((n) => item(n.label, pageHref(n.id), menuNote(n.id)))}
+      ${u ? html`
+        ${item(site.accountButtonLabel || 'My account', '/account', 'Your pass and classes')}
+        ${u.role !== 'member' ? item(u.role === 'admin' ? 'Admin' : 'Teacher', '/admin') : ''}
+        <li style="--i:${i++}"><button type="button" id="menu-logout">Log out</button></li>`
+      : html`
+        ${members.allowRegistration ? item('Join the LAB', '/register', 'Get your member pass') : ''}
+        ${item(site.loginButtonLabel || 'Member login', '/login')}`}
+    </ul>
+    <div class="contact-us" style="--i:${i}">
+      <h2>${state.content.contact.title}</h2>
+      ${phones.map((p) => html`<a class="tel" href="${telHref(p)}">${ICON.phone}${p}</a>`)}
+      ${site.email ? html`<a class="tel" href="mailto:${site.email}">${ICON.mail}${site.email}</a>` : ''}
+      ${site.address ? html`<p>${keepPostcode(site.address)}</p>` : ''}
+      ${insta !== '#' && site.socials?.instagram ? html`<a class="ig" href="${insta}" target="_blank" rel="noopener">${ICON.insta}@${handle}</a>` : ''}
+    </div>`);
+  document.getElementById('menu-logout')?.addEventListener('click', logout);
 
   // Teachers on a phone get a one-tap shortcut to the QR scanner on every page.
   const fab = document.getElementById('scan-fab');
@@ -97,48 +120,82 @@ function renderHeader() {
 }
 
 function renderFooter() {
-  const { site, nav } = state.content;
+  const { site, nav, timetable, pricing, privacy } = state.content;
   const year = new Date().getFullYear();
+  const classes = (timetable.classes || []).filter((c) => c && c.name);
+  const days = classDays(classes);
+  const plan = firstPlan(pricing);
+  const [a, b] = (() => {
+    const words = String(site.name).split(/\s+/);
+    const cut = words.findIndex((w, k) => k > 0 && /^(of|and|&)$/i.test(w));
+    return cut > 0 ? [words.slice(0, cut).join(' '), words.slice(cut).join(' ')] : twoLines(site.name);
+  })();
+  const handle = String(site.socials?.instagram || '').replace(/\/+$/, '').split('/').pop();
+
+  // The ticker: the class's facts, scrolling slowly above the footer.
+  const facts = [
+    days.length === 1 ? `Every ${days[0]}` : days.length ? days.map((d) => `${d}s`).join(' & ') : '',
+    classes[0] ? formatTime(classes[0].start) : '',
+    site.address,
+    plan ? `${plan.price} ${plan.period || ''}`.trim() : '',
+    classes[0]?.ages || '',
+  ].filter(Boolean);
+  const ticker = document.getElementById('ticker');
+  ticker.hidden = !facts.length;
+  ticker.setAttribute('aria-label', facts.join('. '));
+  mount(ticker, html`<div class="ticker-track" aria-hidden="true">${[1, 2, 3, 4].map(() => html`<span>${facts.join(' · ')} · </span>`)}</div>`);
+
   mount('#footer', html`
     <div>
-      <div class="footer-brand">
-        <img src="${safeImg(site.logo) || '/img/logo.png'}" alt="" width="56" height="56">
-        <strong style="color:#fff">${site.name}</strong>
-      </div>
-      <p>${site.footerText}</p>
-      ${socialLinks(site, true)}
+      <div class="fl">${a} <span>${b}</span></div>
+      ${site.footerText ? html`<p style="margin-top:14px">${site.footerText}</p>` : ''}
     </div>
     <div>
-      <h4>${site.footerExploreTitle}</h4>
+      <h2>${site.footerContactTitle || 'Contact us'}</h2>
+      <ul>
+        ${(site.phones || []).filter(Boolean).map((p) => html`<li><a href="${telHref(p)}">${p}</a></li>`)}
+        ${site.email ? html`<li><a href="mailto:${site.email}">${site.email}</a></li>` : ''}
+        ${site.address ? html`<li>${keepPostcode(site.address)}</li>` : ''}
+      </ul>
+    </div>
+    <div>
+      <h2>${days.length === 1 ? `Every ${days[0]}` : 'Classes'}</h2>
+      <ul>
+        ${classes.map((c) => html`<li>${formatTime(c.start)}${c.end ? ` to ${formatTime(c.end)}` : ''}${classes.length > 1 ? ` · ${c.name}` : ''}</li>`)}
+        ${plan ? html`<li>${plan.price} ${plan.period || ''}</li>` : ''}
+        ${handle ? html`<li><a href="${safeUrl(site.socials.instagram)}" target="_blank" rel="noopener">@${handle}</a></li>` : ''}
+      </ul>
+    </div>
+    <div>
+      <h2>${site.footerExploreTitle || 'Explore'}</h2>
       <ul>
         ${nav.filter((n) => n.visible).map((n) => html`<li><a href="${pageHref(n.id)}">${n.label}</a></li>`)}
         <li><a href="/login">${site.loginButtonLabel || 'Member login'}</a></li>
       </ul>
     </div>
-    <div>
-      <h4>${site.footerContactTitle}</h4>
-      <ul>
-        ${site.address ? html`<li>📍 ${site.address}</li>` : ''}
-        ${(site.phones || []).filter(Boolean).map((p) => html`<li>📞 <a href="tel:${p.replace(/\s+/g, '')}">${p}</a></li>`)}
-        ${site.email ? html`<li>✉️ <a href="mailto:${site.email}">${site.email}</a></li>` : ''}
-      </ul>
-    </div>
-    <div class="footer-bottom">
+    <div class="base">
       <span>${site.copyrightText || `© ${year} ${site.name}`}</span>
-      <a href="/privacy">${state.content.privacy.title}</a>
+      <a href="/privacy">${privacy.title}</a>
     </div>`);
 }
 
-function socialLinks(site, light = false) {
-  const labels = { instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok', youtube: 'YouTube' };
-  const links = Object.entries(site.socials || {}).filter(([, url]) => url);
-  if (!links.length) return '';
-  return html`<div class="socials">${links.map(([k, url]) => html`
-    <a class="btn btn-sm ${light ? 'btn-light' : k === 'instagram' ? 'btn-insta' : 'btn-outline'}" href="${safeUrl(url)}" target="_blank" rel="noopener">${labels[k] || k}</a>`)}</div>`;
+// The top of every inner page: the title in two voices, the introduction and actions beside it.
+function pageHead(title, intro, { second = '', actions = '' } = {}) {
+  const [a, b] = second ? [title, second] : twoLines(title);
+  return html`
+    <section class="page-head">
+      <h1>${a}${b ? html` <span>${b}</span>` : ''}</h1>
+      <div>
+        ${intro ? html`<p>${marked(intro)}</p>` : ''}
+        ${actions ? html`<div class="p-actions">${actions}</div>` : ''}
+      </div>
+    </section>`;
 }
 
-function pageHero(title, intro) {
-  return html`<section class="page-hero"><div class="container"><h1>${title}</h1>${intro ? html`<p>${intro}</p>` : ''}</div></section>`;
+// A heading in two voices: "Meet the <span>team</span>".
+function h2(text, extra = '') {
+  const [a, b] = twoLines(text);
+  return html`<h2 class="p-h2" ${raw(extra)}>${a}${b ? html` <span>${b}</span>` : ''}</h2>`;
 }
 
 function setTitle(title) {
@@ -152,23 +209,9 @@ function mapEmbed(query) {
   return html`<iframe class="map-embed" src="${src}" loading="lazy" title="Map" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
 }
 
-// ---------- public pages ----------
+const TONES = ['t-gold', 't-deep', 't-cream'];
 
-function classCard(c) {
-  return html`
-    <div class="card class-card">
-      <div class="class-time">${formatTime(c.start)}<small>${c.end ? `to ${formatTime(c.end)}` : ''}</small></div>
-      <div>
-        <h3 style="margin:0">${c.name}</h3>
-        ${c.location ? html`<div class="muted small">📍 ${c.location}</div>` : ''}
-        <div class="tags">
-          ${c.level ? html`<span class="tag">${c.level}</span>` : ''}
-          ${c.ages ? html`<span class="tag tag-gold">${c.ages}</span>` : ''}
-        </div>
-        ${c.notes ? html`<div class="small muted" style="margin-top:6px">${c.notes}</div>` : ''}
-      </div>
-    </div>`;
-}
+// ---------- public pages ----------
 
 function groupByDay(classes) {
   const groups = new Map();
@@ -185,182 +228,131 @@ function groupByDay(classes) {
 }
 
 function renderHome() {
-  const { home, site, timetable } = state.content;
-  setTitle('');
-  const heroImg = safeImg(home.heroImage);
-  // Percent-encode characters that could end the CSS url('…') early.
-  const heroCss = heroImg.replace(/["'()\\\s<>]/g, (c) => `%${c.charCodeAt(0).toString(16).padStart(2, '0')}`);
-  const groups = groupByDay(timetable.classes);
-  mount(main(), html`
-    <section class="hero ${heroImg ? 'has-image' : ''} ${home.showHeroLogo ? '' : 'no-logo'} ${home.heroLayout === 'side' ? 'layout-side' : 'layout-centred'}" ${raw(heroImg ? `style="background-image:url('${esc(heroCss)}')"` : '')}>
-      <div class="container hero-inner">
-        <div>
-          ${home.heroEyebrow ? html`<span class="eyebrow">${home.heroEyebrow}</span>` : ''}
-          <h1>${home.heroTitle}</h1>
-          <p>${home.heroSubtitle}</p>
-          ${buttons(home.heroButtons)}
-        </div>
-        ${home.showHeroLogo ? html`<div class="hero-logo-wrap ${logoAnimationClasses(home.logoAnimation)}"><div class="hero-logo"><img src="${safeImg(site.logo) || '/img/logo.png'}" alt="${site.name} logo"></div></div>` : ''}
-      </div>
-    </section>
-
-    ${home.showHighlights && home.highlights?.length ? html`
-    <section class="section">
-      <div class="container grid grid-4">
-        ${home.highlights.map((h) => html`
-          <div class="card feature">
-            <div class="feature-icon" aria-hidden="true">${h.icon || '★'}</div>
-            <h3>${h.title}</h3>
-            <p class="muted">${h.text}</p>
-          </div>`)}
-      </div>
-    </section>` : ''}
-
-    ${home.showIntro ? html`
-    <section class="section section-soft">
-      <div class="container split">
-        <div>
-          ${home.introEyebrow ? html`<span class="eyebrow">${home.introEyebrow}</span>` : ''}
-          <h2>${home.introTitle}</h2>
-          <div class="rich">${formatText(home.introText)}</div>
-          ${buttons(home.introButtons, 'mt-20')}
-        </div>
-        <div>
-          ${safeImg(home.introImage)
-            ? html`<img src="${safeImg(home.introImage)}" alt="" loading="lazy">`
-            : html`
-              <div class="card">
-                <h3>${home.classesCardTitle}</h3>
-                ${[...groups].map(([day, list]) => html`
-                  <div class="list-item">
-                    <div><strong>${day}</strong><div class="meta">${list.map((c) => c.name).join(' · ')}</div></div>
-                    <span class="tag">${formatTime(list[0].start)}</span>
-                  </div>`)}
-                ${home.classesCardButton ? html`<a class="btn btn-sm btn-accent" href="/timetable" style="margin-top:12px">${home.classesCardButton}</a>` : ''}
-              </div>`}
-        </div>
-      </div>
-    </section>` : ''}
-
-    ${home.showInstagram ? html`
-    <section class="section" id="home-insta" hidden>
-      <div class="container">
-        <div class="section-title">${home.instagramEyebrow ? html`<span class="eyebrow">${home.instagramEyebrow}</span>` : ''}<h2>${home.instagramTitle}</h2></div>
-        <div class="gallery-grid" id="home-insta-grid"></div>
-        ${home.instagramButton ? html`<div class="center" style="margin-top:24px"><a class="btn btn-outline" href="/gallery">${home.instagramButton}</a></div>` : ''}
-      </div>
-    </section>` : ''}
-
-    ${home.showCta ? html`
-    <section class="cta-band">
-      <div class="container">
-        <h2>${home.ctaTitle}</h2>
-        ${home.ctaText ? html`<p>${home.ctaText}</p>` : ''}
-        ${buttons(home.ctaButtons, 'justify-center')}
-      </div>
-    </section>` : ''}`);
-
-  if (!home.showInstagram) return;
-  api('/api/instagram').then((feed) => {
-    const posts = (feed.posts || []).slice(0, Math.max(1, Number(home.instagramPostCount) || 6));
-    const section = document.getElementById('home-insta');
-    if (!posts.length || !section) return;
-    mountInstaGrid(document.getElementById('home-insta-grid'), posts);
-    section.hidden = false;
-  }).catch(() => {});
+  renderHomePage({ state, main, setTitle, onLeave });
 }
 
 function renderAbout() {
   const { about } = state.content;
   setTitle(about.title);
   const img = safeImg(about.image);
+  const founders = (about.founders || []).filter((f) => f && f.name);
+  const values = (about.values || []).filter((v) => v && v.title);
   mount(main(), html`
-    ${pageHero(about.title, about.intro)}
-    <section class="section">
-      <div class="container ${img ? 'split' : ''}">
-        <div class="rich" style="max-width:760px;${img ? '' : 'margin:0 auto'}">
-          ${about.storyEyebrow ? html`<span class="eyebrow">${about.storyEyebrow}</span>` : ''}
-          ${formatText(about.story)}
-        </div>
-        ${img ? html`<img src="${img}" alt="" loading="lazy">` : ''}
-      </div>
-    </section>
-    ${about.values?.length ? html`
-    <section class="section section-soft">
-      <div class="container">
-        <div class="section-title"><h2>${about.valuesTitle}</h2></div>
-        <div class="grid grid-3">${about.values.map((v) => html`<div class="card"><h3>${v.title}</h3><p class="muted">${v.text}</p></div>`)}</div>
+    ${pageHead(about.title, about.intro)}
+    ${about.story ? html`
+    <section class="p-sec tg2 p-split" data-fade style="${img ? '' : 'grid-template-columns:1fr'}">
+      <div class="tile t-white tile-card" style="justify-content:center"><div class="p-body" style="max-width:62ch">${formatText(about.story)}</div></div>
+      ${img ? html`<div class="tile tile-photo"><img src="${img}" alt="" loading="lazy"></div>` : ''}
+    </section>` : ''}
+    ${founders.length ? html`
+    <section class="p-sec">
+      ${h2(about.teamTitle)}
+      <div class="tg2" data-fade>
+        ${founders.map((f, k) => html`
+          <div class="tile t-dark tile-card person-tile">
+            ${safeImg(f.image)
+              ? html`<img src="${safeImg(f.image)}" alt="${f.name}" loading="lazy" style="width:38%;aspect-ratio:1;object-fit:cover;border-radius:16px;flex:none">`
+              : html`<div aria-hidden="true" style="width:38%;aspect-ratio:1;border-radius:16px;flex:none;display:grid;place-items:center;background:var(--navy-2);font:900 clamp(32px,4vw,56px)/1 var(--display);color:var(--gold)">${initials(f.name)}</div>`}
+            <div style="display:grid;gap:10px;min-width:0">
+              <span class="tile-no">${String(k + 1).padStart(2, '0')}${f.role ? ` · ${f.role}` : ''}</span>
+              <h3>${f.name}</h3>
+              ${f.bio ? html`<p>${f.bio}</p>` : ''}
+            </div>
+          </div>`)}
       </div>
     </section>` : ''}
-    ${about.founders?.length ? html`
-    <section class="section">
-      <div class="container">
-        <div class="section-title">${about.teamEyebrow ? html`<span class="eyebrow">${about.teamEyebrow}</span>` : ''}<h2>${about.teamTitle}</h2></div>
-        <div class="grid grid-3">
-          ${about.founders.map((f) => html`
-            <div class="card person">
-              ${safeImg(f.image) ? html`<img class="person-photo" src="${safeImg(f.image)}" alt="${f.name}" loading="lazy">` : html`<div class="person-photo">${initials(f.name)}</div>`}
-              <h3>${f.name}</h3>
-              <div class="role">${f.role}</div>
-              <p class="muted">${f.bio}</p>
-            </div>`)}
-        </div>
+    ${values.length ? html`
+    <section class="p-sec">
+      ${h2(about.valuesTitle)}
+      <div class="tg3" data-fade>
+        ${values.map((v, k) => html`<div class="tile ${TONES[k % 3]} tile-card"><span class="tile-no">${String(k + 1).padStart(2, '0')}</span><h3>${v.title}</h3>${v.text ? html`<p>${v.text}</p>` : ''}</div>`)}
       </div>
     </section>` : ''}`);
+}
+
+// One class as a wide navy tile: the start time big, the details, and when it next runs.
+function classTile(c, k, site) {
+  const next = nextClass(c);
+  const plan = firstPlan(state.content.pricing);
+  return html`
+    <div class="tile t-deep tile-card class-tile">
+      <div class="big-num" style="color:var(--gold)" data-count="${clockFace(c.start)}">${clockFace(c.start)}</div>
+      <div style="display:grid;gap:8px;min-width:0">
+        <span class="tile-no">A${k + 1}${c.day ? ` · ${c.day}` : ''} · ${formatTime(c.start)}${c.end ? ` to ${formatTime(c.end)}` : ''}</span>
+        <h3>${c.name}</h3>
+        <p>${[c.level, c.ages].filter(Boolean).join(' · ')}</p>
+        ${c.notes ? html`<p style="opacity:.8">${c.notes}</p>` : ''}
+        ${c.location ? html`<p style="opacity:.8">${keepPostcode(c.location)}</p>` : ''}
+      </div>
+      ${next ? html`
+      <div style="display:grid;gap:10px;justify-items:start">
+        <p><b>Next: ${longDate(next.date)}</b><br><span style="opacity:.75">${untilText(next.minutes)}${plan ? ` · ${plan.price} ${plan.period || ''}` : ''}</span></p>
+        <a class="cta-pill gold" data-ics="${k}" href="#" download="${String(c.name).toLowerCase().replace(/[^a-z0-9]+/g, '-')}.ics">Add to my calendar</a>
+      </div>` : ''}
+    </div>`;
 }
 
 function renderTimetable() {
   const { timetable, site } = state.content;
   setTitle(timetable.title);
-  const groups = groupByDay(timetable.classes);
+  const classes = [...groupByDay((timetable.classes || []).filter((c) => c && c.name)).values()].flat();
+  const days = classDays(classes);
   const showMap = timetable.showMap && site.mapQuery;
+  const before = String(timetable.notes || '').split(/\n+|(?<=\.)\s+(?=[A-Z])/).map((s) => s.trim()).filter(Boolean);
   mount(main(), html`
-    ${pageHero(timetable.title, timetable.intro)}
-    <section class="section">
-      <div class="container">
-        ${groups.size ? [...groups].map(([day, list]) => html`
-          <div class="day-group">
-            <h3>${day}</h3>
-            ${list.map(classCard)}
-          </div>`) : html`<div class="empty">${timetable.emptyText}</div>`}
-        ${timetable.notes ? html`<div class="notice">${formatText(timetable.notes)}</div>` : ''}
-      </div>
+    ${pageHead(timetable.title, timetable.intro, { second: days.length === 1 ? `every ${days[0]}` : '', actions: directions(site) })}
+    <section class="p-sec" style="display:grid;gap:var(--gap)">
+      <h2 class="sr-only">Classes</h2>
+      ${classes.length ? classes.map((c, k) => classTile(c, k, site)) : html`<div class="tile t-white tile-card"><p>${timetable.emptyText}</p></div>`}
     </section>
     ${timetable.venueTitle || timetable.venueText || showMap ? html`
-    <section class="section section-soft">
-      <div class="container ${showMap ? 'split' : ''}">
-        <div>
-          <h2>${timetable.venueTitle}</h2>
-          <div class="rich">${formatText(timetable.venueText)}</div>
-          ${timetable.venueButton?.label ? html`<a class="btn btn-primary" href="${safeUrl(timetable.venueButton.link)}">${timetable.venueButton.label}</a>` : ''}
-        </div>
-        ${showMap ? mapEmbed(site.mapQuery) : ''}
+    <section class="p-sec tg2 p-split" data-fade style="${showMap ? '' : 'grid-template-columns:1fr'}">
+      <div class="tile t-white tile-card">
+        ${h2(timetable.venueTitle, 'style="margin:0"')}
+        <div class="p-body">${formatText(timetable.venueText)}</div>
+        <div class="p-actions" style="margin-top:10px">${directions(site)}${timetable.venueButton?.label ? html`<span style="margin-left:18px">${goLink(timetable.venueButton.label, timetable.venueButton.link)}</span>` : ''}</div>
       </div>
+      ${showMap ? html`<div class="tile t-mid map-tile">${mapEmbed(site.mapQuery)}</div>` : ''}
+    </section>` : ''}
+    ${before.length ? html`
+    <section class="p-sec">
+      ${h2('Before you come')}
+      <div class="tg3" data-fade>${before.map((t, k) => html`<div class="tile ${['t-gold', 't-cream', 't-dark'][k % 3]} tile-card"><span class="tile-no">${String(k + 1).padStart(2, '0')}</span><h3>${t.replace(/\.$/, '')}</h3></div>`)}</div>
     </section>` : ''}`);
+
+  // Each class's calendar file is made when its button is pressed.
+  main().querySelectorAll('[data-ics]').forEach((a) => {
+    const c = classes[Number(a.dataset.ics)];
+    const next = nextClass(c);
+    if (!next) return;
+    a.href = URL.createObjectURL(new Blob([icsFor(c, next, site)], { type: 'text/calendar' }));
+  });
 }
 
 function renderPricing() {
   const { pricing } = state.content;
   setTitle(pricing.title);
+  const plan = firstPlan(pricing);
+  const plans = (pricing.plans || []).filter((p) => p && p.name);
   mount(main(), html`
-    ${pageHero(pricing.title, pricing.intro)}
-    <section class="section">
-      <div class="container">
-        <div class="grid grid-3" style="align-items:stretch">
-          ${pricing.plans.map((p) => html`
-            <div class="card plan ${p.highlight ? 'highlight' : ''}">
-              ${p.highlight && pricing.highlightBadge ? html`<span class="badge">${pricing.highlightBadge}</span>` : ''}
-              <h3>${p.name}</h3>
-              <div class="plan-price">${p.price}</div>
-              <div class="plan-period">${p.period}</div>
-              <p class="muted">${p.description}</p>
-              <ul>${(p.features || []).filter(Boolean).map((f) => html`<li>${f}</li>`)}</ul>
-            </div>`)}
-        </div>
-        ${pricing.notes ? html`<div class="notice" style="margin-top:32px">${formatText(pricing.notes)}</div>` : ''}
-        ${pricing.ctaButton?.label ? html`<div class="center" style="margin-top:24px"><a class="btn btn-accent" href="${safeUrl(pricing.ctaButton.link)}">${pricing.ctaButton.label}</a></div>` : ''}
+    ${pageHead(pricing.title, pricing.intro, { second: plan ? `${plan.price} ${String(plan.period || '').replace(/^per /, 'a ')}` : '' })}
+    <section class="p-sec tg3" data-fade style="${plans.length < 3 ? `grid-template-columns:repeat(${Math.max(1, plans.length)},minmax(0,1fr))` : ''}">
+      ${plans.map((p, k) => html`
+        <div class="tile ${TONES[k % 3]} tile-card">
+          <span class="tile-no">A${k + 1} · ${p.name}${p.highlight && pricing.highlightBadge ? ` · ${pricing.highlightBadge}` : ''}</span>
+          <div class="big-num ${/\d/.test(p.price) ? '' : 'sm'}" ${raw(/^\D?\d+$/.test(p.price) ? `data-count="${p.price.replace(/\D/g, '')}"` : '')}>${p.price}</div>
+          ${p.period ? html`<p><b>${p.period}</b></p>` : ''}
+          ${p.description ? html`<p>${p.description}</p>` : ''}
+          ${(p.features || []).filter(Boolean).length ? html`<p>${(p.features || []).filter(Boolean).join(' · ')}</p>` : ''}
+        </div>`)}
+    </section>
+    ${pricing.notes || pricing.ctaButton?.label ? html`
+    <section class="p-sec" data-fade>
+      <div class="tile t-dark tile-card p-split" style="display:grid;grid-template-columns:1.2fr 1fr;gap:28px;align-items:center">
+        <div class="p-body" style="color:#fff;font-size:18px">${formatText(pricing.notes)}</div>
+        ${pricing.ctaButton?.label ? html`<div><a class="cta-pill gold" href="${safeUrl(pricing.ctaButton.link)}">${pricing.ctaButton.label}</a></div>` : ''}
       </div>
-    </section>`);
+    </section>` : ''}`);
 }
 
 // ----- Instagram grid & lightbox -----
@@ -462,31 +454,22 @@ async function renderGallery() {
   setTitle(gallery.title);
   const username = String(gallery.instagramUsername || '').replace(/^@/, '');
   const profileUrl = username ? `https://www.instagram.com/${encodeURIComponent(username)}/` : safeUrl(site.socials?.instagram);
+  const follow = html`<a class="cta-pill" href="${profileUrl}" target="_blank" rel="noopener">${gallery.followButton}</a><a class="cta-ring" href="${profileUrl}" target="_blank" rel="noopener" aria-label="@${username} on Instagram">${ICON.insta}</a>`;
   mount(main(), html`
-    ${pageHero(gallery.title, gallery.intro)}
-    <section class="section">
-      <div class="container">
-        <div class="insta-head">
-          <div class="insta-handle">
-            <img src="${safeImg(site.logo) || '/img/logo.png'}" alt="">
-            <div>@${username}<div class="muted small" id="insta-updated">Instagram</div></div>
-          </div>
-          <a class="btn btn-insta" href="${profileUrl}" target="_blank" rel="noopener">${gallery.followButton}</a>
-        </div>
-        <div id="insta-grid" class="gallery-grid"><div class="page-loading" style="grid-column:1/-1;min-height:200px"><div class="spinner"></div></div></div>
-      </div>
+    ${pageHead(gallery.title, gallery.intro, { second: 'on Instagram', actions: follow })}
+    <section class="p-sec">
+      <p class="small muted" id="insta-updated" style="margin:0 0 14px">@${username}</p>
+      <div id="insta-grid" class="tg4 stagger"><div class="page-loading" style="grid-column:1/-1;min-height:200px"><div class="spinner"></div></div></div>
     </section>
     ${gallery.extraImages?.length ? html`
-    <section class="section section-soft">
-      <div class="container">
-        <div class="section-title"><h2>${gallery.extraTitle}</h2></div>
-        <div class="gallery-grid" id="extra-grid">
-          ${gallery.extraImages.filter((img) => safeImg(img.url)).map((img, k) => html`
-            <a class="gallery-item" href="${safeImg(img.url)}" data-post="${k}">
-              <img src="${safeImg(img.url)}" alt="${img.caption || ''}" loading="lazy">
-              ${img.caption ? html`<span class="gi-caption">${img.caption}</span>` : ''}
-            </a>`)}
-        </div>
+    <section class="p-sec">
+      ${h2(gallery.extraTitle)}
+      <div class="tg4 stagger" id="extra-grid">
+        ${gallery.extraImages.filter((img) => safeImg(img.url)).map((img, k) => html`
+          <a class="gallery-item" href="${safeImg(img.url)}" data-post="${k}">
+            <img src="${safeImg(img.url)}" alt="${img.caption || ''}" loading="lazy">
+            ${img.caption ? html`<span class="gi-caption">${img.caption}</span>` : ''}
+          </a>`)}
       </div>
     </section>` : ''}`);
 
@@ -503,9 +486,9 @@ async function renderGallery() {
 
   const grid = document.getElementById('insta-grid');
   const empty = html`
-    <div class="empty" style="grid-column:1/-1">
+    <div class="tile t-white tile-card" style="grid-column:1/-1">
       <p>${gallery.emptyText}</p>
-      <a class="btn btn-insta" href="${profileUrl}" target="_blank" rel="noopener">Open @${username}</a>
+      <div><a class="cta-pill" href="${profileUrl}" target="_blank" rel="noopener">Open @${username}</a></div>
     </div>`;
   try {
     const feed = await api('/api/instagram');
@@ -513,7 +496,7 @@ async function renderGallery() {
     if (posts.length) {
       mountInstaGrid(grid, posts);
       const newest = posts[0].timestamp ? new Date(posts[0].timestamp) : null;
-      if (newest) document.getElementById('insta-updated').textContent = `Latest post ${newest.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
+      if (newest) document.getElementById('insta-updated').textContent = `@${username} · latest post ${newest.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
     } else mount(grid, empty);
   } catch {
     mount(grid, empty);
@@ -523,38 +506,39 @@ async function renderGallery() {
 function renderContact() {
   const { contact, site } = state.content;
   setTitle(contact.title);
+  const phones = (site.phones || []).filter(Boolean);
+  const handle = String(site.socials?.instagram || '').replace(/\/+$/, '').split('/').pop();
   mount(main(), html`
-    ${pageHero(contact.title, contact.intro)}
-    <section class="section">
-      <div class="container grid ${contact.formEnabled ? 'grid-2' : ''}" style="gap:40px">
-        <div>
-          <h2>${contact.detailsTitle}</h2>
-          <ul class="contact-list">
-            ${site.address ? html`<li><span class="ci">📍</span><div><strong>Address</strong><br>${site.address}</div></li>` : ''}
-            ${(site.phones || []).filter(Boolean).length ? html`<li><span class="ci">📞</span><div><strong>Phone</strong><br>${site.phones.filter(Boolean).map((p, i) => html`${i ? raw('<br>') : ''}<a href="tel:${p.replace(/\s+/g, '')}">${p}</a>`)}</div></li>` : ''}
-            ${site.email ? html`<li><span class="ci">✉️</span><div><strong>Email</strong><br><a href="mailto:${site.email}">${site.email}</a></div></li>` : ''}
-          </ul>
-          ${socialLinks(site)}
-          ${contact.showMap ? html`<div style="margin-top:24px">${mapEmbed(site.mapQuery)}</div>` : ''}
+    ${pageHead(contact.title, contact.intro)}
+    <section class="p-sec tg2 p-split" style="align-items:start;${contact.formEnabled ? '' : 'grid-template-columns:1fr'}">
+      ${contact.formEnabled ? html`
+      <div class="tile t-white form-card">
+        ${h2(contact.formTitle, 'style="margin:0 0 6px"')}
+        <p class="small muted" style="margin:0 0 18px">${contact.formIntro}</p>
+        <form class="form" id="contact-form" novalidate>
+          <div class="form-row">
+            <label class="field"><span>Name</span><input name="name" required autocomplete="name"></label>
+            <label class="field"><span>Phone (optional)</span><input name="phone" type="tel" autocomplete="tel"></label>
+          </div>
+          <label class="field"><span>Email</span><input name="email" type="email" required autocomplete="email"></label>
+          <label class="field"><span>Subject</span><input name="subject"></label>
+          <label class="field"><span>Message</span><textarea name="message" required rows="5"></textarea></label>
+          <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+          <div class="form-error" role="alert"></div>
+          <p class="small muted" style="margin:0">We only use your details to reply to you. See our <a href="/privacy">Privacy Policy</a>.</p>
+          <div><button class="cta-pill" type="submit">${contact.submitLabel || 'Send message'}</button></div>
+        </form>
+      </div>` : ''}
+      <div style="display:grid;gap:var(--gap)">
+        <div class="tile t-deep tile-card">
+          <span class="tile-no">${contact.detailsTitle}</span>
+          ${phones.map((p) => html`<a href="${telHref(p)}" style="display:flex;gap:12px;align-items:center;font:800 26px/1 var(--display);text-decoration:none"><span style="width:20px;display:grid">${ICON.phone}</span>${p}</a>`)}
+          ${site.email ? html`<a href="mailto:${site.email}" style="display:flex;gap:12px;align-items:center;font-weight:600;text-decoration:none"><span style="width:20px;display:grid">${ICON.mail}</span>${site.email}</a>` : ''}
+          ${site.address ? html`<p style="opacity:.82">${keepPostcode(site.address)}</p>` : ''}
+          ${handle ? html`<a href="${safeUrl(site.socials.instagram)}" target="_blank" rel="noopener" style="display:flex;gap:8px;align-items:center;text-decoration:none"><span style="width:18px;display:grid">${ICON.insta}</span>@${handle}</a>` : ''}
         </div>
-        ${contact.formEnabled ? html`
-        <div class="card">
-          <h2>${contact.formTitle}</h2>
-          <p class="muted">${contact.formIntro}</p>
-          <form class="form" id="contact-form" novalidate>
-            <div class="form-row">
-              <label class="field"><span>Name</span><input name="name" required autocomplete="name"></label>
-              <label class="field"><span>Phone (optional)</span><input name="phone" type="tel" autocomplete="tel"></label>
-            </div>
-            <label class="field"><span>Email</span><input name="email" type="email" required autocomplete="email"></label>
-            <label class="field"><span>Subject</span><input name="subject"></label>
-            <label class="field"><span>Message</span><textarea name="message" required rows="5"></textarea></label>
-            <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
-            <div class="form-error" role="alert"></div>
-            <p class="small muted" style="margin:0">We only use your details to reply to you. See our <a href="/privacy">Privacy Policy</a>.</p>
-            <button class="btn btn-primary" type="submit">${contact.submitLabel || 'Send message'}</button>
-          </form>
-        </div>` : ''}
+        ${contact.showMap && site.mapQuery ? html`<div class="tile t-mid map-tile" style="min-height:260px">${mapEmbed(site.mapQuery)}</div>` : ''}
+        <div class="p-actions">${directions(site)}</div>
       </div>
     </section>`);
 
@@ -562,10 +546,12 @@ function renderContact() {
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
     formError(form, '');
-    await withBusy(form.querySelector('button[type=submit]'), async () => {
+    const button = form.querySelector('button[type=submit]');
+    await withBusy(button, async () => {
       try {
         await api('/api/contact', { method: 'POST', body: formData(form) });
         form.reset();
+        confetti(button);
         toast(contact.successMessage || 'Message sent', 'success', 5000);
       } catch (err) {
         formError(form, err.message);
@@ -581,23 +567,17 @@ function renderCustomPage(slug) {
   setTitle(page.title);
   const img = safeImg(page.image);
   mount(main(), html`
-    ${pageHero(page.title, page.intro)}
-    <section class="section">
-      <div class="container ${img ? 'split' : ''}">
-        <div class="rich" style="max-width:760px;${img ? '' : 'margin:0 auto'}">${formatText(page.body)}</div>
-        ${img ? html`<img src="${img}" alt="" loading="lazy">` : ''}
-      </div>
+    ${pageHead(page.title, page.intro)}
+    <section class="p-sec tg2 p-split" style="${img ? '' : 'grid-template-columns:1fr'}">
+      <div class="tile t-white tile-card"><div class="p-body" style="max-width:68ch">${formatText(page.body)}</div></div>
+      ${img ? html`<div class="tile tile-photo"><img src="${img}" alt="" loading="lazy"></div>` : ''}
     </section>`);
 }
 
 function renderNotFound() {
   setTitle('Page not found');
   mount(main(), html`
-    <section class="section"><div class="container empty">
-      <h1>Page not found</h1>
-      <p>Sorry, we could not find that page.</p>
-      <a class="btn btn-primary" href="/">Go to the home page</a>
-    </div></section>`);
+    ${pageHead('Page not found', 'Sorry, we could not find that page.', { actions: html`<a class="cta-pill" href="/">Go to the home page</a>` })}`);
 }
 
 // ---------- privacy policy & consent ----------
@@ -606,11 +586,11 @@ function renderPrivacy() {
   const { privacy } = state.content;
   setTitle(privacy.title);
   mount(main(), html`
-    ${pageHero(privacy.title, privacy.intro)}
-    <section class="section">
-      <div class="container policy">
-        <p class="muted small">Version ${privacy.version}${privacy.lastUpdated ? ` · Last updated ${privacy.lastUpdated}` : ''}</p>
-        <div class="rich">${formatText(privacy.body)}</div>
+    ${pageHead(privacy.title, privacy.intro)}
+    <section class="p-sec">
+      <div class="tile t-white tile-card policy">
+        <p class="small muted">Version ${privacy.version}${privacy.lastUpdated ? ` · Last updated ${privacy.lastUpdated}` : ''}</p>
+        <div class="p-body rich" style="max-width:72ch">${formatText(privacy.body)}</div>
       </div>
     </section>`);
 }
@@ -667,14 +647,14 @@ function renderConsent() {
   if (!state.user.privacyRequired) return navigate(next, { replace: true });
   const changed = Boolean(state.user.privacyVersion);
   mount(main(), authShell(changed ? 'Our privacy policy has changed' : privacy.title, html`
-    <p class="center muted">${members.consentPageIntro}</p>
+    <p class="muted">${members.consentPageIntro}</p>
     <div class="policy-scroll rich" tabindex="0">${formatText(privacy.body)}</div>
     <form class="form" id="consent-form" novalidate style="margin-top:16px">
       ${consentFields(state.user)}
       <div class="form-error" role="alert"></div>
-      <button class="btn btn-primary btn-block" type="submit">Accept and continue</button>
+      <button class="cta-pill" type="submit" style="width:100%">Accept and continue</button>
     </form>
-    <p class="center small" style="margin:16px 0 0"><button class="btn btn-ghost btn-sm" id="consent-logout">Log out instead</button></p>`));
+    <p class="small" style="margin:16px 0 0"><button class="btn btn-ghost btn-sm" id="consent-logout">Log out instead</button></p>`));
 
   const form = document.getElementById('consent-form');
   bindConsentFields(form);
@@ -703,16 +683,17 @@ function afterLogin(user, next) {
 
 // ---------- auth & member pages ----------
 
-function authShell(title, inner) {
-  const { site } = state.content;
+// A form on a white card, with the title in two voices; an optional column beside it.
+function authShell(title, inner, aside = '') {
+  const [a, b] = twoLines(title);
   return html`
-    <div class="auth-wrap">
-      <div class="card">
-        <img class="auth-logo" src="${safeImg(site.logo) || '/img/logo.png'}" alt="">
-        <h1 class="center" style="font-size:1.6rem">${title}</h1>
+    <section class="p-sec auth2 ${aside ? 'tg2 p-split' : ''}" style="align-items:start">
+      <div class="tile t-white form-card" style="${aside ? '' : 'max-width:500px;margin:0 auto;width:100%'}">
+        <h1 class="auth-title">${a}${b ? html` <span>${b}</span>` : ''}</h1>
         ${inner}
       </div>
-    </div>`;
+      ${aside}
+    </section>`;
 }
 
 function nextPath() {
@@ -725,15 +706,15 @@ function renderLogin() {
   const { members } = state.content;
   setTitle(members.loginTitle);
   mount(main(), authShell(members.loginTitle, html`
-    <p class="center muted">${members.loginIntro}</p>
+    <p class="muted">${members.loginIntro}</p>
     <form class="form" id="login-form" novalidate>
       <label class="field"><span>Email or member ID</span><input name="identifier" required autocomplete="username" autocapitalize="none"></label>
       <label class="field"><span>Password</span><input name="password" type="password" required autocomplete="current-password"></label>
       <div class="form-error" role="alert"></div>
-      <button class="btn btn-primary btn-block" type="submit">Log in</button>
+      <button class="cta-pill" type="submit" style="width:100%">Log in</button>
     </form>
-    <p class="center small muted" style="margin-top:16px">${members.forgotPasswordText}</p>
-    ${members.allowRegistration ? html`<p class="center" style="margin:0">New member? <a href="/register">Create an account</a></p>` : ''}`));
+    <p class="small muted" style="margin-top:16px">${members.forgotPasswordText}</p>
+    ${members.allowRegistration ? html`<p style="margin:0">New here? <a href="/register"><b>Create an account</b></a></p>` : ''}`));
 
   const form = document.getElementById('login-form');
   form.addEventListener('submit', async (e) => {
@@ -757,12 +738,17 @@ function renderRegister() {
   setTitle(members.registerTitle);
   if (!members.allowRegistration) {
     mount(main(), authShell(members.registerTitle, html`
-      <p class="center">${members.registrationClosedText}</p>
-      <a class="btn btn-primary btn-block" href="/login">Back to login</a>`));
+      <p>${members.registrationClosedText}</p>
+      <a class="cta-pill" href="/login" style="width:100%">Back to login</a>`));
     return;
   }
+  const perks = [
+    ['Your member pass', 'A QR code your teacher scans at the door.'],
+    ['Your classes', 'Every class you attend, all in one place.'],
+    ['Your data, your choice', 'Download or delete it any time.'],
+  ];
   mount(main(), authShell(members.registerTitle, html`
-    <p class="center muted">${members.registerIntro}</p>
+    <p class="muted">${members.registerIntro}</p>
     <form class="form" id="register-form" novalidate>
       <label class="field"><span>Full name</span><input name="name" required autocomplete="name"></label>
       <label class="field"><span>Email</span><input name="email" type="email" autocomplete="email"><small id="email-hint" hidden>For under 16s this can be a parent's email. Leave it blank if a brother or sister already uses that email; you will then log in with the member ID you are given.</small></label>
@@ -771,21 +757,24 @@ function renderRegister() {
       <label class="field"><span>Password</span><input name="password" type="password" required minlength="8" autocomplete="new-password"><small>At least 8 characters.</small></label>
       ${consentFields()}
       <div class="form-error" role="alert"></div>
-      <button class="btn btn-primary btn-block" type="submit">Create account</button>
+      <div><button class="cta-pill" type="submit">Create my account</button></div>
     </form>
-    <p class="center" style="margin:16px 0 0">Already a member? <a href="/login">Log in</a></p>`));
+    <p style="margin:16px 0 0">Already a member? <a href="/login"><b>Log in</b></a></p>`,
+  html`<div style="display:grid;gap:var(--gap)">${perks.map(([t, d], k) => html`<div class="tile ${TONES[k % 3]} tile-card"><span class="tile-no">${String(k + 1).padStart(2, '0')}</span><h3>${t}</h3><p>${d}</p></div>`)}</div>`));
 
   const form = document.getElementById('register-form');
   bindConsentFields(form, (under16) => { document.getElementById('email-hint').hidden = !under16; });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     formError(form, '');
-    await withBusy(form.querySelector('button[type=submit]'), async () => {
+    const button = form.querySelector('button[type=submit]');
+    await withBusy(button, async () => {
       try {
         const f = formData(form);
         const body = { name: f.name, email: f.email, phone: f.phone, bio: f.bio, password: f.password, ...readConsentForm(form) };
         const { user } = await api('/api/auth/register', { method: 'POST', body });
         state.user = user;
+        confetti(button);
         toast(`${members.welcomeMessage} (${user.memberId})`, 'success', 6000);
         navigate('/account', { replace: true });
       } catch (err) {
@@ -816,87 +805,84 @@ export function monthlyChart(monthly) {
 async function renderAccount() {
   if (!state.user) return navigate('/login?next=/account', { replace: true });
   setTitle('My account');
-  const { members, site } = state.content;
+  const { members, site, timetable } = state.content;
   const { attendance, stats } = await api('/api/me/attendance');
   const u = state.user;
+  const classes = (timetable.classes || []).filter((c) => c && c.name);
+  const next = classes[0] ? nextClass(classes[0]) : null;
+  const since = u.createdAt ? formatDateTime(u.createdAt, { month: 'long', year: 'numeric' }) : '';
   mount(main(), html`
-    <section class="section">
-      <div class="container">
-        <div class="admin-head">
-          <h1 style="font-size:1.8rem">Hi, ${u.name.split(' ')[0]} 👋</h1>
-          <div class="btn-row no-print">
-            ${u.role !== 'member' ? html`<a class="btn btn-sm btn-accent" href="/admin/scanner">Open scanner</a><a class="btn btn-sm btn-outline" href="/admin">${u.role === 'admin' ? 'Admin' : 'Teacher'} dashboard</a>` : ''}
-            <button class="btn btn-sm btn-ghost" id="logout">Log out</button>
-          </div>
-        </div>
-        <div class="account-grid">
-          <div>
-            <div class="member-card">
-              <div class="small" style="opacity:.8;position:relative;z-index:1">${site.name}</div>
-              <h2>${u.name}</h2>
-              <div class="mid">${u.memberId}</div>
-              <div class="qr-box"><img src="/api/me/qr.svg?v=${encodeURIComponent(u.memberId)}" alt="QR code for member ID ${u.memberId}" width="256" height="256"></div>
-              <div class="small" style="opacity:.85;position:relative;z-index:1">${members.qrHint}</div>
-            </div>
-            <div class="btn-row no-print" style="margin-top:16px;justify-content:center">
-              <button class="btn btn-sm btn-outline" id="print-card">Print card</button>
-            </div>
-            <p class="small muted center no-print" style="margin-top:12px">Tip: add this page to your home screen for quick access to your QR code.</p>
-          </div>
-          <div class="no-print">
-            <div class="stat-grid">
-              <div class="stat"><div class="stat-value">${stats.total}</div><div class="stat-label">Classes attended</div></div>
-              <div class="stat"><div class="stat-value">${stats.thisMonth}</div><div class="stat-label">This month</div></div>
-              <div class="stat"><div class="stat-value" style="font-size:1.1rem;padding:8px 0">${stats.lastAttended ? formatDate(stats.lastAttended, { day: 'numeric', month: 'short' }) : '-'}</div><div class="stat-label">Last class</div></div>
-            </div>
-            <div class="card" style="margin-top:20px">
-              <h3>Last 6 months</h3>
-              ${monthlyChart(stats.monthly)}
-            </div>
-            <div class="card" style="margin-top:20px">
-              <h3>Attendance history</h3>
-              ${attendance.length ? html`<ul class="list">${attendance.map((a) => html`
-                <li class="list-item">
-                  <div><strong>${a.title}</strong><div class="meta">${formatDate(a.date)}${a.startTime ? ` · ${formatTime(a.startTime)}` : ''}</div></div>
-                  <span class="tag">✓ Attended</span>
-                </li>`)}</ul>` : html`<p class="muted">No classes yet. Your attendance will appear here once a teacher scans your QR code.</p>`}
-            </div>
-            <div class="card" style="margin-top:20px">
-              <h3>My profile</h3>
-              <form class="form" id="profile-form">
-                <label class="field"><span>Name</span><input name="name" value="${u.name}" required></label>
-                <label class="field"><span>Phone</span><input name="phone" type="tel" value="${u.phone}"></label>
-                <label class="field"><span>Bio</span><textarea name="bio" rows="4" maxlength="1000" placeholder="${members.bioPrompt}">${u.bio}</textarea><small>Your teachers can see this.</small></label>
-                <label class="field"><span>Email</span><input value="${u.email}" disabled><small>Ask a teacher to change your email.</small></label>
-                <div class="form-error" role="alert"></div>
-                <div><button class="btn btn-primary" type="submit">Save profile</button></div>
-              </form>
-            </div>
-            <div class="card" style="margin-top:20px">
-              <h3>Change password</h3>
-              <form class="form" id="password-form">
-                <label class="field"><span>Current password</span><input name="current" type="password" required autocomplete="current-password"></label>
-                <label class="field"><span>New password</span><input name="next" type="password" required minlength="8" autocomplete="new-password"></label>
-                <div class="form-error" role="alert"></div>
-                <div><button class="btn btn-primary" type="submit">Update password</button></div>
-              </form>
-            </div>
-            <div class="card" style="margin-top:20px" id="privacy-card">
-              <h3>Your data &amp; privacy</h3>
-              ${u.privacyRequired
-                ? html`<div class="notice warn">You have not accepted the current Privacy Policy. <a href="/privacy-consent?next=/account">Review and accept it</a>.</div>`
-                : html`<p class="small muted">You accepted Privacy Policy version ${u.privacyVersion} on ${formatDateTime(u.privacyAcceptedAt, { day: 'numeric', month: 'long', year: 'numeric' })}.</p>`}
-              ${u.under16 ? html`<p class="small">Under 16 · Parent or guardian: <strong>${u.guardianName}</strong> (${u.guardianEmail}${u.guardianPhone ? `, ${u.guardianPhone}` : ''})</p>` : ''}
-              <div class="btn-row">
-                <a class="btn btn-sm btn-outline" href="/privacy">Read the Privacy Policy</a>
-                <a class="btn btn-sm btn-outline" href="/api/me/export" download>Download my data</a>
-                <button class="btn btn-sm btn-danger" id="delete-account" type="button">Delete my account</button>
-              </div>
-            </div>
-          </div>
+    <section class="page-head">
+      <div>
+        <p style="font-weight:700;color:var(--gold-text);margin:0 0 10px">Hello, ${u.name.split(' ')[0]}</p>
+        <h1>Your <span>pass</span></h1>
+        <p style="margin-top:20px">${members.qrHint}</p>
+        <div class="p-actions no-print" style="margin-top:22px">
+          ${u.role !== 'member' ? html`<a class="cta-pill gold" href="/admin/scanner">Open scanner</a><a class="cta-pill light" href="/admin">${u.role === 'admin' ? 'Admin' : 'Teacher'} dashboard</a>` : ''}
+          <button class="cta-pill light" type="button" id="print-card">Print card</button>
         </div>
       </div>
-    </section>`);
+      <div class="tile t-cream tile-card pass-card member-card-print">
+        <span class="tile-no">${site.name}</span>
+        <div class="qr-box"><img src="/api/me/qr.svg?v=${encodeURIComponent(u.memberId)}" alt="QR code for member ID ${u.memberId}" width="256" height="256"></div>
+        <div class="pass-id">${u.memberId}</div>
+        <p class="small muted">${u.name}${since ? ` · member since ${since}` : ''}</p>
+      </div>
+    </section>
+    <div class="no-print">
+      <section class="p-sec tg2 p-split" style="align-items:stretch" data-fade>
+        <div class="tile t-deep tile-card">
+          <span class="tile-no">Classes attended</span>
+          <div class="big-num" style="color:var(--gold)" data-count="${stats.total}">${stats.total}</div>
+          <p>${stats.thisMonth} this month${stats.lastAttended ? ` · last class ${formatDate(stats.lastAttended, { day: 'numeric', month: 'short' })}` : ''}</p>
+          ${next ? html`<p style="opacity:.8">Next: ${longDate(next.date)}, ${formatTime(classes[0].start)}</p>` : ''}
+          ${monthlyChart(stats.monthly)}
+        </div>
+        <div class="tile t-white tile-card">
+          <h3>Attendance</h3>
+          ${attendance.length ? html`<ul class="attend-list">${attendance.map((a, k) => html`
+            <li><span><span class="tile-no" style="margin-right:12px;color:var(--gold-text)">${String(attendance.length - k).padStart(2, '0')}</span><b>${formatDate(a.date, { weekday: 'long', day: 'numeric', month: 'long' })}</b></span><span class="small muted">${a.startTime ? formatTime(a.startTime) : ''}${a.title ? ` · ${a.title}` : ''}</span></li>`)}</ul>`
+            : html`<p class="muted">No classes yet. Your attendance will appear here once a teacher scans your QR code.</p>`}
+        </div>
+      </section>
+      <section class="p-sec tg2 p-split" style="align-items:start" data-fade>
+        <div class="tile t-white form-card">
+          <h3 style="margin:0 0 14px">My profile</h3>
+          <form class="form" id="profile-form">
+            <label class="field"><span>Name</span><input name="name" value="${u.name}" required></label>
+            <label class="field"><span>Phone</span><input name="phone" type="tel" value="${u.phone}"></label>
+            <label class="field"><span>Bio</span><textarea name="bio" rows="4" maxlength="1000" placeholder="${members.bioPrompt}">${u.bio}</textarea><small>Your teachers can see this.</small></label>
+            <label class="field"><span>Email</span><input value="${u.email}" disabled><small>Ask a teacher to change your email.</small></label>
+            <div class="form-error" role="alert"></div>
+            <div><button class="cta-pill" type="submit">Save profile</button></div>
+          </form>
+        </div>
+        <div class="tile t-white form-card">
+          <h3 style="margin:0 0 14px">Change password</h3>
+          <form class="form" id="password-form">
+            <label class="field"><span>Current password</span><input name="current" type="password" required autocomplete="current-password"></label>
+            <label class="field"><span>New password</span><input name="next" type="password" required minlength="8" autocomplete="new-password"></label>
+            <div class="form-error" role="alert"></div>
+            <div><button class="cta-pill" type="submit">Update password</button></div>
+          </form>
+        </div>
+      </section>
+      <section class="p-sec" id="privacy-card" data-fade>
+        <div class="tile t-gold tile-card">
+          <h3>Your data &amp; privacy</h3>
+          ${u.privacyRequired
+            ? html`<p>You have not accepted the current Privacy Policy. <a href="/privacy-consent?next=/account"><b>Review and accept it</b></a>.</p>`
+            : html`<p>You accepted Privacy Policy version ${u.privacyVersion} on ${formatDateTime(u.privacyAcceptedAt, { day: 'numeric', month: 'long', year: 'numeric' })}.</p>`}
+          ${u.under16 ? html`<p>Under 16 · Parent or guardian: <strong>${u.guardianName}</strong> (${u.guardianEmail}${u.guardianPhone ? `, ${u.guardianPhone}` : ''})</p>` : ''}
+          <div class="p-actions">
+            <a class="cta-pill" href="/privacy">Read the Privacy Policy</a>
+            <a class="cta-pill light" href="/api/me/export" download>Download my data</a>
+            <button class="cta-pill light" id="delete-account" type="button">Delete my account</button>
+            <button class="cta-pill light" id="logout" type="button">Log out</button>
+          </div>
+        </div>
+      </section>
+    </div>`);
 
   document.getElementById('logout').addEventListener('click', logout);
   document.getElementById('print-card').addEventListener('click', () => window.print());
@@ -1044,6 +1030,9 @@ async function route() {
     mount(main(), html`<section class="section"><div class="container empty"><h2>Something went wrong</h2><p>${err.message}</p><a class="btn btn-primary" href="${location.pathname}">Try again</a></div></section>`);
   }
   if (!location.hash) window.scrollTo(0, 0);
+  // Pages soften into view and their figures count up as they scroll in.
+  blurFade(main());
+  numberTickers(main());
 }
 
 export async function reloadContent() {
@@ -1053,9 +1042,17 @@ export async function reloadContent() {
   renderFooter();
 }
 
+function setMenu(open, viaKey = false) {
+  const hdr = document.getElementById('hdr');
+  const btn = document.getElementById('menu-toggle');
+  hdr.toggleAttribute('data-open', open);
+  btn.setAttribute('aria-expanded', String(open));
+  btn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+  if (open && viaKey) setTimeout(() => hdr.querySelector('.menu-inner a, .menu-inner button')?.focus(), 60);
+}
+
 function closeMenu() {
-  document.getElementById('site-nav').classList.remove('open');
-  document.getElementById('menu-toggle').setAttribute('aria-expanded', 'false');
+  setMenu(false);
 }
 
 document.addEventListener('click', (e) => {
@@ -1076,12 +1073,19 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 async function start() {
-  document.getElementById('menu-toggle').addEventListener('click', () => {
-    const nav = document.getElementById('site-nav');
-    const open = !nav.classList.contains('open');
-    nav.classList.toggle('open', open);
-    document.getElementById('menu-toggle').setAttribute('aria-expanded', String(open));
+  // The menu: its button, Escape, a click outside it, or choosing a link closes it.
+  const hdr = document.getElementById('hdr');
+  document.getElementById('menu-toggle').addEventListener('click', (e) => setMenu(!hdr.hasAttribute('data-open'), e.detail === 0));
+  addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && hdr.hasAttribute('data-open')) {
+      setMenu(false);
+      document.getElementById('menu-toggle').focus();
+    }
   });
+  document.addEventListener('click', (e) => {
+    if (hdr.hasAttribute('data-open') && !hdr.contains(e.target)) setMenu(false);
+  });
+  enableRipples();
   try {
     const [content, me] = await Promise.all([api('/api/content'), api('/api/me')]);
     state.content = content;

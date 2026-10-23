@@ -8,7 +8,7 @@ A mobile-friendly website and members' app for the London Academy of Bhangra (LA
 - **QR scanner for teachers:** scan members' QR codes with a phone camera to record attendance for each class. On a phone the camera opens straight away. *Scan from a photo* and manual check-in are also available.
 - **Privacy policy and consent:** sign-up requires accepting the Privacy Policy; under 16s need a parent or guardian's consent.
 - **Class debriefs:** after each class a teacher logs who ran it, the date, the number of attendees, the LAB pouch balance and class feedback.
-- **Admin page:** edit every part of the website: all text, headings and buttons, images, logo, colours, fonts, menu tabs, home page sections (show or hide), timetable, prices, contact details, member page wording and extra pages. Also manage members, sessions, CSV exports and contact-form messages.
+- **Admin page:** edit every part of the website: all text, headings and buttons, images, logo, menu tabs, the home page heading, punchline and picture wall, timetable, prices, contact details, member page wording and extra pages. Also manage members, sessions, CSV exports and contact-form messages.
 
 ## Running it
 

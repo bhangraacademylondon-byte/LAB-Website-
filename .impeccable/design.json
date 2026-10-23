@@ -1,0 +1,548 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-23T06:04:06.106Z",
+  "title": "Design System: London Academy of Bhangra",
+  "extensions": {
+    "colorMeta": {
+      "paper": {
+        "role": "neutral",
+        "displayName": "Warm Paper",
+        "canonical": "oklch(96.7% 0.007 97)",
+        "cssVar": "--paper",
+        "tonalRamp": [
+          "#0c0b08",
+          "#272623",
+          "#464541",
+          "#676662",
+          "#8a8985",
+          "#afaea9",
+          "#d2d1cc",
+          "#efeeea"
+        ]
+      },
+      "ink": {
+        "role": "primary",
+        "displayName": "Ink",
+        "canonical": "oklch(21.3% 0.043 282)",
+        "cssVar": "--ink",
+        "tonalRamp": [
+          "#09081c",
+          "#23243b",
+          "#41425c",
+          "#62637f",
+          "#8586a3",
+          "#a9abc9",
+          "#ccceed",
+          "#e9ecff"
+        ]
+      },
+      "navy": {
+        "role": "primary",
+        "displayName": "Academy Navy",
+        "canonical": "oklch(24.8% 0.056 282)",
+        "cssVar": "--navy",
+        "tonalRamp": [
+          "#090622",
+          "#222241",
+          "#404162",
+          "#606286",
+          "#8386ab",
+          "#a7aad1",
+          "#cacdf6",
+          "#e7ebff"
+        ]
+      },
+      "navy-raised": {
+        "role": "primary",
+        "displayName": "Raised Navy",
+        "canonical": "oklch(30.7% 0.071 281)",
+        "cssVar": "--navy-2",
+        "tonalRamp": [
+          "#090427",
+          "#212148",
+          "#3f406a",
+          "#5f618e",
+          "#8184b4",
+          "#a6a9da",
+          "#c8ccff",
+          "#e6eaff"
+        ]
+      },
+      "deep-navy": {
+        "role": "primary",
+        "displayName": "Midnight",
+        "canonical": "oklch(16.4% 0.112 265)",
+        "cssVar": "--deep",
+        "tonalRamp": [
+          "#010039",
+          "#0b1f5c",
+          "#274080",
+          "#4763a6",
+          "#6887cd",
+          "#8cacf5",
+          "#aed0ff",
+          "#caeeff"
+        ]
+      },
+      "cream": {
+        "role": "neutral",
+        "displayName": "Cream",
+        "canonical": "oklch(97.4% 0.007 81)",
+        "cssVar": "--cream",
+        "tonalRamp": [
+          "#0d0b08",
+          "#282622",
+          "#474541",
+          "#686661",
+          "#8b8984",
+          "#b0ada9",
+          "#d3d0cc",
+          "#f1eee9"
+        ]
+      },
+      "gold": {
+        "role": "secondary",
+        "displayName": "Festival Gold",
+        "canonical": "oklch(73.8% 0.094 81)",
+        "cssVar": "--gold",
+        "tonalRamp": [
+          "#1e0200",
+          "#3d1e00",
+          "#5f3e00",
+          "#825f1a",
+          "#a78342",
+          "#cda867",
+          "#f1cb89",
+          "#ffe8a6"
+        ]
+      },
+      "gold-light": {
+        "role": "secondary",
+        "displayName": "Gold Light",
+        "cssVar": "--accent-light",
+        "tonalRamp": [
+          "#1e0200",
+          "#3d1e00",
+          "#5f3e00",
+          "#825f1a",
+          "#a78342",
+          "#cda867",
+          "#f1cb89",
+          "#ffe8a6"
+        ]
+      },
+      "gold-text": {
+        "role": "secondary",
+        "displayName": "Gold Ink",
+        "canonical": "oklch(51.0% 0.076 80)",
+        "cssVar": "--gold-text",
+        "tonalRamp": [
+          "#1b0400",
+          "#392000",
+          "#5a4009",
+          "#7d6130",
+          "#a18453",
+          "#c7a977",
+          "#eccc99",
+          "#ffeab5"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted",
+        "canonical": "oklch(47.9% 0.016 290)",
+        "cssVar": "--muted",
+        "tonalRamp": [
+          "#0b0a11",
+          "#26252e",
+          "#45444d",
+          "#66656f",
+          "#898892",
+          "#adacb8",
+          "#d0cfdb",
+          "#eeedf9"
+        ]
+      },
+      "body-ink": {
+        "role": "neutral",
+        "displayName": "Body Ink",
+        "tonalRamp": [
+          "#09081c",
+          "#23243b",
+          "#41425c",
+          "#62637f",
+          "#8586a3",
+          "#a9abc9",
+          "#ccceed",
+          "#e9ecff"
+        ]
+      },
+      "white": {
+        "role": "neutral",
+        "displayName": "White",
+        "tonalRamp": [
+          "#0c0b08",
+          "#272623",
+          "#464541",
+          "#676662",
+          "#8a8985",
+          "#afaea9",
+          "#d2d1cc",
+          "#efeeea"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The academy name on the home page; last word on a navy tile in gold; 1.1px self-stroke."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Inner page heads, in two voices (ink, then Gold Ink)."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Section headings, in two voices."
+      },
+      "title-small": {
+        "displayName": "Title Small",
+        "purpose": "Headings inside tiles; the same face sets facts on home tiles and the ticker."
+      },
+      "figure": {
+        "displayName": "Figure",
+        "purpose": "Big class times, prices and totals; counts up into view."
+      },
+      "menu": {
+        "displayName": "Menu",
+        "purpose": "Links in the open menu panel."
+      },
+      "index": {
+        "displayName": "Index",
+        "purpose": "Tile numbering such as 01 or A1."
+      },
+      "punchline": {
+        "displayName": "Punchline",
+        "purpose": "Inter italic line under the home title; picked-out words at 800 in Gold Ink."
+      },
+      "lead": {
+        "displayName": "Lead",
+        "purpose": "Page-head introductions, max 36ch."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Reading text, max 60ch."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Header links and menu button."
+      },
+      "button": {
+        "displayName": "Button",
+        "purpose": "Pill button labels."
+      }
+    },
+    "shadows": [
+      {
+        "name": "floating-card",
+        "value": "0 0 0 1px rgba(22,22,44,.08), 0 16px 36px -24px rgba(22,22,44,.30)",
+        "purpose": "The header card only."
+      },
+      {
+        "name": "control-lift",
+        "value": "0 0 0 1px rgba(22,22,44,.08), 0 8px 20px -10px rgba(22,22,44,.45)",
+        "purpose": "The round pause button over the tile wall."
+      },
+      {
+        "name": "hairline-ring",
+        "value": "0 0 0 1px rgba(22,22,44,.08)",
+        "purpose": "White tiles and cards on paper."
+      },
+      {
+        "name": "inset-ring-navy",
+        "value": "inset 0 0 0 1px rgba(255,255,255,.14)",
+        "purpose": "Edge of navy tiles."
+      },
+      {
+        "name": "inset-ring-cream",
+        "value": "inset 0 0 0 1px #e9e6df",
+        "purpose": "Edge of cream tiles."
+      },
+      {
+        "name": "pill-ring-light",
+        "value": "inset 0 0 0 1.5px #16162c",
+        "purpose": "The light pill outline."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(.23, 1, .32, 1)",
+        "purpose": "Default curve for presses, menu, blur fade and ripples."
+      },
+      {
+        "name": "ease-expo",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Home entrance: header slide (950ms) and title lines rising (1000ms, 85ms apart)."
+      },
+      {
+        "name": "ease-quart",
+        "value": "cubic-bezier(0.25, 1, 0.5, 1)",
+        "purpose": "Home entrance of punchline, lede and actions (700 to 800ms)."
+      },
+      {
+        "name": "ease-quint",
+        "value": "cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Tile columns gliding in, handing over to the drift at 2100ms."
+      },
+      {
+        "name": "press",
+        "value": "scale(.97) 160ms ease-out",
+        "purpose": "Every pill and round control on press."
+      },
+      {
+        "name": "ripple",
+        "value": "560ms ease-out, currentColor at 22%",
+        "purpose": "Ring spreading from the press point on pills and circles."
+      },
+      {
+        "name": "tile-drift",
+        "value": "14.6s linear infinite, alternating up and down",
+        "purpose": "Home tile wall columns; pausable."
+      },
+      {
+        "name": "word-rotate",
+        "value": "every 2600ms; 260ms blur-out up, 360ms in",
+        "purpose": "The changing words tile."
+      },
+      {
+        "name": "shine-border",
+        "value": "6s linear infinite conic rotation",
+        "purpose": "Gold thread round the title tile word."
+      },
+      {
+        "name": "shimmer",
+        "value": "4.2s cubic-bezier(.45,0,.2,1) 2.2s infinite",
+        "purpose": "Gold sweep across Get directions on home."
+      },
+      {
+        "name": "ticker",
+        "value": "48s linear infinite",
+        "purpose": "Gold strip above the footer; pauses on hover."
+      },
+      {
+        "name": "blur-fade",
+        "value": "opacity/blur(8px) 600ms, translateY(14px) 700ms ease-out, 70ms stagger",
+        "purpose": "Inner page blocks entering view."
+      },
+      {
+        "name": "number-ticker",
+        "value": "1100ms, quartic ease-out",
+        "purpose": "Big figures counting up."
+      },
+      {
+        "name": "confetti",
+        "value": "1600ms, 110 pieces in gold, gold light, navy, raised navy, cream",
+        "purpose": "Sign-up success and message sent."
+      },
+      {
+        "name": "menu-open",
+        "value": "grid rows 260ms ease-out; items 30ms apart",
+        "purpose": "Menu panel inside the header card."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "prefers-reduced-motion: reduce",
+        "purpose": "Stops drift, shine, shimmer, ticker, rotate, ripple, fades, tickers, confetti and the entrance; hides the pause button."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "620px"
+      },
+      {
+        "name": "tablet",
+        "value": "960px"
+      },
+      {
+        "name": "home-mob-l",
+        "value": "min-width 560px and aspect >= 1/1"
+      },
+      {
+        "name": "home-tab-p",
+        "value": "min-width 600px, min-height 820px, aspect <= 21/20"
+      },
+      {
+        "name": "home-tab-l",
+        "value": "min-width 900px, min-height 540px, aspect >= 21/20"
+      },
+      {
+        "name": "home-desk",
+        "value": "min-width 1097px and aspect >= 27/25"
+      }
+    ],
+    "focus": {
+      "value": "2px solid ink (gold on navy), offset 3px",
+      "purpose": "Site-wide focus-visible ring."
+    },
+    "grain": {
+      "value": "fractal-noise SVG; multiply .13 on light tiles, screen .035 on dark",
+      "purpose": "Kept on purpose on every solid tile (owner decision)."
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Pill",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The main action, e.g. Get directions; ink fill, 63px tall, 22px radius.",
+      "html": "<a class=\"ds-pill\" href=\"#\">Get directions</a>",
+      "css": ":host{--paper:#f5f4ef;--ink:#16162c;--navy:#1d1d3b;--navy-2:#2a2a52;--deep:#01003d;--cream:#f9f6f1;--gold:#c9a463;--gold-text:#7d6130;--line:rgba(22,22,44,.08);--display:'Archivo','Arial Black',Impact,system-ui,sans-serif;--sans:'Inter',system-ui,sans-serif;--ease-out:cubic-bezier(.23,1,.32,1);} .ds-pill { height: 63px; padding: 0 26px; min-width: 116px; border-radius: 22px; background: var(--ink); color: #fff; display: inline-grid; grid-auto-flow: column; gap: 8px; place-items: center; font: 700 16px/1 var(--sans); white-space: nowrap; border: 0; cursor: pointer; text-decoration: none; transition: transform 160ms cubic-bezier(.23,1,.32,1), background-color 200ms ease, color 200ms ease; } .ds-pill:hover { background: #26264a; } .ds-pill:active { transform: scale(.97); } .ds-pill:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }"
+    },
+    {
+      "name": "Gold Pill",
+      "kind": "button",
+      "refersTo": "button-gold",
+      "description": "Gold fill variant for actions on navy or emphasis on paper.",
+      "html": "<a class=\"ds-pill ds-gold\" href=\"#\">Join the academy</a>",
+      "css": ":host{--paper:#f5f4ef;--ink:#16162c;--navy:#1d1d3b;--navy-2:#2a2a52;--deep:#01003d;--cream:#f9f6f1;--gold:#c9a463;--gold-text:#7d6130;--line:rgba(22,22,44,.08);--display:'Archivo','Arial Black',Impact,system-ui,sans-serif;--sans:'Inter',system-ui,sans-serif;--ease-out:cubic-bezier(.23,1,.32,1);} .ds-pill { height: 63px; padding: 0 26px; min-width: 116px; border-radius: 22px; background: var(--ink); color: #fff; display: inline-grid; grid-auto-flow: column; gap: 8px; place-items: center; font: 700 16px/1 var(--sans); white-space: nowrap; border: 0; cursor: pointer; text-decoration: none; transition: transform 160ms cubic-bezier(.23,1,.32,1), background-color 200ms ease, color 200ms ease; } .ds-pill:hover { background: #26264a; } .ds-pill:active { transform: scale(.97); } .ds-pill:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; } .ds-gold { background: var(--gold); color: var(--ink); } .ds-gold:hover { background: #d8b678; }"
+    },
+    {
+      "name": "Light Pill",
+      "kind": "button",
+      "refersTo": "button-light",
+      "description": "White pill with an ink ring; Call us on phones.",
+      "html": "<a class=\"ds-pill ds-light\" href=\"#\">Call us</a>",
+      "css": ":host{--paper:#f5f4ef;--ink:#16162c;--navy:#1d1d3b;--navy-2:#2a2a52;--deep:#01003d;--cream:#f9f6f1;--gold:#c9a463;--gold-text:#7d6130;--line:rgba(22,22,44,.08);--display:'Archivo','Arial Black',Impact,system-ui,sans-serif;--sans:'Inter',system-ui,sans-serif;--ease-out:cubic-bezier(.23,1,.32,1);} .ds-pill { height: 63px; padding: 0 26px; min-width: 116px; border-radius: 22px; background: var(--ink); color: #fff; display: inline-grid; grid-auto-flow: column; gap: 8px; place-items: center; font: 700 16px/1 var(--sans); white-space: nowrap; border: 0; cursor: pointer; text-decoration: none; transition: transform 160ms cubic-bezier(.23,1,.32,1), background-color 200ms ease, color 200ms ease; } .ds-pill:hover { background: #26264a; } .ds-pill:active { transform: scale(.97); } .ds-pill:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; } .ds-light { background: #fff; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); } .ds-light:hover { background: #f1efe8; }"
+    },
+    {
+      "name": "Pill with Round Partner",
+      "kind": "button",
+      "refersTo": "button-ring",
+      "description": "The pill and its 64px round pin, 4px apart, with a go link after.",
+      "html": "<div class=\"ds-acts\"><a class=\"ds-pill\" href=\"#\">Get directions</a><a class=\"ds-ring\" href=\"#\" aria-label=\"Get directions\"><svg viewBox=\"0 0 24 24\" width=\"24\" height=\"24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z\"/><circle cx=\"12\" cy=\"9.5\" r=\"2.5\"/></svg></a><a class=\"ds-go\" href=\"#\">Timetable <span class=\"ds-circ\"><svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h13M13 6l6 6-6 6\"/></svg></span></a></div>",
+      "css": ":host{--paper:#f5f4ef;--ink:#16162c;--navy:#1d1d3b;--navy-2:#2a2a52;--deep:#01003d;--cream:#f9f6f1;--gold:#c9a463;--gold-text:#7d6130;--line:rgba(22,22,44,.08);--display:'Archivo','Arial Black',Impact,system-ui,sans-serif;--sans:'Inter',system-ui,sans-serif;--ease-out:cubic-bezier(.23,1,.32,1);} .ds-pill { height: 63px; padding: 0 26px; min-width: 116px; border-radius: 22px; background: var(--ink); color: #fff; display: inline-grid; grid-auto-flow: column; gap: 8px; place-items: center; font: 700 16px/1 var(--sans); white-space: nowrap; border: 0; cursor: pointer; text-decoration: none; transition: transform 160ms cubic-bezier(.23,1,.32,1), background-color 200ms ease, color 200ms ease; } .ds-pill:hover { background: #26264a; } .ds-pill:active { transform: scale(.97); } .ds-pill:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; } .ds-acts { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; } .ds-ring { width: 64px; height: 64px; border-radius: 50%; background: var(--ink); color: var(--gold); display: inline-grid; place-items: center; transition: transform 160ms cubic-bezier(.23,1,.32,1), background-color 200ms ease, color 200ms ease; } .ds-ring:hover { background: #26264a; } .ds-ring:active { transform: scale(.97); } .ds-ring:focus-visible, .ds-go:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; } .ds-go { margin-left: 18px; display: inline-flex; align-items: center; gap: 12px; font: 700 16px var(--sans); color: var(--ink); text-decoration: none; } .ds-go:hover { color: var(--gold-text); } .ds-circ { width: 32px; height: 32px; border-radius: 50%; background: var(--ink); color: #fff; display: inline-grid; place-items: center; }"
+    },
+    {
+      "name": "Header Card",
+      "kind": "nav",
+      "refersTo": "header-card",
+      "description": "Floating white card hanging from the top: badge, name, links, menu button.",
+      "html": "<header class=\"ds-hdr\"><a class=\"ds-logo\" href=\"#\"><span class=\"ds-badge\"></span><span><b>LAB</b><small>London Academy of Bhangra</small></span></a><nav class=\"ds-nav\"><a href=\"#\" aria-current=\"page\">Classes</a><a href=\"#\">About</a><a href=\"#\">Gallery</a><span class=\"ds-sep\"></span><button class=\"ds-menu\" type=\"button\"><span class=\"ds-burger\"><i></i><i></i><i></i></span>Menu</button></nav></header>",
+      "css": ":host{--paper:#f5f4ef;--ink:#16162c;--navy:#1d1d3b;--navy-2:#2a2a52;--deep:#01003d;--cream:#f9f6f1;--gold:#c9a463;--gold-text:#7d6130;--line:rgba(22,22,44,.08);--display:'Archivo','Arial Black',Impact,system-ui,sans-serif;--sans:'Inter',system-ui,sans-serif;--ease-out:cubic-bezier(.23,1,.32,1);} .ds-hdr { display: flex; align-items: center; gap: 24px; height: 102px; padding: 0 20px 0 26px; background: #fff; color: var(--ink); border-radius: 0 0 22px 22px; box-shadow: 0 0 0 1px var(--line), 0 16px 36px -24px rgba(22,22,44,.30); } .ds-logo { display: flex; align-items: center; gap: 14px; color: var(--ink); text-decoration: none; } .ds-badge { width: 58px; height: 58px; border-radius: 50%; background: #000; } .ds-logo b { display: block; font: 900 31px/.9 var(--display); font-stretch: 85%; letter-spacing: -.02em; } .ds-logo small { display: block; margin-top: 6px; font: 600 8.6px/1.2 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: #5d5c66; } .ds-nav { margin-left: auto; display: flex; align-items: center; gap: 22px; font: 600 15px var(--sans); } .ds-nav a { color: var(--ink); text-decoration: none; } .ds-nav a:hover { color: var(--gold-text); } .ds-nav a[aria-current=page] { text-decoration: underline 2px var(--gold); text-underline-offset: 6px; } .ds-nav a:focus-visible, .ds-menu:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; } .ds-sep { width: 1px; height: 26px; background: rgba(22,22,44,.16); } .ds-menu { display: flex; align-items: center; gap: 10px; font: 600 15px var(--sans); color: var(--ink); background: none; border: 0; cursor: pointer; } .ds-burger { width: 22px; display: grid; gap: 5px; } .ds-burger i { display: block; height: 2px; background: currentColor; border-radius: 2px; }"
+    },
+    {
+      "name": "Tile Card",
+      "kind": "card",
+      "refersTo": "tile-gold",
+      "description": "The content container: 22px tile with index, heading and text, grain on solid tones.",
+      "html": "<div class=\"ds-row\"><div class=\"ds-tile ds-t-gold\"><span class=\"ds-no\">01</span><h3>Kids and adults</h3><p>One class, everyone dances together.</p></div><div class=\"ds-tile ds-t-deep\"><span class=\"ds-no\">02</span><h3>Real props</h3><p>Traditional folk dance, taught by performers.</p></div><div class=\"ds-tile ds-t-cream\"><span class=\"ds-no\">03</span><h3>Just turn up</h3><p>No booking needed.</p></div></div>",
+      "css": ":host{--paper:#f5f4ef;--ink:#16162c;--navy:#1d1d3b;--navy-2:#2a2a52;--deep:#01003d;--cream:#f9f6f1;--gold:#c9a463;--gold-text:#7d6130;--line:rgba(22,22,44,.08);--display:'Archivo','Arial Black',Impact,system-ui,sans-serif;--sans:'Inter',system-ui,sans-serif;--ease-out:cubic-bezier(.23,1,.32,1);} .ds-row { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 13px; } .ds-tile { position: relative; isolation: isolate; overflow: hidden; border-radius: 22px; padding: 28px; display: flex; flex-direction: column; gap: 12px; } .ds-tile h3 { margin: 0; font: 900 28px/1 var(--display); font-stretch: 88%; letter-spacing: -.035em; text-transform: uppercase; } .ds-tile p { margin: 0; font: 400 16px/1.55 var(--sans); } .ds-no { font: 800 13px/1 var(--display); letter-spacing: .06em; } .ds-t-gold { background: var(--gold); color: var(--ink); } .ds-t-gold .ds-no { opacity: .7; } .ds-t-deep { background: var(--deep); color: #fff; } .ds-t-deep .ds-no { color: var(--gold); } .ds-t-cream { background: var(--cream); color: var(--ink); box-shadow: inset 0 0 0 1px #e9e6df; } .ds-t-cream .ds-no { color: var(--gold-text); } .ds-tile::after { content: ''; position: absolute; inset: 0; z-index: -1; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\"); opacity: .13; mix-blend-mode: multiply; pointer-events: none; } .ds-t-deep::after { mix-blend-mode: screen; opacity: .035; }"
+    },
+    {
+      "name": "Big Figure Tile",
+      "kind": "card",
+      "refersTo": "tile-deep",
+      "description": "Midnight tile with a big gold Archivo figure, e.g. the class time.",
+      "html": "<div class=\"ds-fig\"><div class=\"ds-num\">7:30</div><div><h3>Bhangra class</h3><p>Every Thursday, 7:30pm</p></div></div>",
+      "css": ":host{--paper:#f5f4ef;--ink:#16162c;--navy:#1d1d3b;--navy-2:#2a2a52;--deep:#01003d;--cream:#f9f6f1;--gold:#c9a463;--gold-text:#7d6130;--line:rgba(22,22,44,.08);--display:'Archivo','Arial Black',Impact,system-ui,sans-serif;--sans:'Inter',system-ui,sans-serif;--ease-out:cubic-bezier(.23,1,.32,1);} .ds-fig { display: grid; grid-template-columns: auto 1fr; gap: 28px; align-items: center; padding: 32px; border-radius: 22px; background: var(--deep); color: #fff; } .ds-num { font: 900 88px/.85 var(--display); letter-spacing: -.06em; color: var(--gold); font-variant-numeric: tabular-nums; } .ds-fig h3 { margin: 0 0 6px; font: 900 28px/1 var(--display); text-transform: uppercase; letter-spacing: -.035em; } .ds-fig p { margin: 0; font: 400 16px/1.5 var(--sans); color: rgba(255,255,255,.82); }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "White field, 1.5px warm stroke, 14px radius.",
+      "html": "<label class=\"ds-field\"><span>Your name</span><input type=\"text\" placeholder=\"First and last name\"></label>",
+      "css": ":host{--paper:#f5f4ef;--ink:#16162c;--navy:#1d1d3b;--navy-2:#2a2a52;--deep:#01003d;--cream:#f9f6f1;--gold:#c9a463;--gold-text:#7d6130;--line:rgba(22,22,44,.08);--display:'Archivo','Arial Black',Impact,system-ui,sans-serif;--sans:'Inter',system-ui,sans-serif;--ease-out:cubic-bezier(.23,1,.32,1);} .ds-field { display: grid; gap: 6px; font: 600 15px var(--sans); color: var(--ink); } .ds-field input { font: 400 16px var(--sans); padding: 13px 15px; border-radius: 14px; border: 1.5px solid #d9d7cf; background: #fff; color: var(--ink); min-height: 44px; } .ds-field input:hover { border-color: #bdb9ad; } .ds-field input:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }"
+    },
+    {
+      "name": "Page Head",
+      "kind": "custom",
+      "description": "Inner page title in two voices over a rule, with the introduction beside it.",
+      "html": "<section class=\"ds-head\"><h1>Our <span>classes</span></h1><p>One class every <b>Thursday at 7:30pm</b>. Kids and adults dance together.</p></section>",
+      "css": ":host{--paper:#f5f4ef;--ink:#16162c;--navy:#1d1d3b;--navy-2:#2a2a52;--deep:#01003d;--cream:#f9f6f1;--gold:#c9a463;--gold-text:#7d6130;--line:rgba(22,22,44,.08);--display:'Archivo','Arial Black',Impact,system-ui,sans-serif;--sans:'Inter',system-ui,sans-serif;--ease-out:cubic-bezier(.23,1,.32,1);} .ds-head { display: grid; grid-template-columns: 1.25fr 1fr; gap: 40px; align-items: end; padding: 48px 0 40px; border-bottom: 1px solid rgba(22,22,44,.16); background: var(--paper); } .ds-head h1 { margin: 0; font: 900 72px/.94 var(--display); letter-spacing: -.055em; text-transform: uppercase; -webkit-text-stroke: 1.1px currentColor; color: var(--ink); } .ds-head h1 span { display: block; color: var(--gold-text); } .ds-head p { margin: 0; font: 400 19px/1.45 var(--sans); color: #3a3a4a; max-width: 36ch; } .ds-head b { color: var(--ink); }"
+    },
+    {
+      "name": "Title Tile Word with Shine",
+      "kind": "custom",
+      "description": "The last word of the home title on a navy tile, ringed by a rotating gold shine border.",
+      "html": "<h1 class=\"ds-name\"><span>Academy of</span> <span class=\"ds-tw\">Bhangra</span></h1>",
+      "css": ":host{--paper:#f5f4ef;--ink:#16162c;--navy:#1d1d3b;--navy-2:#2a2a52;--deep:#01003d;--cream:#f9f6f1;--gold:#c9a463;--gold-text:#7d6130;--line:rgba(22,22,44,.08);--display:'Archivo','Arial Black',Impact,system-ui,sans-serif;--sans:'Inter',system-ui,sans-serif;--ease-out:cubic-bezier(.23,1,.32,1);} @property --shine { syntax: '<angle>'; inherits: false; initial-value: 0deg; } .ds-name { margin: 0; font: 900 56px/.94 var(--display); letter-spacing: -.06em; text-transform: uppercase; color: var(--ink); } .ds-name > span { display: block; } .ds-tw { position: relative; display: inline-block !important; margin-top: .14em; padding: .1em .26em .02em; background: var(--navy); color: var(--gold); border-radius: 18px; } .ds-tw::before { content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 2px; pointer-events: none; background: conic-gradient(from var(--shine), transparent 0deg 250deg, rgba(201,164,99,.25) 290deg, #e7c98a 330deg, transparent 360deg); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); animation: ds-shine 6s linear infinite; } @keyframes ds-shine { to { --shine: 360deg; } } @media (prefers-reduced-motion: reduce) { .ds-tw::before { display: none; } }"
+    },
+    {
+      "name": "Ticker Strip",
+      "kind": "custom",
+      "refersTo": "ticker-strip",
+      "description": "Gold band of class facts scrolling above the footer.",
+      "html": "<div class=\"ds-ticker\"><div class=\"ds-track\"><span>Every Thursday · 7:30pm · Gidea Park · £7 a class · </span><span>Every Thursday · 7:30pm · Gidea Park · £7 a class · </span></div></div>",
+      "css": ":host{--paper:#f5f4ef;--ink:#16162c;--navy:#1d1d3b;--navy-2:#2a2a52;--deep:#01003d;--cream:#f9f6f1;--gold:#c9a463;--gold-text:#7d6130;--line:rgba(22,22,44,.08);--display:'Archivo','Arial Black',Impact,system-ui,sans-serif;--sans:'Inter',system-ui,sans-serif;--ease-out:cubic-bezier(.23,1,.32,1);} .ds-ticker { overflow: hidden; border-radius: 18px; background: var(--gold); color: var(--ink); mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); } .ds-track { display: flex; width: max-content; animation: ds-tick 48s linear infinite; } .ds-track span { padding: 16px 0; font: 900 20px/1 var(--display); letter-spacing: -.02em; text-transform: uppercase; white-space: pre; } .ds-ticker:hover .ds-track { animation-play-state: paused; } @keyframes ds-tick { to { transform: translateX(-50%); } } @media (prefers-reduced-motion: reduce) { .ds-track { animation: none; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Thursday Mosaic",
+    "overview": "The site is a wall of rounded tiles on warm paper. Each tile holds one thing: a photo from the academy's Instagram, a block of navy or gold, or a single fact in heavy uppercase (\"Every Thursday\", \"7:30pm\", \"£7 a class\", \"Gidea Park\"). On the home page the wall drifts up and down beside the academy's name, set huge in Archivo. The last word of the name sits on a navy tile of its own, ringed by a thin thread of moving gold light. Inner pages use the same tiles as their content blocks under a big two-voice page head: ink, then gold. The energy comes from motion, scale and real photos, never from ornament. Around that, a floating white header card, a gold ticker strip and a dark rounded footer keep the layout clean and confident.\n\nThe feel is festive but polished. The type is loud and tightly tracked. The surfaces are flat with soft corners. The palette is navy and gold, the brand colours, set on a pale warm paper instead of a dark ground, so the page reads as daylight and welcome. A fine grain on the solid tiles gives them a printed, tactile quality. That grain is a deliberate decision, not leftover texture. Every effect (shimmer, shine, word rotate, ripple, blur fade, number tickers, confetti, the drift and the ticker) is plain CSS or small vanilla JS in the spirit of Magic UI, and all of them stop for visitors who ask for reduced motion.\n\nThe brand's refusals are carried from PRODUCT.md: no clichéd \"Indian\" decoration (paisley, mandalas, Bollywood clip-art), and no quiet, plain page without Bhangra's energy.",
+    "keyCharacteristics": [
+      "Warm paper ground (#f5f4ef) with navy, gold, cream and white tiles at a 22px radius.",
+      "Archivo 900, uppercase, tracked tight (-0.035em to -0.06em), for every heading and every fact on a tile.",
+      "Titles in two voices: ink, then the last word in gold.",
+      "Inter for reading, with Inter italic as the punchline voice.",
+      "Flat surfaces. Depth comes from tone, hairline rings and grain; the only real shadows are on the floating header card and the pause button.",
+      "Motion that is constant but calm (drift, shine, ticker), with a pause button and a full stop under reduced motion."
+    ],
+    "rules": [
+      {
+        "name": "The Gold Ink Rule",
+        "body": "Gold type on paper or white is always Gold Ink (#7d6130); Festival Gold (#c9a463) is a fill, or type on navy only. Festival Gold on paper fails contrast.",
+        "section": "colors"
+      },
+      {
+        "name": "The Brand Pair Rule",
+        "body": "Navy and gold are the only chromatic colours. Every other surface is paper, cream or white. Confetti is drawn from the same five colours (gold, gold light, navy, raised navy, cream).",
+        "section": "colors"
+      },
+      {
+        "name": "The Dark Ground Logo Rule",
+        "body": "The round badge always sits on black or dark navy, never straight on paper or white; in the header it sits in a black circle.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Voices Rule",
+        "body": "Every big title splits into ink and gold: everything but the last word in ink, the last word in gold (Gold Ink on paper, Festival Gold on navy). On the home page, the last word moves onto its own navy tile.",
+        "section": "typography"
+      },
+      {
+        "name": "The Uppercase Display Rule",
+        "body": "Archivo is always uppercase and always tracked negative at heading sizes. Inter is never uppercase, except for the logo's small tagline and the footer column headings.",
+        "section": "typography"
+      },
+      {
+        "name": "The Grain Stays Rule",
+        "body": "Every solid tile carries the grain overlay. It is part of the material, by the owner's decision; do not remove it or swap it for a gradient.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Two Floaters Rule",
+        "body": "Only things that float over moving or scrolling content (the header card, the pause button) cast a shadow. Tiles never do.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** build every content block as a 22px tile in one of the six tones, on warm paper.",
+      "**Do** set titles in Archivo 900 uppercase with negative tracking, and split them into two voices (ink, then the last word in gold).",
+      "**Do** use Gold Ink (#7d6130) for any gold type on paper or white, and Festival Gold (#c9a463) only as a fill or as type on navy.",
+      "**Do** keep the grain overlay on solid tiles.",
+      "**Do** pair the main pill with its 64px round partner and keep tap targets at least 44px.",
+      "**Do** switch every effect off under reduced motion, and give any loop longer than five seconds a pause control.",
+      "**Do** let real photos from Instagram fill the photo tiles, on a midnight ground."
+    ],
+    "donts": [
+      "**Don't** use clichéd \"Indian\" decoration: generic paisley, mandalas or Bollywood clip-art.",
+      "**Don't** make a quiet, plain page with no sense of Bhangra's energy.",
+      "**Don't** put the round badge straight on paper or white; it sits on black or dark navy.",
+      "**Don't** add drop shadows to tiles, or hard offset shadows anywhere; only the header card and the pause button float.",
+      "**Don't** use square corners on public surfaces.",
+      "**Don't** introduce chromatic colours beyond navy and gold."
+    ]
+  }
+}
