@@ -230,6 +230,64 @@ function renderHome() {
   renderHomePage({ state, main, setTitle, onLeave });
 }
 
+// ----- Performances and Workshops: booking pages with the same layout -----
+
+function renderService(key) {
+  const page = state.content[key];
+  setTitle(page.title);
+  const hero = safeImg(page.heroImage);
+  const items = (page.items || []).filter(Boolean);
+  const facts = (page.facts || []).filter((f) => f && f.label && f.value);
+  const photos = (page.gallery || []).filter((g) => g && safeImg(g.image));
+  const enquire = page.buttonLabel ? html`<a class="cta-pill gold" href="${safeUrl(page.buttonLink)}">${page.buttonLabel}</a>` : '';
+  mount(main(), html`
+    <section class="p-sec svc-hero-wrap">
+      <div class="tile svc-hero ${hero ? 'has-photo' : 't-deep'}" style="${hero ? `--pic:url('${hero.replace(/['\\\n]/g, '')}')` : ''}">
+        <h1>${page.title}</h1>
+        ${page.tagline ? html`<p class="svc-tag">${page.tagline}</p>` : ''}
+      </div>
+    </section>
+    <section class="p-sec tg2 p-split svc-intro" data-fade style="align-items:stretch">
+      <div class="tile t-white tile-card">
+        ${h2(page.introTitle, 'style="margin:0"')}
+        ${page.intro ? html`<div class="p-body">${formatText(page.intro)}</div>` : ''}
+        ${enquire ? html`<div class="p-actions" style="margin-top:8px">${enquire}</div>` : ''}
+      </div>
+      ${items.length ? html`
+      <div class="tile t-gold tile-card">
+        <span class="tile-no">${page.listTitle}</span>
+        <ol class="svc-list">${items.map((it, k) => html`<li><span>${String(k + 1).padStart(2, '0')}</span>${it}</li>`)}</ol>
+      </div>` : ''}
+    </section>
+    ${facts.length ? html`
+    <section class="p-sec svc-facts" data-fade style="grid-template-columns:repeat(${Math.min(facts.length, 3)},minmax(0,1fr))">
+      ${facts.map((f, k) => html`<div class="tile ${['t-deep', 't-cream', 't-mid'][k % 3]} tile-card"><span class="tile-no">${f.label}</span><p class="svc-fact">${f.value}</p></div>`)}
+    </section>` : ''}
+    ${page.featureTitle ? html`
+    <section class="p-sec" data-fade>
+      <div class="tile t-dark tile-card svc-feature">
+        <div>
+          ${h2(page.featureTitle, 'style="margin:0"')}
+          ${page.featureSubtitle ? html`<p class="svc-sub">${page.featureSubtitle}</p>` : ''}
+        </div>
+        <div>
+          ${page.featureText ? html`<p>${page.featureText}</p>` : ''}
+          ${enquire ? html`<div class="p-actions" style="margin-top:14px">${enquire}</div>` : ''}
+        </div>
+      </div>
+    </section>` : ''}
+    ${photos.length || state.user?.role === 'admin' ? html`
+    <section class="p-sec">
+      ${h2(page.galleryTitle)}
+      ${photos.length ? html`
+      <div class="tg3 svc-gallery" data-fade>${photos.map((g) => html`
+        <figure class="tile svc-photo"><img src="${safeImg(g.image)}" alt="${g.caption || ''}" loading="lazy">${g.caption ? html`<figcaption>${g.caption}</figcaption>` : ''}</figure>`)}
+      </div>` : html`
+      <div class="tg3 svc-gallery">${[0, 1, 2].map(() => html`<a class="tile t-cream svc-photo svc-empty" href="/admin/content/${key}">+ Add a photo in Admin</a>`)}</div>
+      <p class="small muted" style="margin-top:10px">Only admins see this until photos are added.</p>`}
+    </section>` : ''}`);
+}
+
 function renderAbout() {
   const { about } = state.content;
   setTitle(about.title);
@@ -520,7 +578,7 @@ function renderContact() {
             <label class="field"><span>Phone (optional)</span><input name="phone" type="tel" autocomplete="tel"></label>
           </div>
           <label class="field"><span>Email</span><input name="email" type="email" required autocomplete="email"></label>
-          <label class="field"><span>Subject</span><input name="subject"></label>
+          <label class="field"><span>Subject</span><input name="subject" value="${new URLSearchParams(location.search).get('subject') || ''}"></label>
           <label class="field"><span>Message</span><textarea name="message" required rows="5"></textarea></label>
           <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
           <div class="form-error" role="alert"></div>
@@ -1130,6 +1188,8 @@ async function route() {
     '/timetable': renderTimetable,
     '/pricing': renderPricing,
     '/gallery': renderGallery,
+    '/performances': () => renderService('performances'),
+    '/workshops': () => renderService('workshops'),
     '/contact': renderContact,
     '/login': renderLogin,
     '/register': renderRegister,

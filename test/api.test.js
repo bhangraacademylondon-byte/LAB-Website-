@@ -111,15 +111,15 @@ test('admin content edits are saved and merged with defaults', async () => {
   await admin('POST', '/api/auth/login', { identifier: 'admin@test.local', password: 'admin-password' });
   const { body: content } = await admin('GET', '/api/content');
   content.home.heroTitle = 'Hello LAB';
-  content.customPages = [{ title: 'Performances', body: 'Book us!' }];
+  content.customPages = [{ title: 'Private lessons', body: 'Book us!' }];
   delete content.pricing;
   const saved = await admin('PUT', '/api/admin/content', content);
   assert.equal(saved.body.home.heroTitle, 'Hello LAB');
   assert.ok(saved.body.pricing.plans.length > 0, 'missing sections fall back to defaults');
-  assert.equal(saved.body.customPages[0].slug, 'performances');
-  assert.ok(saved.body.nav.some((n) => n.id === 'page:performances'));
+  assert.equal(saved.body.customPages[0].slug, 'private-lessons');
+  assert.ok(saved.body.nav.some((n) => n.id === 'page:private-lessons'));
 
-  const page = await fetch(`${base}/p/performances`);
+  const page = await fetch(`${base}/p/private-lessons`);
   assert.equal(page.status, 200);
 });
 

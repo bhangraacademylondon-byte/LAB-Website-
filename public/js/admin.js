@@ -29,6 +29,8 @@ const NAV = [
   { path: 'content/timetable', label: 'Timetable', icon: '🕒', admin: true },
   { path: 'content/pricing', label: 'Pricing', icon: '💷', admin: true },
   { path: 'content/gallery', label: 'Gallery', icon: '🖼️', admin: true },
+  { path: 'content/performances', label: 'Performances', icon: '🎉', admin: true },
+  { path: 'content/workshops', label: 'Workshops', icon: '💃', admin: true },
   { path: 'content/contact', label: 'Contact page', icon: '✉️', admin: true },
   { path: 'content/members', label: 'Member pages', icon: '🔑', admin: true },
   { path: 'content/privacy', label: 'Privacy policy', icon: '🔒', admin: true },
@@ -1066,6 +1068,41 @@ const BUTTON_FIELDS = [
   { key: 'link', label: 'Link', hint: 'A page like /timetable, or a full web address (https://…)' },
   { key: 'style', label: 'Colour', type: 'select', options: ['Gold', 'Navy', 'White', 'Outline'] },
 ];
+// Performances and Workshops share one layout, so they share one editor.
+function serviceSchema(title, view, noun) {
+  return {
+    title,
+    view,
+    fields: [
+      h('Top of the page'),
+      { key: 'title', label: 'Page title' },
+      { key: 'tagline', label: 'Line under the title' },
+      { key: 'heroImage', label: 'Big photo at the top', type: 'image', hint: 'A wide, landscape photo works best.' },
+      h('Introduction'),
+      { key: 'introTitle', label: 'Heading' },
+      { key: 'intro', label: 'Text', type: 'rich' },
+      { key: 'listTitle', label: 'List heading', hint: 'e.g. "Perfect for"' },
+      { key: 'items', label: 'List', type: 'strings', itemLabel: 'item' },
+      h('Key facts'),
+      { key: 'facts', label: 'Facts', type: 'list', itemLabel: 'fact', titleKey: 'label', hint: 'Up to three short facts, e.g. Length, Dancers, Outfits.', fields: [
+        { key: 'label', label: 'Label' }, { key: 'value', label: 'Value' },
+      ] },
+      h('Highlight'),
+      { key: 'featureTitle', label: 'Heading' },
+      { key: 'featureSubtitle', label: 'Subheading' },
+      { key: 'featureText', label: 'Text', type: 'textarea' },
+      h('Enquiry button'),
+      { key: 'buttonLabel', label: 'Button text' },
+      { key: 'buttonLink', label: 'Button link', hint: 'The contact page, with the subject filled in: /contact?subject=…' },
+      h('Photos'),
+      { key: 'galleryTitle', label: 'Heading' },
+      { key: 'gallery', label: 'Photos', type: 'list', itemLabel: 'photo', titleKey: 'caption', hint: `Photos from your ${noun}s. Each shows in the grid with its caption.`, fields: [
+        { key: 'image', label: 'Photo', type: 'image' }, { key: 'caption', label: 'Caption (optional)' },
+      ] },
+    ],
+  };
+}
+
 const buttonList = (key, label) => ({ key, label, type: 'list', itemLabel: 'button', titleKey: 'label', fields: BUTTON_FIELDS });
 const singleButton = (key, label) => ({ key, label, type: 'object', fields: [
   { key: 'label', label: 'Button text', hint: 'Leave blank to hide the button.' },
@@ -1147,6 +1184,8 @@ const SCHEMAS = {
       ] },
     ],
   },
+  performances: serviceSchema('Performances page', '/performances', 'event'),
+  workshops: serviceSchema('Workshops page', '/workshops', 'workshop'),
   timetable: {
     title: 'Timetable',
     view: '/timetable',
@@ -1513,7 +1552,7 @@ function navEditor(root) {
   const nav = draftAll.nav;
   const pageTitle = (id) => {
     if (id.startsWith('page:')) return `Extra page: /p/${id.slice(5)}`;
-    return { home: 'Home page', about: 'About page', timetable: 'Timetable page', pricing: 'Pricing page', gallery: 'Gallery page', contact: 'Contact page' }[id] || id;
+    return { home: 'Home page', about: 'About page', timetable: 'Timetable page', pricing: 'Pricing page', gallery: 'Gallery page', contact: 'Contact page', performances: 'Performances page', workshops: 'Workshops page' }[id] || id;
   };
   const { bar, setDirty } = saveBar(async (btn) => {
     await withBusy(btn, async () => {

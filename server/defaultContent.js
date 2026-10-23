@@ -40,6 +40,8 @@ module.exports = {
     { id: 'timetable', label: 'Timetable', visible: true },
     { id: 'pricing', label: 'Pricing', visible: true },
     { id: 'gallery', label: 'Gallery', visible: true },
+    { id: 'performances', label: 'Performances', visible: true },
+    { id: 'workshops', label: 'Workshops', visible: true },
     { id: 'contact', label: 'Contact', visible: true },
   ],
 
@@ -107,6 +109,51 @@ module.exports = {
       { title: 'Inclusivity', text: 'Classes for every age, background and level of experience.' },
       { title: 'Community', text: 'A friendly, family atmosphere where everyone belongs.' },
     ],
+  },
+
+  // Booking pages for performances and workshops. Photos are added in Admin.
+  performances: {
+    title: 'Book a performance',
+    tagline: 'Bringing Punjabi culture to your event',
+    heroImage: '',
+    introTitle: 'Bringing culture to your event',
+    intro: 'The London Academy of Bhangra is proud to perform at your event, bringing the colour and energy of Punjabi folk dance to your guests. Our traditional bhangra outfits and props are ready to go.\n\nA typical performance lasts around 10 minutes, with anywhere from 2 to 16 dancers depending on what you need. Whatever your vision, tell us and we\'ll tailor the performance to suit, so your event is one to remember.',
+    listTitle: 'We perform at',
+    items: ['Weddings and sangeets', 'Birthday parties', 'Festivals and melas', 'Council cultural events', 'Corporate performances', 'Vaisakhi and Diwali celebrations'],
+    facts: [
+      { label: 'Length', value: 'Around 10 minutes' },
+      { label: 'Dancers', value: '2 to 16' },
+      { label: 'Outfits', value: 'Traditional dress and props' },
+    ],
+    featureTitle: 'Corporate events and workshops',
+    featureSubtitle: 'Entertainment for the workplace, team building or a cultural festival?',
+    featureText: 'We work with companies to bring an immersive cultural experience to the workplace: a performance from a small team of our dancers, followed by a bite-size, interactive workshop where your staff get up from their desks and learn some bhangra themselves.',
+    buttonLabel: 'Enquire about a performance',
+    buttonLink: '/contact?subject=Performance enquiry',
+    galleryTitle: 'From our events',
+    gallery: [{ image: '', caption: '' }],
+  },
+
+  workshops: {
+    title: 'Bhangra workshops',
+    tagline: 'Feel the energy of bhangra',
+    heroImage: '',
+    introTitle: 'Our bhangra workshops',
+    intro: 'Our workshops are a great way to experience bhangra and feel its energy for yourself. Our main aim is to promote bhangra and other Punjabi folk dances, so every workshop is built to give your organisation, team or group real, hands-on knowledge of the steps and where they come from.\n\nNo experience needed: we teach a short routine step by step and finish with everyone dancing it together.',
+    listTitle: 'Great for',
+    items: ['Schools and colleges', 'Corporate team building', 'Wedding and sangeet preparation', 'Community and youth groups', 'Festivals and cultural days', 'Private groups and parties'],
+    facts: [
+      { label: 'Length', value: 'Tailored to your group' },
+      { label: 'Level', value: 'Complete beginners welcome' },
+      { label: 'Where', value: 'At your venue' },
+    ],
+    featureTitle: 'Workshops for workplaces',
+    featureSubtitle: 'Get your staff away from their desks',
+    featureText: 'Bespoke, bite-size workshops for offices, conferences and away days, on their own or after a performance from our dancers. A great way to celebrate Vaisakhi or Diwali, or simply to bring your team together.',
+    buttonLabel: 'Enquire about a workshop',
+    buttonLink: '/contact?subject=Workshop enquiry',
+    galleryTitle: 'Workshops in action',
+    gallery: [{ image: '', caption: '' }],
   },
 
   timetable: {
