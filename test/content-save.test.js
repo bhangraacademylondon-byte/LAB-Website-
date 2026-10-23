@@ -93,6 +93,6 @@ test('phone numbers saved before names existed get Ravi and Gurdeep, and old pay
     { name: '', phone: '020 7946 0000' },
   ]);
   assert.equal(now.site.phones, undefined);
-  assert.equal(now.pricing.notes, 'Pay at the class by cash or card.');
+  assert.match(now.pricing.notes, /cash or card.*not transferable/);
   assert.equal(now.pricing.payment, 'Cash or card');
 });

@@ -137,7 +137,7 @@ module.exports = {
     // Members can pay for a class date online through this link (leave blank to turn it off).
     payLink: 'https://monzo.com/pay/r/london-academy-of-bhangra_HF8dxahnyoRKtg',
     payAmount: '£7',
-    notes: 'Pay at the class by cash or card.',
+    notes: 'Pay at the class by cash or card, or online for a chosen class from your account. Class payments are not transferable: if you miss the class, the payment can\'t be moved to another date or refunded.',
     ctaButton: { label: 'Ask about private lessons', link: '/contact' },
   },
 

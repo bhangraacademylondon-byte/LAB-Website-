@@ -415,3 +415,8 @@ button.call-btn { border: 0; padding: 0; cursor: pointer; }
 .pay-sum div { background: #fff; border-radius: 16px; padding: 14px; box-shadow: 0 0 0 1px var(--line); font: 600 13px var(--sans); color: #5d5c66; }
 .pay-sum b { display: block; font: 900 28px/1 var(--display); color: var(--ink); margin-bottom: 4px; }
 @media (max-width: 620px) { .pay-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pay-list li { flex-wrap: wrap; } }
+.pay-terms { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 14px; border: 1.5px solid #d9d7cf; font: 400 14px/1.45 var(--sans); color: #3a3a4a; cursor: pointer; }
+.pay-terms input { flex: none; width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--ink); }
+.pay-terms.is-needed { border-color: #8a2f20; background: #fbefec; }
+.pay-terms:has(input:checked) { border-color: var(--ink); }
+#pay-go[aria-disabled=true] { opacity: .5; }

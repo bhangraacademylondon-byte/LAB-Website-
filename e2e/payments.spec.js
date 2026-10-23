@@ -19,6 +19,13 @@ test('a member pays for a class with Monzo and a teacher sees it on the class pa
   await expect(pay.locator('#pay-ref')).toContainText('SIMRAN KAUR');
   await expect(pay).toContainText('take a screenshot of the confirmation');
 
+  // Monzo only opens once they've ticked that payments are not transferable.
+  await expect(pay).toContainText('Class payments are not transferable');
+  await expect(pay.getByRole('link', { name: /Pay £7 with Monzo/ })).toHaveAttribute('aria-disabled', 'true');
+  await pay.getByRole('link', { name: /Pay £7 with Monzo/ }).click({ force: true });
+  await expect(pay.locator('.pay-terms')).toHaveClass(/is-needed/);
+  expect(context.pages().length).toBe(1);
+  await pay.getByRole('checkbox').check();
   const [monzo] = await Promise.all([context.waitForEvent('page'), pay.getByRole('link', { name: /Pay £7 with Monzo/ }).click()]);
   expect(monzo.url()).toContain('monzo.com/pay/');
   await monzo.close();

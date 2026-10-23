@@ -837,7 +837,7 @@ async function payForClass(box) {
       main = html`
         <div class="tile t-cream tile-card pay-card" id="pay-confirm">
           <h3>Did your payment go through?</h3>
-          <p>${payOnline.amount} for <b>${classDate(pending.date)}</b>, reference <b>${pending.reference}</b>.</p>
+          <p>${payOnline.amount} for <b>${classDate(pending.date)}</b>, reference <b>${pending.reference}</b>. This payment is for that class only and is not transferable.</p>
           <div class="pay-shot">📸 <span><b>Take a screenshot of Monzo's payment confirmation</b>, just in case your account doesn't update. Show it to a teacher if you need to.</span></div>
           <div class="p-actions"><button class="cta-pill" type="button" id="pay-yes">Yes, I've paid</button><button class="cta-pill light" type="button" id="pay-no">No, not yet</button></div>
           <p class="small muted" style="margin:0">Only tap "Yes" once Monzo shows the payment as complete. Payments are checked against Monzo.</p>
@@ -854,8 +854,9 @@ async function payForClass(box) {
           : html`
             <div class="pay-ref"><small>Put this in the Monzo payment note</small><div><b id="pay-ref">…</b><button type="button" class="pay-copy" id="pay-copy">Copy</button></div></div>
             <div class="pay-shot">📸 <span>After paying, <b>take a screenshot of the confirmation</b>, just in case your account doesn't update.</span></div>
-            <div><a class="cta-pill gold" id="pay-go" href="${payOnline.link}" target="_blank" rel="noopener">Pay ${payOnline.amount} with Monzo</a></div>
-            <p class="small muted" style="margin:0">Opens Monzo's secure payment page. If you miss the class, the payment stays on this date.</p>`}
+            <label class="pay-terms"><input type="checkbox" id="pay-agree"> <span><b>Class payments are not transferable.</b> This payment is only for ${classDate(chosen)}. If you miss the class, it can't be moved to another date or refunded.</span></label>
+            <div><a class="cta-pill gold" id="pay-go" href="${payOnline.link}" target="_blank" rel="noopener" aria-disabled="true">Pay ${payOnline.amount} with Monzo</a></div>
+            <p class="small muted" style="margin:0" id="pay-hint">Tick the box above to continue to Monzo's secure payment page.</p>`}
         </div>`;
     }
     mount(box, html`<div class="tg2 p-split" style="align-items:start">${main || ''}${history()}</div>`);
@@ -885,6 +886,20 @@ async function payForClass(box) {
       } catch {
         toast('Select the reference and copy it', 'error');
       }
+    });
+    // The Monzo button only works once they've ticked that payments are not transferable.
+    const agree = box.querySelector('#pay-agree');
+    const go = box.querySelector('#pay-go');
+    agree?.addEventListener('change', () => {
+      go.setAttribute('aria-disabled', String(!agree.checked));
+      box.querySelector('#pay-hint').textContent = agree.checked ? "Opens Monzo's secure payment page." : 'Tick the box above to continue to Monzo\'s secure payment page.';
+    });
+    go?.addEventListener('click', (e) => {
+      if (agree.checked) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      agree.closest('label').classList.add('is-needed');
+      agree.focus();
     });
     box.querySelector('#pay-go')?.addEventListener('click', async () => {
       // The link opens Monzo in a new tab; the payment is recorded as started meanwhile.

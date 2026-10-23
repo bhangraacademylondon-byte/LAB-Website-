@@ -81,6 +81,7 @@ function slugify(value) {
 
 const RETIRED_DEFAULTS = [
   ['pricing', 'notes', 'Payment is cash only at the class.'],
+  ['pricing', 'notes', 'Pay at the class by cash or card.'],
 ];
 
 function normalise(content) {
