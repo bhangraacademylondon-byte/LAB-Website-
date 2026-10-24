@@ -299,7 +299,7 @@ dialog { border-radius: var(--r); }
 .site-foot li, .site-foot a, .tile-card a { min-width: 0; overflow-wrap: anywhere; }
 @media (max-width: 960px) { .menu-inner { grid-template-columns: minmax(0, 1fr); } }
 .tile-card p, .tile-card h3, .tile-no { overflow-wrap: anywhere; }
-.person-tile { flex-direction: row; gap: 22px; align-items: center; }
+.person-tile { flex-direction: row; gap: 22px; align-items: flex-start; }
 @media (max-width: 620px) { .person-tile { flex-direction: column; align-items: flex-start; } .person-tile > :first-child { width: 120px !important; } }
 
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

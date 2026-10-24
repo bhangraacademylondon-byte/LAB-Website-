@@ -148,7 +148,43 @@ const MAX_AGE_MS = 2000;
 let cache = null;
 let loadedAt = 0;
 
+// People added to the site after it went live. Each is added once to saved
+// content (an About page edited in Admin keeps its changes), and is not
+// brought back if later removed in Admin.
+const ADDITIONS = [
+  { id: 'teachers-aman-simrit', apply: (c) => addTeachers(c, ['Aman', 'Simrit']) },
+  { id: 'founder-bios', apply: (c) => { fillTeacher(c, 'Ravi'); fillTeacher(c, 'Gurdeep'); } },
+];
+
+// Gives a listed teacher the bio and photo from the defaults, where theirs is still blank or the original placeholder.
+function fillTeacher(c, name) {
+  const now = c.about.founders.find((f) => String(f.name || '').trim().toLowerCase() === name.toLowerCase());
+  const latest = defaults.about.founders.find((f) => f.name === name);
+  if (!now) return;
+  if (!String(now.bio || '').trim() || now.bio === 'A highly skilled Bhangra dancer, prominent in the UK Bhangra scene.') now.bio = latest.bio;
+  if (!String(now.image || '').trim()) now.image = latest.image;
+}
+
+// Adds each teacher from the defaults, in order, unless someone with that name is already listed.
+function addTeachers(c, names) {
+  for (const name of names) {
+    const has = (n) => c.about.founders.some((f) => String(f.name || '').trim().toLowerCase() === n.toLowerCase());
+    if (!has(name)) c.about.founders.push(structuredClone(defaults.about.founders.find((f) => f.name === name)));
+  }
+}
+
+async function applyAdditions() {
+  const done = await getSetting('content_additions', []);
+  const todo = ADDITIONS.filter((a) => !done.includes(a.id));
+  if (!todo.length) return;
+  const content = normalise(await getSetting('content', {}));
+  for (const a of todo) a.apply(content);
+  await setSetting('content', content);
+  await setSetting('content_additions', [...done, ...todo.map((a) => a.id)]);
+}
+
 async function init() {
+  if (!cache) await applyAdditions();
   cache = normalise(await getSetting('content', {}));
   loadedAt = Date.now();
   return cache;

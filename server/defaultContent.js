@@ -2,6 +2,35 @@
 
 // Starting content for the public site. Every value here can be changed from
 // the admin page (Admin → Content); this is only used until the first save.
+// The team's own bios, from their Instagram introductions.
+const RAVI = {
+  name: 'Ravi',
+  role: 'Co-founder & Instructor',
+  bio: 'Ravi is a co-founder of the LAB and a well-known name on the UK bhangra scene. Since starting in 2016 he has competed in 13 competitions, in both music and live bhangra. As co-captain of KCL Bhangra he helped lead the team to victory at The Bhangra Showdown 2019, and more recently he won 1st place with Vasda Panjab at Groundshaker and Back 2 Roots 2024 in Canada, having competed in every one of their live competitions. Known for nurturing new dancers, Ravi has worked alongside some of the scene\'s finest choreographers and performers. Together with Gurdeep, he\'s building the LAB into a home for bhangra in East London, where passion, skill and tradition come together to inspire the next generation of dancers.',
+  image: '/img/team-ravi.webp',
+};
+
+const GURDEEP = {
+  name: 'Gurdeep',
+  role: 'Co-founder & Instructor',
+  bio: 'Gurdeep is a co-founder of the LAB and one of the UK\'s most decorated bhangra dancers. Dancing since the age of 11, he trained under some of the UK\'s most senior bhangra figures. He\'s a three-time Bhangra Showdown champion with Aston University (2018, 2020 and 2022), and won Best Male at The Bhangra Showdown 2022 and at Groundshaker Bhangra 2024 in Toronto. He also took 1st place with Gabru Chel Chabileh at Bhangra Fest 2018, and back-to-back titles with Vasda Panjab at Back 2 Roots and Groundshaker 2024. With 6 wins from 10 competitions, he has proven himself on stage time and again. Together with Ravi, Gurdeep wants to share his passion with the next generation and make the LAB London\'s leading home for bhangra training and performance.',
+  image: '/img/team-gurdeep.webp',
+};
+
+const AMAN = {
+  name: 'Aman',
+  role: 'Lead Instructor & Team Captain',
+  bio: 'Aman, one of the UK\'s best female bhangra dancers, has been a key part of the LAB since we started in January 2025. She began dancing in 2022 and worked her way up, competing twice at TBS with QMUL and winning Best Female as captain in 2025. She\'s danced at national level with Furteley Girls at World Class Bhangra 2023, and with Heeran, who came 3rd at Bhangra Beatdown 2024. As our team captain she led the LAB to 1st place at Bhangra Virsa 2025, taking Best Female once again. Confident, kind and full of stage experience, Aman is now leading the next generation of LAB dancers.',
+  image: '/img/team-aman.webp',
+};
+
+const SIMRIT = {
+  name: 'Simrit',
+  role: 'Instructor',
+  bio: 'Simrit has been with the LAB since our very first class in January 2025. Since then she\'s danced on stage at UCL Rangeela and at Bhangra Virsa 2026 with Sanjha Panjab, choreographed and led classes, and helped run our social media. Her love for bhangra and her dedication make her a brilliant LAB instructor.',
+  image: '/img/team-simrit.webp',
+};
+
 module.exports = {
   site: {
     name: 'London Academy of Bhangra',
@@ -67,8 +96,10 @@ module.exports = {
     teamEyebrow: 'The team',
     teamTitle: 'Meet the team',
     founders: [
-      { name: 'Ravi', role: 'Co-founder & Instructor', bio: 'A highly skilled Bhangra dancer, prominent in the UK Bhangra scene.', image: '' },
-      { name: 'Gurdeep', role: 'Co-founder & Instructor', bio: 'A highly skilled Bhangra dancer, prominent in the UK Bhangra scene.', image: '' },
+      RAVI,
+      GURDEEP,
+      AMAN,
+      SIMRIT,
     ],
     valuesTitle: 'What we stand for',
     values: [
