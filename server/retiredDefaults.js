@@ -494,5 +494,10 @@ module.exports = [
     "gallery",
     "maxPosts",
     12
+  ],
+  [
+    "site",
+    "logo",
+    "/img/logo.webp"
   ]
 ];

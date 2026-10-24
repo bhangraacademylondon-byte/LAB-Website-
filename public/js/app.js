@@ -19,7 +19,7 @@ const main = () => document.getElementById('main');
 
 function applyTheme() {
   const { site } = state.content;
-  document.getElementById('brand-logo').src = safeImg(site.logo) || '/img/logo.webp';
+  document.getElementById('brand-logo').src = safeImg(site.logo) || '/img/logo-mark.webp';
   document.getElementById('brand-short').textContent = site.shortName || site.name;
   document.getElementById('brand-name').textContent = site.name;
   document.getElementById('brand').setAttribute('aria-label', `${site.name}, home`);

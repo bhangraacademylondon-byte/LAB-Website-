@@ -63,7 +63,8 @@ a:hover { color: var(--gold-text); }
 .hdr-main { display: flex; align-items: center; gap: 24px; height: 102px; padding: 0 20px 0 26px; }
 .lab-logo { display: flex; align-items: center; gap: 14px; text-decoration: none; color: var(--ink); min-width: 0; }
 .lab-logo:hover { color: var(--ink); }
-.lab-logo img { width: 84px; height: 84px; border-radius: 50%; background: #000; flex: none; box-shadow: 0 0 0 2px var(--gold), 0 6px 16px -8px rgba(22, 22, 44, .5); }
+/* Black behind the logo's white lettering, fading out into the header. */
+.lab-logo img { width: 84px; height: 84px; border-radius: 50%; background: radial-gradient(circle, rgba(0, 0, 0, .95) 0 48%, rgba(0, 0, 0, .55) 62%, rgba(0, 0, 0, 0) 71%); flex: none; }
 .lab-logo b { display: block; font: 900 31px/.9 var(--display); font-stretch: 85%; letter-spacing: -.02em; }
 .lab-logo small { display: block; font: 600 11px/1.2 var(--sans); letter-spacing: .12em; color: var(--muted); margin-top: 6px; text-transform: uppercase; }
 .mnav { margin-left: auto; display: flex; align-items: center; gap: 22px; font-size: 15px; font-weight: 600; }
@@ -238,7 +239,7 @@ dialog { border-radius: var(--r); }
 @media (max-width: 620px) {
   .hdr-main { height: 76px; padding: 0 12px 0 12px; gap: 12px; }
   .lab-logo { gap: 10px; }
-  .lab-logo img { width: 56px; height: 56px; box-shadow: 0 0 0 1.5px var(--gold), 0 4px 10px -6px rgba(22, 22, 44, .5); }
+  .lab-logo img { width: 56px; height: 56px; }
   .lab-logo b { font-size: 24px; }
   .lab-logo small { font-size: 9.5px; letter-spacing: .08em; }
   .hdr-cta { display: none; }
