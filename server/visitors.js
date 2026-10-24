@@ -10,7 +10,7 @@ const crypto = require('node:crypto');
 const { db, getSetting, setSetting } = require('./db');
 
 const KEEP_MONTHS = 13;
-const EVENTS = ['directions', 'calendar', 'call', 'join', 'instagram', 'contact'];
+const EVENTS = ['directions', 'calendar', 'call', 'whatsapp', 'join', 'instagram', 'contact'];
 const BOTS = /bot|crawl|spider|slurp|preview|facebookexternalhit|whatsapp\/|headless|lighthouse|pingdom|uptime|monitor|curl|wget|python|node-fetch|axios|go-http/i;
 
 const londonDay = (d = new Date()) => d.toLocaleDateString('en-CA', { timeZone: 'Europe/London' });

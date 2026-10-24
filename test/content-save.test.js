@@ -111,3 +111,14 @@ test('the old Performances and Workshops wording is replaced where it was never 
   assert.equal(now.performances.featureTitle, 'Our own heading', 'edited wording is kept');
   assert.equal(now.workshops.listTitle, 'Perfect for');
 });
+
+test('the withdrawn "Monthly unlimited" plan is removed from saved pricing unless it was edited', async () => {
+  const admin = await adminClient();
+  const fresh = (await admin('GET', '/api/content')).body;
+  const monthly = { name: 'Monthly unlimited', price: 'Ask us', period: 'per month', description: '', features: [], highlight: true };
+  await setSetting('content', { ...fresh, pricing: { ...fresh.pricing, plans: [...fresh.pricing.plans, monthly, { ...monthly, price: '£25' }] } });
+  await new Promise((r) => setTimeout(r, 2100));
+  const plans = (await admin('GET', '/api/content')).body.pricing.plans;
+  assert.equal(plans.filter((p) => p.name === 'Monthly unlimited').length, 1, 'only the edited one (with a price) stays');
+  assert.equal(plans.find((p) => p.name === 'Monthly unlimited').price, '£25');
+});

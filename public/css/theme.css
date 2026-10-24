@@ -467,3 +467,22 @@ button.call-btn { border: 0; padding: 0; cursor: pointer; }
 }
 .menu-inner .mgroup li a { flex-wrap: wrap; row-gap: 2px; }
 .menu-inner .mgroup li a small { margin-left: auto; white-space: nowrap; }
+
+/* ---------- FAQs and WhatsApp ---------- */
+.faq-list { display: grid; gap: 10px; }
+.faq-item { padding: 0; }
+.faq-item summary { display: flex; align-items: center; gap: 16px; padding: 22px 24px; cursor: pointer; list-style: none; }
+.faq-item summary::-webkit-details-marker { display: none; }
+.faq-q { flex: 1; font: 800 clamp(18px, 2vw, 24px)/1.15 var(--display); letter-spacing: -.02em; text-transform: uppercase; color: var(--ink); }
+.faq-icon { flex: none; position: relative; width: 36px; height: 36px; border-radius: 50%; background: var(--ink); }
+.faq-icon::before, .faq-icon::after { content: ''; position: absolute; left: 11px; right: 11px; top: 17px; height: 2px; border-radius: 2px; background: var(--gold); transition: transform 200ms var(--ease-out); }
+.faq-icon::after { transform: rotate(90deg); }
+.faq-item[open] .faq-icon::after { transform: rotate(0deg); }
+.faq-item summary:hover .faq-q { color: var(--gold-text); }
+.faq-a { padding: 0 24px 24px 72px; max-width: 70ch; }
+.faq-a p { margin: 0 0 10px; }
+.wa-pill { background: #25d366; color: #0b3d1f; }
+.wa-pill:hover { background: #3ee07a; }
+.wa-pill svg { width: 20px; height: 20px; }
+@media (max-width: 620px) { .faq-item summary { padding: 18px 16px; gap: 12px; } .faq-a { padding: 0 16px 18px; } .faq-item .tile-no { display: none; } }
+@media (prefers-reduced-motion: reduce) { .faq-icon::before, .faq-icon::after { transition: none; } }

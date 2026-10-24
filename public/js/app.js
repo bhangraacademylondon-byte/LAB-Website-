@@ -5,7 +5,7 @@ import {
 import { renderHome as renderHomePage } from './home.js';
 import {
   nextClass, untilText, longDate, icsFor, keepPostcode, mapsHref, telHref, firstPlan, classDays, clockFace, contacts,
-  marked, twoLines, ICON, directions, goLink,
+  marked, twoLines, ICON, directions, goLink, whatsappButton,
 } from './classes.js';
 import { blurFade, numberTickers, enableRipples, confetti } from './effects.js';
 import { trackPage, trackEvent } from './track.js';
@@ -86,7 +86,7 @@ function renderHeader() {
   let i = 0;
   const item = (label, href, note = '') => html`<li style="--i:${i++}"><a href="${href}"${current(href)}>${label}${note ? html` <small>${note}</small>` : ''}</a></li>`;
   const inGroup = (ids) => visible.filter((n) => ids.includes(n.id));
-  const classes = inGroup(['timetable', 'pricing']);
+  const classes = inGroup(['timetable', 'pricing', 'faq']);
   const booking = inGroup(['performances', 'workshops']);
   const rest = visible.filter((n) => !classes.includes(n) && !booking.includes(n));
   const group = (title, body, extra = '') => html`
@@ -300,6 +300,35 @@ function renderService(key) {
   document.fonts?.ready.then(fit);
   addEventListener('resize', fit);
   onLeave(() => removeEventListener('resize', fit));
+}
+
+// ----- FAQs: questions that open with a tap -----
+
+function renderFaq() {
+  const { faq, site } = state.content;
+  setTitle(faq.title);
+  const items = (faq.items || []).filter((q) => q && q.question);
+  mount(main(), html`
+    ${pageHead(faq.title, faq.intro)}
+    <section class="p-sec">
+      <div class="faq-list" data-fade>
+        ${items.map((q, k) => html`
+          <details class="tile t-white faq-item" ${raw(k === 0 ? 'open' : '')}>
+            <summary><span class="tile-no">${String(k + 1).padStart(2, '0')}</span><span class="faq-q">${q.question}</span><span class="faq-icon" aria-hidden="true"></span></summary>
+            <div class="p-body faq-a">${formatText(q.answer)}</div>
+          </details>`)}
+      </div>
+    </section>
+    ${faq.ctaTitle ? html`
+    <section class="p-sec" data-fade>
+      <div class="tile t-dark tile-card svc-feature">
+        <div>${h2(faq.ctaTitle, 'style="margin:0"')}</div>
+        <div>
+          ${faq.ctaText ? html`<p>${faq.ctaText}</p>` : ''}
+          <div class="p-actions" style="margin-top:14px">${whatsappButton(site)}<a class="cta-pill light" href="/contact">Send a message</a></div>
+        </div>
+      </div>
+    </section>` : ''}`);
 }
 
 function renderAbout() {
@@ -605,6 +634,7 @@ function renderContact() {
           <span class="tile-no">${contact.detailsTitle}</span>
           ${phones.map((c) => html`<a href="${telHref(c.phone)}" style="display:flex;gap:12px;align-items:center;text-decoration:none"><span style="width:20px;display:grid">${ICON.phone}</span><span>${c.name ? html`<small style="display:block;font:600 14px/1.2 var(--sans);opacity:.8;margin-bottom:4px">${c.name}</small>` : ''}<span style="font:800 26px/1 var(--display)">${c.phone}</span></span></a>`)}
           ${site.email ? html`<a href="mailto:${site.email}" style="display:flex;gap:12px;align-items:center;font-weight:600;text-decoration:none"><span style="width:20px;display:grid">${ICON.mail}</span>${site.email}</a>` : ''}
+          ${whatsappButton(site) ? html`<div style="margin:4px 0 2px">${whatsappButton(site)}</div>` : ''}
           ${site.address ? html`<p style="opacity:.82">${keepPostcode(site.address)}</p>` : ''}
           ${handle ? html`<a href="${safeUrl(site.socials.instagram)}" target="_blank" rel="noopener" style="display:flex;gap:8px;align-items:center;text-decoration:none"><span style="width:18px;display:grid">${ICON.insta}</span>@${handle}</a>` : ''}
         </div>
@@ -1202,6 +1232,7 @@ async function route() {
     '/timetable': renderTimetable,
     '/pricing': renderPricing,
     '/gallery': renderGallery,
+    '/faq': renderFaq,
     '/performances': () => renderService('performances'),
     '/workshops': () => renderService('workshops'),
     '/contact': renderContact,

@@ -4,7 +4,7 @@ const defaults = require('./defaultContent');
 const { getSetting, setSetting } = require('./db');
 
 const SECTIONS = Object.keys(defaults);
-const BUILT_IN_PAGES = ['home', 'about', 'timetable', 'pricing', 'gallery', 'contact', 'performances', 'workshops'];
+const BUILT_IN_PAGES = ['home', 'about', 'timetable', 'pricing', 'gallery', 'contact', 'performances', 'workshops', 'faq'];
 
 function isPlainObject(v) {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -123,6 +123,9 @@ function normalise(content) {
     .map((c) => ({ name: String(c.name || '').trim(), phone: String(c.phone || '').trim() }))
     .filter((c) => digits(c.phone));
   delete merged.site.phones;
+
+  // The "Monthly unlimited" plan was withdrawn; it goes from saved pricing too, unless it was edited.
+  merged.pricing.plans = (merged.pricing.plans || []).filter((p) => !(p?.name === 'Monthly unlimited' && p?.price === 'Ask us'));
 
   // Wording we have since corrected, replaced only where it was never edited.
   for (const [section, key, old] of RETIRED_DEFAULTS) {

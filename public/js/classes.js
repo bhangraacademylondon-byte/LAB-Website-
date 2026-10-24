@@ -97,7 +97,21 @@ export const ICON = {
   phone: svg('<path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2"/>', ' stroke-width="1.9"'),
   insta: svg('<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/>', ' stroke-width="2"'),
   mail: svg('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>', ' stroke-width="1.9"'),
+  whatsapp: svg('<path d="M20.5 12a8.5 8.5 0 0 1-12.6 7.4L3.5 20.5l1.2-4.2A8.5 8.5 0 1 1 20.5 12z"/><path d="M9 8.6c.3-.6.9-.6 1.2 0l.6 1.3c.1.3 0 .6-.2.8l-.5.5a5.6 5.6 0 0 0 2.7 2.7l.5-.5c.2-.2.5-.3.8-.2l1.3.6c.6.3.6.9 0 1.2-.8.6-1.9.8-2.9.3a8 8 0 0 1-3.6-3.6c-.5-1-.3-2.1.1-3.1z" fill="currentColor" stroke="none"/>', ' stroke-width="1.8"'),
 };
+
+// A WhatsApp chat with the academy, with a friendly first line filled in.
+export function whatsappHref(site) {
+  let digits = String(site.whatsapp || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('0')) digits = `44${digits.slice(1)}`;
+  return `https://wa.me/${digits}?text=${encodeURIComponent(`Hi! I have a question about ${site.shortName || 'LAB'} bhangra classes.`)}`;
+}
+
+export function whatsappButton(site, label = 'Message us on WhatsApp') {
+  const href = whatsappHref(site);
+  return href ? html`<a class="cta-pill wa-pill" href="${href}" target="_blank" rel="noopener">${ICON.whatsapp}${label}</a>` : '';
+}
 
 // Get directions: the big pill and its round pin, or nothing if no map location is set.
 export function directions(site, { shimmer = false } = {}) {

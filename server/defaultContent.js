@@ -13,6 +13,8 @@ module.exports = {
     headingFont: 'Poppins',
     bodyFont: 'Poppins',
     email: '',
+    // The number people message on WhatsApp (leave blank to hide the WhatsApp buttons).
+    whatsapp: '07851 564285',
     // Who to phone. The Call button offers each of them.
     contacts: [
       { name: 'Ravi', phone: '07851 564285' },
@@ -39,6 +41,7 @@ module.exports = {
     { id: 'about', label: 'About', visible: true },
     { id: 'timetable', label: 'Timetable', visible: true },
     { id: 'pricing', label: 'Pricing', visible: true },
+    { id: 'faq', label: 'FAQs', visible: true },
     { id: 'gallery', label: 'Gallery', visible: true },
     { id: 'performances', label: 'Performances', visible: true },
     { id: 'workshops', label: 'Workshops', visible: true },
@@ -111,6 +114,25 @@ module.exports = {
     ],
   },
 
+  // Questions newcomers ask, answered on the FAQs page.
+  faq: {
+    title: 'Your questions answered',
+    intro: 'Everything you need to know before your first class. Can\'t see your question? Send us a message.',
+    items: [
+      { question: 'Do I need to book?', answer: 'No, just turn up! Classes are every Thursday at 7:30pm at The Royal Liberty School, Gidea Park. Arrive 5 to 10 minutes early on your first night so we can say hello.' },
+      { question: 'I\'ve never danced before. Can I still come?', answer: 'Absolutely. Our classes are for all abilities and we break every step down. Lots of our dancers had never tried bhangra before their first class.' },
+      { question: 'How old do you have to be?', answer: 'There\'s no minimum age! Our Thursday class is for kids and adults together, so it\'s perfect for families. We do ask that all under 16s are supervised by a parent or guardian, who will also need to sign them up.' },
+      { question: 'Can parents join in or watch?', answer: 'Parents and guardians are welcome to stay and watch for free. Better still, why not join in? It\'s a great way to have fun together, and it\'s £7 a class for anyone dancing.' },
+      { question: 'What should I wear?', answer: 'Comfortable clothes you can move in and trainers. Bring a bottle of water, as it\'s a workout!' },
+      { question: 'How much does it cost?', answer: '£7 a class, paid by cash or card on the night. Members can also pay online for a chosen class from their account. Online payments are for that date only and can\'t be moved if you miss the class.' },
+      { question: 'Do I need to sign up before my first class?', answer: 'No. Come along first, and if you enjoy it, join the LAB to get your member pass: a QR code we scan to check you in each week.' },
+      { question: 'Is there parking?', answer: 'Yes, there\'s plenty of free parking at the school. Coming by train? Gidea Park station is about a 9 minute walk away.' },
+      { question: 'Do you perform at events or run workshops?', answer: 'Yes! We perform at weddings, parties, festivals and work events, and run workshops for schools, workplaces and groups. Have a look at our Performances and Workshops pages.' },
+    ],
+    ctaTitle: 'Still have a question?',
+    ctaText: 'Message us on WhatsApp or send us a message, and we\'ll get back to you.',
+  },
+
   // Booking pages for performances and workshops. Photos are added in Admin.
   performances: {
     title: 'Book a performance',
@@ -175,7 +197,6 @@ module.exports = {
     intro: 'Simple, flexible pricing. No contracts and no joining fee.',
     plans: [
       { name: 'Drop-in', price: '£7', period: 'per class', description: 'Pay as you go, no commitment.', features: ['Any single class', 'Perfect for trying us out'], highlight: false },
-      { name: 'Monthly unlimited', price: 'Ask us', period: 'per month', description: 'The best value for regular dancers.', features: ['Unlimited classes', 'Priority for performances'], highlight: true },
       { name: 'Private lessons', price: 'Ask us', period: 'per session', description: 'One-to-one or group tuition, e.g. wedding dances.', features: ['Choreography to your song', 'Flexible times'], highlight: false },
     ],
     highlightBadge: 'Most popular',

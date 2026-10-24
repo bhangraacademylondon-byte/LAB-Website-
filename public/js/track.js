@@ -54,6 +54,7 @@ function eventFor(a) {
   if (a.hasAttribute('data-ics') || /\.ics$/.test(a.getAttribute('download') || '')) return 'calendar';
   if (/google\.[^/]+\/maps|maps\.google\./.test(href)) return 'directions';
   if (/instagram\.com/.test(href)) return 'instagram';
+  if (/wa\.me\//.test(href)) return 'whatsapp';
   if (/^\/register(\b|$)/.test(href)) return 'join';
   return null;
 }

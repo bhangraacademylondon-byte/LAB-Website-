@@ -28,6 +28,7 @@ const NAV = [
   { path: 'content/about', label: 'About page', icon: '📖', admin: true },
   { path: 'content/timetable', label: 'Timetable', icon: '🕒', admin: true },
   { path: 'content/pricing', label: 'Pricing', icon: '💷', admin: true },
+  { path: 'content/faq', label: 'FAQs', icon: '❓', admin: true },
   { path: 'content/gallery', label: 'Gallery', icon: '🖼️', admin: true },
   { path: 'content/performances', label: 'Performances', icon: '🎉', admin: true },
   { path: 'content/workshops', label: 'Workshops', icon: '💃', admin: true },
@@ -1127,6 +1128,7 @@ const SCHEMAS = {
         { key: 'name', label: 'Name' },
         { key: 'phone', label: 'Phone number', type: 'tel' },
       ] },
+      { key: 'whatsapp', label: 'WhatsApp number', type: 'tel', hint: 'The "Message us on WhatsApp" buttons open a chat with this number. Leave blank to hide them.' },
       { key: 'address', label: 'Address', type: 'textarea' },
       { key: 'mapQuery', label: 'Map location', hint: 'Address or postcode to show on the Google map.' },
       { key: 'socials', label: 'Social media links', type: 'object', fields: [
@@ -1182,6 +1184,21 @@ const SCHEMAS = {
       { key: 'founders', label: 'Team members', type: 'list', itemLabel: 'person', titleKey: 'name', fields: [
         { key: 'name', label: 'Name' }, { key: 'role', label: 'Role' }, { key: 'bio', label: 'Bio', type: 'textarea' }, { key: 'image', label: 'Photo', type: 'image' },
       ] },
+    ],
+  },
+  faq: {
+    title: 'FAQs page',
+    view: '/faq',
+    fields: [
+      { key: 'title', label: 'Page title' },
+      { key: 'intro', label: 'Introduction', type: 'textarea' },
+      { key: 'items', label: 'Questions', type: 'list', itemLabel: 'question', titleKey: 'question', hint: 'Shown in this order; the first one starts open. Use the ↑ ↓ arrows to reorder.', fields: [
+        { key: 'question', label: 'Question' },
+        { key: 'answer', label: 'Answer', type: 'rich' },
+      ] },
+      h('Bottom of the page'),
+      { key: 'ctaTitle', label: 'Heading' },
+      { key: 'ctaText', label: 'Text', type: 'textarea' },
     ],
   },
   performances: serviceSchema('Performances page', '/performances', 'event'),
@@ -1552,7 +1569,7 @@ function navEditor(root) {
   const nav = draftAll.nav;
   const pageTitle = (id) => {
     if (id.startsWith('page:')) return `Extra page: /p/${id.slice(5)}`;
-    return { home: 'Home page', about: 'About page', timetable: 'Timetable page', pricing: 'Pricing page', gallery: 'Gallery page', contact: 'Contact page', performances: 'Performances page', workshops: 'Workshops page' }[id] || id;
+    return { home: 'Home page', about: 'About page', timetable: 'Timetable page', pricing: 'Pricing page', gallery: 'Gallery page', contact: 'Contact page', performances: 'Performances page', workshops: 'Workshops page', faq: 'FAQs page' }[id] || id;
   };
   const { bar, setDirty } = saveBar(async (btn) => {
     await withBusy(btn, async () => {
@@ -1776,7 +1793,7 @@ async function messagesPage(root) {
 // ---------- visitors ----------
 
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-const EVENT_LABELS = { directions: 'Get directions', calendar: 'Add to my calendar', call: 'Call us', join: 'Join the LAB', instagram: 'Instagram link', contact: 'Contact form sent' };
+const EVENT_LABELS = { directions: 'Get directions', calendar: 'Add to my calendar', call: 'Call us', whatsapp: 'WhatsApp', join: 'Join the LAB', instagram: 'Instagram link', contact: 'Contact form sent' };
 const DEVICE_LABELS = { phone: 'Phone', computer: 'Computer', tablet: 'Tablet' };
 
 const count = (n) => Number(n || 0).toLocaleString('en-GB');
