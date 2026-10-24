@@ -104,8 +104,8 @@ html.tab-p .motion-btn { right: calc(clamp(20px, 4vw, 40px) + 12px); bottom: 14p
 /* ---------- phones: the name first, the tiles below; the page scrolls if it needs to ---------- */
 html.mob .home2 { position: relative; display: flex; flex-direction: column; min-height: 100svh; overflow: hidden; padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); }
 html.mob .home2 .hdr { position: relative; margin: 0 var(--tm); }
-html.mob .home2 .hdr-main { height: 68px; padding: 0 12px 0 14px; gap: 12px; }
-html.mob .home2 .lab-logo img { width: 40px; height: 40px; }
+html.mob .home2 .hdr-main { height: 76px; padding: 0 12px 0 12px; gap: 12px; }
+html.mob .home2 .lab-logo img { width: 56px; height: 56px; box-shadow: 0 0 0 1.5px var(--gold), 0 4px 10px -6px rgba(22, 22, 44, .5); }
 html.mob .home2 .lab-logo b { font-size: 24px; }
 html.mob .home2 .lab-logo small { font-size: 9.5px; letter-spacing: .08em; }
 html.mob .home2 .mnav-links, html.mob .home2 .hdr-cta { display: none; }

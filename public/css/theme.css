@@ -63,7 +63,7 @@ a:hover { color: var(--gold-text); }
 .hdr-main { display: flex; align-items: center; gap: 24px; height: 102px; padding: 0 20px 0 26px; }
 .lab-logo { display: flex; align-items: center; gap: 14px; text-decoration: none; color: var(--ink); min-width: 0; }
 .lab-logo:hover { color: var(--ink); }
-.lab-logo img { width: 58px; height: 58px; border-radius: 50%; background: #000; flex: none; }
+.lab-logo img { width: 84px; height: 84px; border-radius: 50%; background: #000; flex: none; box-shadow: 0 0 0 2px var(--gold), 0 6px 16px -8px rgba(22, 22, 44, .5); }
 .lab-logo b { display: block; font: 900 31px/.9 var(--display); font-stretch: 85%; letter-spacing: -.02em; }
 .lab-logo small { display: block; font: 600 11px/1.2 var(--sans); letter-spacing: .12em; color: var(--muted); margin-top: 6px; text-transform: uppercase; }
 .mnav { margin-left: auto; display: flex; align-items: center; gap: 22px; font-size: 15px; font-weight: 600; }
@@ -247,9 +247,9 @@ dialog { border-radius: var(--r); }
   .site-foot { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 620px) {
-  .hdr-main { height: 68px; padding: 0 12px 0 14px; gap: 12px; }
+  .hdr-main { height: 76px; padding: 0 12px 0 12px; gap: 12px; }
   .lab-logo { gap: 10px; }
-  .lab-logo img { width: 40px; height: 40px; }
+  .lab-logo img { width: 56px; height: 56px; box-shadow: 0 0 0 1.5px var(--gold), 0 4px 10px -6px rgba(22, 22, 44, .5); }
   .lab-logo b { font-size: 24px; }
   .lab-logo small { font-size: 9.5px; letter-spacing: .08em; }
   .hdr-cta { display: none; }
@@ -486,3 +486,5 @@ button.call-btn { border: 0; padding: 0; cursor: pointer; }
 .wa-pill svg { width: 20px; height: 20px; }
 @media (max-width: 620px) { .faq-item summary { padding: 18px 16px; gap: 12px; } .faq-a { padding: 0 16px 18px; } .faq-item .tile-no { display: none; } }
 @media (prefers-reduced-motion: reduce) { .faq-icon::before, .faq-icon::after { transition: none; } }
+/* On the narrowest phones the badge and "LAB" carry the name; the full name has no room. */
+@media (max-width: 359px) { .lab-logo small { display: none; } }
