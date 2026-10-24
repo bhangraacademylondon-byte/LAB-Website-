@@ -128,6 +128,7 @@ module.exports = {
       { question: 'Do I need to sign up before my first class?', answer: 'No. Come along first, and if you enjoy it, join the LAB to get your member pass: a QR code we scan to check you in each week.' },
       { question: 'Is there parking?', answer: 'Yes, there\'s plenty of free parking at the school. Coming by train? Gidea Park station is about a 9 minute walk away.' },
       { question: 'Do you perform at events or run workshops?', answer: 'Yes! We perform at weddings, parties, festivals and work events, and run workshops for schools, workplaces and groups. Have a look at our Performances and Workshops pages.' },
+      { question: 'Does the academy compete?', answer: 'Yes, we do! Our team competes nationally and internationally. Come and talk to us in person at a Thursday class to find out more.' },
     ],
     ctaTitle: 'Still have a question?',
     ctaText: 'Message us on WhatsApp or send us a message, and we\'ll get back to you.',

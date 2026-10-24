@@ -442,5 +442,47 @@ module.exports = [
     "workshops",
     "buttonLabel",
     "Get in touch"
+  ],
+  [
+    "faq",
+    "items",
+    [
+      {
+        "question": "Do I need to book?",
+        "answer": "No, just turn up! Classes are every Thursday at 7:30pm at The Royal Liberty School, Gidea Park. Arrive 5 to 10 minutes early on your first night so we can say hello."
+      },
+      {
+        "question": "I've never danced before. Can I still come?",
+        "answer": "Absolutely. Our classes are for all abilities and we break every step down. Lots of our dancers had never tried bhangra before their first class."
+      },
+      {
+        "question": "How old do you have to be?",
+        "answer": "There's no minimum age! Our Thursday class is for kids and adults together, so it's perfect for families. We do ask that all under 16s are supervised by a parent or guardian, who will also need to sign them up."
+      },
+      {
+        "question": "Can parents join in or watch?",
+        "answer": "Parents and guardians are welcome to stay and watch for free. Better still, why not join in? It's a great way to have fun together, and it's £7 a class for anyone dancing."
+      },
+      {
+        "question": "What should I wear?",
+        "answer": "Comfortable clothes you can move in and trainers. Bring a bottle of water, as it's a workout!"
+      },
+      {
+        "question": "How much does it cost?",
+        "answer": "£7 a class, paid by cash or card on the night. Members can also pay online for a chosen class from their account. Online payments are for that date only and can't be moved if you miss the class."
+      },
+      {
+        "question": "Do I need to sign up before my first class?",
+        "answer": "No. Come along first, and if you enjoy it, join the LAB to get your member pass: a QR code we scan to check you in each week."
+      },
+      {
+        "question": "Is there parking?",
+        "answer": "Yes, there's plenty of free parking at the school. Coming by train? Gidea Park station is about a 9 minute walk away."
+      },
+      {
+        "question": "Do you perform at events or run workshops?",
+        "answer": "Yes! We perform at weddings, parties, festivals and work events, and run workshops for schools, workplaces and groups. Have a look at our Performances and Workshops pages."
+      }
+    ]
   ]
 ];
