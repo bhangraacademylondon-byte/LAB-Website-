@@ -592,7 +592,7 @@ async function renderGallery() {
     </div>`;
   try {
     const feed = await api('/api/instagram');
-    const posts = (feed.posts || []).slice(0, Math.max(1, Number(gallery.maxPosts) || 12));
+    const posts = (feed.posts || []).slice(0, Math.max(1, Number(gallery.maxPosts) || 8));
     if (posts.length) {
       mountInstaGrid(grid, posts);
       const newest = posts[0].timestamp ? new Date(posts[0].timestamp) : null;

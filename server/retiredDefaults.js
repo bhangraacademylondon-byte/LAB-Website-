@@ -489,5 +489,10 @@ module.exports = [
     "site",
     "logo",
     "/img/logo.png"
+  ],
+  [
+    "gallery",
+    "maxPosts",
+    12
   ]
 ];

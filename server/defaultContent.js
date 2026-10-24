@@ -178,7 +178,7 @@ module.exports = {
     title: 'Gallery',
     intro: 'Our latest posts from Instagram.',
     instagramUsername: 'londonacademyofbhangra',
-    maxPosts: 12,
+    maxPosts: 8,
     followButton: 'Follow on Instagram',
     emptyText: 'See our latest photos and videos on Instagram.',
     extraTitle: 'More photos',

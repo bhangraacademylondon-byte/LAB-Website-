@@ -239,7 +239,7 @@ app.get('/api/content', async (_req, res) => {
 app.get('/api/instagram', async (_req, res) => {
   const feed = await instagram.getFeed();
   const { gallery, home } = content.getContent();
-  const max = Math.min(Math.max(Number(gallery.maxPosts) || 12, Number(home.instagramPostCount) || 0, 1), 50);
+  const max = Math.min(Math.max(Number(gallery.maxPosts) || 8, Number(home.instagramPostCount) || 0, 1), 50);
   res.setHeader('Cache-Control', 'public, max-age=120');
   res.json({ ...feed, posts: (feed.posts || []).slice(0, max) });
 });
