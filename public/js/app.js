@@ -19,7 +19,7 @@ const main = () => document.getElementById('main');
 
 function applyTheme() {
   const { site } = state.content;
-  document.getElementById('brand-logo').src = safeImg(site.logo) || '/img/logo.png';
+  document.getElementById('brand-logo').src = safeImg(site.logo) || '/img/logo.webp';
   document.getElementById('brand-short').textContent = site.shortName || site.name;
   document.getElementById('brand-name').textContent = site.name;
   document.getElementById('brand').setAttribute('aria-label', `${site.name}, home`);
@@ -461,7 +461,7 @@ function instaItem(p, i) {
   const icon = p.type === 'VIDEO' ? '▶' : p.type === 'CAROUSEL_ALBUM' ? '❐' : '';
   return html`
     <a class="gallery-item" href="${safeUrl(p.permalink)}" target="_blank" rel="noopener" data-post="${i}" aria-label="${p.caption ? p.caption.slice(0, 80) : 'Instagram post'}">
-      <img src="${safeImg(p.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">
+      <img src="${safeImg(p.thumb || p.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">
       ${icon ? html`<span class="gi-type">${icon}</span>` : ''}
       ${p.caption ? html`<span class="gi-caption">${p.caption}</span>` : ''}
     </a>`;

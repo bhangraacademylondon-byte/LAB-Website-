@@ -234,23 +234,3 @@ export async function withBusy(button, fn) {
     }
   }
 }
-
-// Home page logo animations. "enter" plays once when the page opens; "loop"
-// repeats. Each maps to CSS classes in styles.css (.enter-* / .loop-*).
-export const LOGO_ANIMATIONS = [
-  { value: 'spin-float', label: 'Spin in, then gentle float', enter: 'spin', loop: 'float' },
-  { value: 'float', label: 'Gentle float', loop: 'float' },
-  { value: 'bounce', label: 'Bhangra bounce (dhol beat)', loop: 'bounce' },
-  { value: 'pulse', label: 'Pulse & golden glow', loop: 'pulse' },
-  { value: 'orbit', label: 'Orbiting gold ring', loop: 'orbit' },
-  { value: 'shine', label: 'Gold shine sweep', loop: 'shine' },
-  { value: 'spin-in', label: 'Spin in on load (then still)', enter: 'spin' },
-  { value: 'drop-in', label: 'Drop in & settle (then still)', enter: 'drop' },
-  { value: 'zoom-orbit', label: 'Zoom in, then orbiting ring', enter: 'zoom', loop: 'orbit' },
-  { value: 'none', label: 'No animation' },
-];
-
-export function logoAnimationClasses(value) {
-  const a = LOGO_ANIMATIONS.find((x) => x.value === value) || LOGO_ANIMATIONS[0];
-  return [a.enter ? `enter-${a.enter}` : '', a.loop ? `loop-${a.loop}` : ''].filter(Boolean).join(' ');
-}

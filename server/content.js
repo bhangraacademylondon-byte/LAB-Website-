@@ -87,6 +87,8 @@ const RETIRED_DEFAULTS = [
   ...require('./retiredDefaults'),
 ];
 
+const RETIRED_HOME_KEYS = ['heroEyebrow', 'heroImage', 'showHeroLogo', 'heroLayout', 'logoAnimation', 'heroButtons', 'showHighlights', 'highlights', 'showIntro', 'introEyebrow', 'introTitle', 'introText', 'introImage', 'introButtons', 'classesCardTitle', 'classesCardButton', 'instagramEyebrow', 'instagramTitle', 'instagramButton', 'showCta', 'ctaTitle', 'ctaText', 'ctaButtons'];
+
 function normalise(content) {
   const merged = mergeDefaults(defaults, isPlainObject(content) ? content : {});
   for (const key of Object.keys(merged)) if (!SECTIONS.includes(key)) delete merged[key];
@@ -123,6 +125,9 @@ function normalise(content) {
     .map((c) => ({ name: String(c.name || '').trim(), phone: String(c.phone || '').trim() }))
     .filter((c) => digits(c.phone));
   delete merged.site.phones;
+
+  // Settings from the old home page design, no longer used: dropped so they aren't sent on every visit.
+  for (const key of RETIRED_HOME_KEYS) delete merged.home[key];
 
   // The "Monthly unlimited" plan was withdrawn; it goes from saved pricing too, unless it was edited.
   merged.pricing.plans = (merged.pricing.plans || []).filter((p) => !(p?.name === 'Monthly unlimited' && p?.price === 'Ask us'));

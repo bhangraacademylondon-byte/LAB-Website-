@@ -21,6 +21,12 @@
   <link rel="stylesheet" href="/css/theme.css">
   <link rel="stylesheet" href="/css/home.css">
   <script type="module" src="/js/app.js"></script>
+  <!-- The modules app.js imports, fetched alongside it rather than after it. -->
+  <link rel="modulepreload" href="/js/lib.js">
+  <link rel="modulepreload" href="/js/home.js">
+  <link rel="modulepreload" href="/js/classes.js">
+  <link rel="modulepreload" href="/js/effects.js">
+  <link rel="modulepreload" href="/js/track.js">
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -30,7 +36,7 @@
   <header class="hdr" id="hdr">
     <div class="hdr-main">
       <a href="/" class="lab-logo" id="brand" aria-label="Home">
-        <img src="/img/logo.png" alt="" id="brand-logo" width="58" height="58">
+        <img src="/img/logo.webp" alt="" id="brand-logo" width="84" height="84">
         <span><b id="brand-short">LAB</b><small id="brand-name">{{SITE_NAME}}</small></span>
       </a>
       <nav class="mnav" aria-label="Main navigation">

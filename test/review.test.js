@@ -54,9 +54,10 @@ test('content saved with the wrong shape does not break the site or the scanner'
   const admin = client();
   await admin('POST', '/api/auth/login', { identifier: 'admin@test.local', password: 'admin-password' });
   const { body: content } = await admin('GET', '/api/content');
-  const saved = await admin('PUT', '/api/admin/content', { ...content, timetable: { ...content.timetable, classes: 'oops' }, home: { ...content.home, highlights: [null, { title: 'ok' }] } });
+  const saved = await admin('PUT', '/api/admin/content', { ...content, timetable: { ...content.timetable, classes: 'oops' }, faq: { ...content.faq, items: [null, { q: 'ok' }] }, home: { ...content.home, highlights: [{ title: 'old' }] } });
   assert.ok(Array.isArray(saved.body.timetable.classes));
-  assert.deepEqual(saved.body.home.highlights.map((h) => h.title), ['ok']);
+  assert.deepEqual(saved.body.faq.items.map((h) => h.q), ['ok']);
+  assert.equal(saved.body.home.highlights, undefined, 'settings from the old home page are dropped');
   const today = await admin('GET', '/api/staff/today');
   assert.equal(today.status, 200);
 });

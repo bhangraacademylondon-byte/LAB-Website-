@@ -132,7 +132,7 @@ export function renderHome(ctx) {
   fill(BRAND);
   if (home.showInstagram) {
     api('/api/instagram').then((feed) => {
-      const urls = (feed.posts || []).map((p) => safeImg(p.image)).filter(Boolean).slice(0, Math.max(4, Number(home.instagramPostCount) || 8));
+      const urls = (feed.posts || []).map((p) => safeImg(p.thumb || p.image)).filter(Boolean).slice(0, Math.max(4, Number(home.instagramPostCount) || 8));
       if (urls.length && document.body.contains(stage)) fill(urls.length >= 4 ? urls : [...urls, ...BRAND]);
     }).catch(() => {});
   }

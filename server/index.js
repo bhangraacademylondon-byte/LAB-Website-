@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const express = require('express');
+const compression = require('compression');
 const multer = require('multer');
 const QRCode = require('qrcode');
 
@@ -187,6 +188,8 @@ app.use(async (req, res, next) => {
   next();
 });
 
+// Text (pages, code, styles, content) is sent compressed: about a quarter of the size.
+app.use(compression());
 app.use(express.json({ limit: '2mb' }));
 app.use(async (req, _res, next) => {
   // Static files (images, scripts) don't need the website content.

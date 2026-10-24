@@ -22,7 +22,8 @@ test('a member pays for a class with Monzo and a teacher sees it on the class pa
   // Monzo only opens once they've ticked that payments are not transferable.
   await expect(pay).toContainText('Class payments are not transferable');
   await expect(pay.getByRole('link', { name: /Pay £7 with Monzo/ })).toHaveAttribute('aria-disabled', 'true');
-  await pay.getByRole('link', { name: /Pay £7 with Monzo/ }).click({ force: true });
+  // Sent straight to the button: a forced click can miss it while the section is still fading in.
+  await pay.getByRole('link', { name: /Pay £7 with Monzo/ }).dispatchEvent('click');
   await expect(pay.locator('.pay-terms')).toHaveClass(/is-needed/);
   expect(context.pages().length).toBe(1);
   await pay.getByRole('checkbox').check();

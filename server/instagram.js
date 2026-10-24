@@ -91,6 +91,8 @@ function normaliseBehold(item) {
     caption: item.caption || item.prunedCaption || '',
     ...base,
     image: sized || base.image,
+    // A smaller copy for the photo tiles and gallery grid; the full size opens in the lightbox.
+    thumb: item.sizes?.medium?.mediaUrl || sized || base.image,
     type,
     permalink: item.permalink,
     timestamp: item.timestamp,

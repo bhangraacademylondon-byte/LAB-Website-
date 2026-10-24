@@ -1,6 +1,6 @@
 'use strict';
 
-// Wording the site used to ship with and has since replaced. Saved content that
+// Values the site used to ship with and has since replaced. Saved content that
 // still holds one of these, never edited, is brought up to date (see content.js).
 module.exports = [
   [
@@ -484,5 +484,10 @@ module.exports = [
         "answer": "Yes! We perform at weddings, parties, festivals and work events, and run workshops for schools, workplaces and groups. Have a look at our Performances and Workshops pages."
       }
     ]
+  ],
+  [
+    "site",
+    "logo",
+    "/img/logo.png"
   ]
 ];
