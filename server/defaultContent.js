@@ -180,7 +180,7 @@ module.exports = {
     title: 'Our journey',
     intro: 'What started as a simple thought, to open a small bhangra academy in East London, has grown into something beyond our imagination. Here are the milestones so far.',
     milestones: [
-      { date: 'November 2023', title: 'Where it started', text: 'Ravi and Gurdeep start planning a bhangra academy for East London.', type: 'The beginning', image: '' },
+      { date: 'November 2023', title: 'Where it started', text: 'Ravi and Gurdeep start planning a bhangra academy for East London.', type: 'The beginning', image: '/img/journey/original-logo-2023.webp' },
       { date: 'January 2025', title: 'Launch class', text: 'The LAB opens with a free charity class for Great Ormond Street Hospital.', type: 'Charity', image: '' },
       { date: 'March 2025', title: 'Mother\'s Day giddha', text: 'A live giddha class with City Giddha for Mother\'s Day.', type: 'Classes', image: '' },
       { date: 'March 2025', title: 'First advanced class', text: 'Tarun Singh Sehmi of Ranjhe leads our first advanced class.', type: 'Classes', image: '' },

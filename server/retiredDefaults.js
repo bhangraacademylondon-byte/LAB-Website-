@@ -499,5 +499,123 @@ module.exports = [
     "site",
     "logo",
     "/img/logo.webp"
+  ],
+  [
+    "timeline",
+    "milestones",
+    [
+      {
+        "date": "November 2023",
+        "title": "Where it started",
+        "text": "Ravi and Gurdeep start planning a bhangra academy for East London.",
+        "type": "The beginning",
+        "image": ""
+      },
+      {
+        "date": "January 2025",
+        "title": "Launch class",
+        "text": "The LAB opens with a free charity class for Great Ormond Street Hospital.",
+        "type": "Charity",
+        "image": ""
+      },
+      {
+        "date": "March 2025",
+        "title": "Mother's Day giddha",
+        "text": "A live giddha class with City Giddha for Mother's Day.",
+        "type": "Classes",
+        "image": ""
+      },
+      {
+        "date": "March 2025",
+        "title": "First advanced class",
+        "text": "Tarun Singh Sehmi of Ranjhe leads our first advanced class.",
+        "type": "Classes",
+        "image": ""
+      },
+      {
+        "date": "April 2025",
+        "title": "Vaisakhi special",
+        "text": "A Vaisakhi live class at home in Gidea Park.",
+        "type": "Classes",
+        "image": ""
+      },
+      {
+        "date": "April 2025",
+        "title": "Bank of England workshop",
+        "text": "A Vaisakhi workshop with UoB Bhangra and Aston Bhangra.",
+        "type": "Workshop",
+        "image": "/img/journey/bank-of-england-2025.webp"
+      },
+      {
+        "date": "May 2025",
+        "title": "International evening",
+        "text": "A workshop for families at William Patten School, Hackney.",
+        "type": "Workshop",
+        "image": "/img/journey/william-patten-2025.webp"
+      },
+      {
+        "date": "June 2025",
+        "title": "Competition team ready",
+        "text": "The first LAB competition team is ready for the stage.",
+        "type": "Competition",
+        "image": "/img/journey/competition-team-2025.webp"
+      },
+      {
+        "date": "June 2025",
+        "title": "1st at Bhangra Virsa",
+        "text": "The first UK girls live team to win, plus Best Female and Best Vardi.",
+        "type": "Competition",
+        "image": "/img/journey/bhangra-virsa-2025.webp"
+      },
+      {
+        "date": "June 2025",
+        "title": "Bhangra Virsa charity class",
+        "text": "Aman teaches the live charity class in Southall for the LAB.",
+        "type": "Charity",
+        "image": ""
+      },
+      {
+        "date": "August 2025",
+        "title": "First international competition",
+        "text": "Flower City Bhangra 2025 in Brampton, Canada.",
+        "type": "Competition",
+        "image": "/img/journey/flower-city-2025.webp"
+      },
+      {
+        "date": "September 2025",
+        "title": "Dancing for Punjab",
+        "text": "A charity class for the Punjab floods, with Khalsa Aid.",
+        "type": "Charity",
+        "image": ""
+      },
+      {
+        "date": "March 2026",
+        "title": "Academy Masterclass",
+        "text": "A masterclass with Northside Bhangra Academy.",
+        "type": "Workshop",
+        "image": ""
+      },
+      {
+        "date": "May 2026",
+        "title": "Live class with Gabru Furteley",
+        "text": "Hosted by Heera Punjab Diyan in the West Midlands.",
+        "type": "Classes",
+        "image": ""
+      },
+      {
+        "date": "June 2026",
+        "title": "3rd at Bhangra Virsa",
+        "text": "The LAB girls place 3rd in the Senior Girls category.",
+        "type": "Competition",
+        "image": "/img/journey/bhangra-virsa-2026.webp"
+      },
+      {
+        "date": "October 2026",
+        "title": "New instructors",
+        "text": "Aman becomes Lead Instructor and Team Captain; Simrit joins as an instructor.",
+        "type": "The team",
+        "image": ""
+      }
+    ]
   ]
 ];
