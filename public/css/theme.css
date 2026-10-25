@@ -477,3 +477,42 @@ button.call-btn { border: 0; padding: 0; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .faq-icon::before, .faq-icon::after { transition: none; } }
 /* On the narrowest phones the badge and "LAB" carry the name; the full name has no room. */
 @media (max-width: 359px) { .lab-logo small { display: none; } }
+
+/* ---------- Our journey: milestones down a line ---------- */
+.tl { --p: 1; position: relative; list-style: none; margin: 0; padding: 8px 0 0; display: grid; gap: 28px; }
+.tl::before, .tl::after { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 3px; margin-left: -1.5px; border-radius: 3px; background: var(--rule); }
+.tl::after { background: var(--gold); transform-origin: top; transform: scaleY(var(--p)); }
+.tl-item { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 72px; }
+.tl-item.left .tl-card { grid-column: 1; }
+.tl-item.right .tl-card { grid-column: 2; }
+.tl-dot { position: absolute; left: 50%; top: 34px; z-index: 1; width: 20px; height: 20px; margin-left: -10px; border-radius: 50%; background: var(--paper); border: 4px solid var(--gold); }
+.tl-card { gap: 10px; z-index: 2; }
+.tl-card h3 { margin: 0; }
+.tl-card p { margin: 0; }
+.tl-date { font: 900 clamp(28px, 3vw, 42px)/1 var(--display) !important; letter-spacing: -.045em; text-transform: uppercase; }
+:is(.t-deep, .t-mid, .t-dark) .tl-date { color: var(--gold); }
+:is(.t-cream, .t-white) .tl-date { color: var(--gold-text); }
+.tl-photo { margin: -8px -8px 6px; }
+/* Photos and event posters keep their own shape, up to a sensible height. */
+.tl-photo img { display: block; width: 100%; height: auto; max-height: 460px; object-fit: cover; border-radius: 16px; }
+.tl-end .tl-card { grid-column: 1 / -1; justify-self: center; width: min(560px, 100%); text-align: center; align-items: center; }
+.tl-end .tl-dot { background: var(--gold); top: -24px; }
+.tl-end { margin-top: 16px; }
+@media (max-width: 760px) {
+  .tl::before, .tl::after { left: 11px; }
+  .tl-item { grid-template-columns: minmax(0, 1fr); padding-left: 40px; }
+  .tl-item.left .tl-card, .tl-item.right .tl-card, .tl-end .tl-card { grid-column: 1; }
+  .tl-dot { left: 11px; top: 28px; }
+  .tl-end .tl-dot { top: 28px; }
+  .tl-end .tl-card { justify-self: stretch; text-align: left; align-items: flex-start; }
+}
+/* Milestones wait off to their side until they scroll into view (only when scripts run). */
+.tl-reveal .tl-card { opacity: 0; transform: translateX(-36px); transition: opacity 600ms ease, transform 700ms var(--ease-out); }
+.tl-reveal .tl-item.right .tl-card { transform: translateX(36px); }
+.tl-reveal .tl-end .tl-card { transform: translateY(24px); }
+.tl-reveal .tl-dot { transform: scale(0); transition: transform 420ms cubic-bezier(.3, 1.6, .5, 1) 160ms; }
+.tl-reveal .tl-item.tl-in .tl-card { opacity: 1; transform: none; }
+.tl-reveal .tl-in .tl-dot { transform: none; }
+@media (max-width: 760px) { .tl-reveal .tl-item.right .tl-card { transform: translateX(-36px); } .tl-reveal .tl-item.tl-in .tl-card { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .tl { --p: 1 !important; } }
+@media print { .tl::after { transform: none; } }

@@ -31,6 +31,7 @@ const NAV = [
   { path: 'content/gallery', label: 'Gallery', icon: '🖼️', admin: true },
   { path: 'content/performances', label: 'Performances', icon: '🎉', admin: true },
   { path: 'content/workshops', label: 'Workshops', icon: '💃', admin: true },
+  { path: 'content/timeline', label: 'Our journey', icon: '🛤️', admin: true },
   { path: 'content/contact', label: 'Contact page', icon: '✉️', admin: true },
   { path: 'content/members', label: 'Member pages', icon: '🔑', admin: true },
   { path: 'content/privacy', label: 'Privacy policy', icon: '🔒', admin: true },
@@ -1202,6 +1203,26 @@ const SCHEMAS = {
   },
   performances: serviceSchema('Performances page', '/performances', 'event'),
   workshops: serviceSchema('Workshops page', '/workshops', 'workshop'),
+  timeline: {
+    title: 'Our journey',
+    view: '/timeline',
+    fields: [
+      { key: 'title', label: 'Page title' },
+      { key: 'intro', label: 'Introduction', type: 'textarea' },
+      h('Milestones'),
+      { key: 'milestones', label: 'Milestones', type: 'list', itemLabel: 'milestone', titleKey: 'title', hint: 'Oldest first. They appear down the page in this order; use the ↑ ↓ arrows to reorder.', fields: [
+        { key: 'date', label: 'When', hint: 'Month and year, e.g. "June 2025"' },
+        { key: 'title', label: 'Title' },
+        { key: 'text', label: 'What happened', type: 'textarea' },
+        { key: 'type', label: 'Type', type: 'select', options: ['The beginning', 'Classes', 'Workshop', 'Competition', 'Charity', 'Performance', 'The team', 'Other'], hint: 'Sets the colour of the tile.' },
+        { key: 'image', label: 'Photo (optional)', type: 'image' },
+      ] },
+      h('End of the page'),
+      { key: 'endTitle', label: 'Heading' },
+      { key: 'endText', label: 'Text', type: 'textarea' },
+      { key: 'endButton', label: 'Button', type: 'object', fields: [{ key: 'label', label: 'Button text' }, { key: 'link', label: 'Link' }] },
+    ],
+  },
   timetable: {
     title: 'Timetable',
     view: '/timetable',
@@ -1554,7 +1575,7 @@ function navEditor(root) {
   const nav = draftAll.nav;
   const pageTitle = (id) => {
     if (id.startsWith('page:')) return `Extra page: /p/${id.slice(5)}`;
-    return { home: 'Home page', about: 'About page', timetable: 'Timetable page', pricing: 'Pricing page', gallery: 'Gallery page', contact: 'Contact page', performances: 'Performances page', workshops: 'Workshops page', faq: 'FAQs page' }[id] || id;
+    return { home: 'Home page', about: 'About page', timetable: 'Timetable page', pricing: 'Pricing page', gallery: 'Gallery page', contact: 'Contact page', performances: 'Performances page', workshops: 'Workshops page', faq: 'FAQs page', timeline: 'Our journey page' }[id] || id;
   };
   const { bar, setDirty } = saveBar(async (btn) => {
     await withBusy(btn, async () => {

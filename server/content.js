@@ -4,7 +4,7 @@ const defaults = require('./defaultContent');
 const { getSetting, setSetting } = require('./db');
 
 const SECTIONS = Object.keys(defaults);
-const BUILT_IN_PAGES = ['home', 'about', 'timetable', 'pricing', 'gallery', 'contact', 'performances', 'workshops', 'faq'];
+const BUILT_IN_PAGES = ['home', 'about', 'timetable', 'pricing', 'gallery', 'contact', 'performances', 'workshops', 'faq', 'timeline'];
 
 function isPlainObject(v) {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -68,7 +68,9 @@ function normaliseNav(nav, customPages) {
     if (seen.has(id)) continue;
     const def = defaults.nav.find((n) => n.id === id);
     const page = customPages.find((p) => `page:${p.slug}` === id);
-    out.push({ id, label: def ? def.label : page.title, visible: true });
+    // A new built-in page goes before Contact, which stays last; custom pages go at the end.
+    const at = def ? out.findIndex((n) => n.id === 'contact') : -1;
+    out.splice(at === -1 ? out.length : at, 0, { id, label: def ? def.label : page.title, visible: true });
   }
   return out;
 }

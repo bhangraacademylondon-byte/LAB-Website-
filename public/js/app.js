@@ -331,6 +331,77 @@ function renderFaq() {
     </section>` : ''}`);
 }
 
+// ----- Our journey: the academy's milestones down a line, oldest first -----
+
+const MILESTONE_TONES = { 'The beginning': 't-deep', Classes: 't-gold', Workshop: 't-white', Competition: 't-mid', Charity: 't-cream', Performance: 't-dark', 'The team': 't-deep', Other: 't-white' };
+
+function renderTimeline() {
+  const { timeline } = state.content;
+  setTitle(timeline.title);
+  const items = (timeline.milestones || []).filter((m) => m && m.title);
+  const end = timeline.endTitle || timeline.endButton?.label;
+  mount(main(), html`
+    ${pageHead(timeline.title, timeline.intro)}
+    <section class="p-sec">
+      <ol class="tl" id="tl">
+        ${items.map((m, k) => {
+          const img = safeImg(m.image);
+          return html`
+          <li class="tl-item ${k % 2 ? 'right' : 'left'}">
+            <span class="tl-dot" aria-hidden="true"></span>
+            <article class="tile ${MILESTONE_TONES[m.type] || 't-white'} tile-card tl-card">
+              ${img ? html`<div class="tl-photo"><img src="${img}" alt="" loading="lazy"></div>` : ''}
+              <span class="tile-no">${String(k + 1).padStart(2, '0')}${m.type ? ` · ${m.type}` : ''}</span>
+              ${m.date ? html`<p class="tl-date">${m.date}</p>` : ''}
+              <h3>${m.title}</h3>
+              ${m.text ? html`<p>${m.text}</p>` : ''}
+            </article>
+          </li>`;
+        })}
+        ${end ? html`
+          <li class="tl-item tl-end">
+            <span class="tl-dot" aria-hidden="true"></span>
+            <div class="tile t-dark tile-card tl-card">
+              <span class="tile-no">Today</span>
+              ${timeline.endTitle ? html`<h3>${timeline.endTitle}</h3>` : ''}
+              ${timeline.endText ? html`<p>${timeline.endText}</p>` : ''}
+              ${timeline.endButton?.label ? html`<div><a class="cta-pill gold" href="${safeUrl(timeline.endButton.link)}">${timeline.endButton.label}</a></div>` : ''}
+            </div>
+          </li>` : ''}
+      </ol>
+    </section>`);
+
+  // The gold line fills in as the page scrolls past the milestones.
+  const line = document.getElementById('tl');
+  if (!line || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const fill = () => {
+    const r = line.getBoundingClientRect();
+    const p = Math.min(1, Math.max(0, (innerHeight * 0.6 - r.top) / r.height));
+    line.style.setProperty('--p', p.toFixed(3));
+  };
+  fill();
+  addEventListener('scroll', fill, { passive: true });
+  addEventListener('resize', fill);
+
+  // Each milestone slides in from its side of the line as it scrolls into view.
+  const io = 'IntersectionObserver' in window && new IntersectionObserver((entries) => {
+    for (const en of entries) {
+      if (!en.isIntersecting) continue;
+      en.target.classList.add('tl-in');
+      io.unobserve(en.target);
+    }
+  }, { rootMargin: '0px 0px -12% 0px' });
+  if (io) {
+    line.classList.add('tl-reveal');
+    line.querySelectorAll('.tl-item').forEach((item) => io.observe(item));
+  }
+  onLeave(() => {
+    removeEventListener('scroll', fill);
+    removeEventListener('resize', fill);
+    if (io) io.disconnect();
+  });
+}
+
 function renderAbout() {
   const { about } = state.content;
   setTitle(about.title);
@@ -1235,6 +1306,7 @@ async function route() {
     '/faq': renderFaq,
     '/performances': () => renderService('performances'),
     '/workshops': () => renderService('workshops'),
+    '/timeline': renderTimeline,
     '/contact': renderContact,
     '/login': renderLogin,
     '/register': renderRegister,
