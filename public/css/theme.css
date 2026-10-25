@@ -493,8 +493,8 @@ button.call-btn { border: 0; padding: 0; cursor: pointer; }
 :is(.t-deep, .t-mid, .t-dark) .tl-date { color: var(--gold); }
 :is(.t-cream, .t-white) .tl-date { color: var(--gold-text); }
 .tl-photo { margin: -8px -8px 6px; }
-/* Photos and event posters keep their own shape, up to a sensible height. */
-.tl-photo img { display: block; width: 100%; height: auto; max-height: 460px; object-fit: cover; border-radius: 16px; }
+/* Every photo is cropped to the same shape, so the milestones line up. */
+.tl-photo img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 16px; }
 .tl-end .tl-card { grid-column: 1 / -1; justify-self: center; width: min(560px, 100%); text-align: center; align-items: center; }
 .tl-end .tl-dot { background: var(--gold); top: -24px; }
 .tl-end { margin-top: 16px; }
