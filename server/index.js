@@ -8,7 +8,7 @@ const compression = require('compression');
 const multer = require('multer');
 const QRCode = require('qrcode');
 
-const { db, init: initDb, isUniqueViolation, DATA_DIR, DATABASE_URL } = require('./db');
+const { db, getSetting, setSetting, init: initDb, isUniqueViolation, DATA_DIR, DATABASE_URL } = require('./db');
 const storage = require('./storage');
 const auth = require('./auth');
 const content = require('./content');
@@ -64,6 +64,18 @@ function publicUser(u, { includeNotes = false } = {}) {
     privacyAcceptedAt: u.privacy_accepted_at || '',
     privacyRequired: u.privacy_version !== currentPrivacyVersion(),
   };
+}
+
+// Teachers an admin has allowed to edit the Our journey page (and nothing else on the site).
+async function timelineEditors() {
+  const ids = await getSetting('timeline_editors', []);
+  return new Set(Array.isArray(ids) ? ids.map(Number) : []);
+}
+
+async function canEditTimeline(user) {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  return user.role === 'instructor' && (await timelineEditors()).has(user.id);
 }
 
 // ---------- privacy policy consent ----------
@@ -344,7 +356,7 @@ app.post('/api/auth/logout', async (req, res) => {
 
 app.get('/api/me', async (req, res) => {
   if (!req.user) return res.json({ user: null });
-  res.json({ user: publicUser(req.user), stats: await memberStats(req.user.id) });
+  res.json({ user: { ...publicUser(req.user), canEditTimeline: await canEditTimeline(req.user) }, stats: await memberStats(req.user.id) });
 });
 
 app.post('/api/me/privacy', auth.requireRole('member'), async (req, res) => {
@@ -652,7 +664,7 @@ async function loadMember(id) {
 
 staff.get('/members/:id', async (req, res) => {
   const member = await loadMember(req.params.id);
-  res.json({ member: publicUser(member, { includeNotes: true }), stats: await memberStats(member.id), attendance: await memberAttendance(member.id) });
+  res.json({ member: { ...publicUser(member, { includeNotes: true }), canEditTimeline: await canEditTimeline(member) }, stats: await memberStats(member.id), attendance: await memberAttendance(member.id) });
 });
 
 staff.get('/members/:id/qr.svg', async (req, res) => {
@@ -854,7 +866,16 @@ admin.patch('/members/:id', async (req, res) => {
   (await db.run('UPDATE users SET name = ?, email = ?, phone = ?, notes = ?, bio = ?, role = ?, active = ? WHERE id = ?', name, email || null, phone, notes, bio, role, active, member.id));
   (await db.run('UPDATE users SET under_16 = ?, guardian_name = ?, guardian_email = ?, guardian_phone = ? WHERE id = ?', under16, guardianName || null, guardianEmail || null, guardianPhone || null, member.id));
   if (!active) await auth.destroyAllSessionsFor(member.id);
-  res.json({ member: publicUser(await loadMember(member.id), { includeNotes: true }) });
+  // Only teachers keep the Our journey permission; it goes if they become a member (or an admin, who has it anyway).
+  const editors = await timelineEditors();
+  const allowed = role === 'instructor' && (req.body.canEditTimeline !== undefined ? req.body.canEditTimeline === true : editors.has(member.id));
+  if (allowed !== editors.has(member.id)) {
+    if (allowed) editors.add(member.id);
+    else editors.delete(member.id);
+    await setSetting('timeline_editors', [...editors]);
+  }
+  const saved = await loadMember(member.id);
+  res.json({ member: { ...publicUser(saved, { includeNotes: true }), canEditTimeline: await canEditTimeline(saved) } });
 });
 
 admin.post('/members/:id/reset-password', async (req, res) => {
@@ -921,12 +942,28 @@ const upload = multer({
   fileFilter: (_req, file, cb) => cb(null, Boolean(IMAGE_TYPES[file.mimetype])),
 });
 
-admin.post('/upload', upload.single('file'), async (req, res) => {
+async function saveUpload(req, res) {
   if (!req.file) throw new HttpError(400, 'Please choose a JPG, PNG, WebP or GIF image (max 10 MB).');
   const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${IMAGE_TYPES[req.file.mimetype]}`;
   const url = await storage.save(name, req.file.buffer, req.file.mimetype);
   res.status(201).json({ url });
+}
+
+admin.post('/upload', upload.single('file'), saveUpload);
+
+// Teachers allowed to edit Our journey can save that page and add photos to it, and nothing more.
+async function requireTimelineEditor(req, _res, next) {
+  if (!(await canEditTimeline(req.user))) return next(new HttpError(403, 'You do not have permission to edit Our journey.'));
+  next();
+}
+
+staff.put('/content/timeline', requireTimelineEditor, async (req, res) => {
+  const value = req.body?.value;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new HttpError(400, 'Invalid content.');
+  res.json(await content.saveSection('timeline', value));
 });
+
+staff.post('/upload', requireTimelineEditor, upload.single('file'), saveUpload);
 
 admin.get('/uploads', async (_req, res) => {
   res.json({ files: await storage.list() });

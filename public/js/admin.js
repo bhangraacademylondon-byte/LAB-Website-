@@ -5,6 +5,8 @@ import {
 import { state, navigate, onLeave, setLeaveGuard, reloadContent, monthlyChart } from './app.js';
 
 const isAdmin = () => state.user?.role === 'admin';
+// Teachers an admin has allowed to edit Our journey (admins always can).
+const canEditTimeline = () => isAdmin() || Boolean(state.user?.canEditTimeline);
 // The 'instructor' role is shown to people as "Teacher".
 const ROLE_LABELS = { member: 'Member', instructor: 'Teacher', admin: 'Admin' };
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -19,7 +21,7 @@ const NAV = [
   { path: 'payments', label: 'Payments', icon: '💷' },
   { path: 'members', label: 'Members', icon: '👥' },
   { path: 'debriefs', label: 'Class debriefs', icon: '📝' },
-  { heading: 'Website', admin: true },
+  { heading: 'Website', admin: true, timeline: true },
   { path: 'visitors', label: 'Visitors', icon: '📈', admin: true },
   { path: 'content/site', label: 'Site & branding', icon: '🎨', admin: true },
   { path: 'content/nav', label: 'Menu tabs', icon: '🧭', admin: true },
@@ -31,7 +33,7 @@ const NAV = [
   { path: 'content/gallery', label: 'Gallery', icon: '🖼️', admin: true },
   { path: 'content/performances', label: 'Performances', icon: '🎉', admin: true },
   { path: 'content/workshops', label: 'Workshops', icon: '💃', admin: true },
-  { path: 'content/timeline', label: 'Our journey', icon: '🛤️', admin: true },
+  { path: 'content/timeline', label: 'Our journey', icon: '🛤️', admin: true, timeline: true },
   { path: 'content/contact', label: 'Contact page', icon: '✉️', admin: true },
   { path: 'content/members', label: 'Member pages', icon: '🔑', admin: true },
   { path: 'content/privacy', label: 'Privacy policy', icon: '🔒', admin: true },
@@ -42,7 +44,7 @@ const NAV = [
 ];
 
 function layout(active) {
-  const items = NAV.filter((n) => !n.admin || isAdmin());
+  const items = NAV.filter((n) => !n.admin || isAdmin() || (n.timeline && canEditTimeline()));
   mount('#main', html`
     <div class="container admin-layout">
       <nav class="admin-nav" aria-label="Admin">
@@ -65,7 +67,8 @@ export async function render(parts) {
   const [section = '', sub, id] = parts;
   document.title = `Admin | ${state.content.site.name}`;
   const adminOnly = ['content', 'instagram', 'messages', 'visitors'];
-  if (adminOnly.includes(section) && !isAdmin()) return navigate('/admin', { replace: true });
+  const timelineOnly = section === 'content' && sub === 'timeline' && canEditTimeline();
+  if (adminOnly.includes(section) && !isAdmin() && !timelineOnly) return navigate('/admin', { replace: true });
 
   if (section === '') return dashboard(layout(''));
   if (section === 'scanner') return scanner(layout('scanner'));
@@ -115,6 +118,7 @@ async function dashboard(root) {
           <li class="list-item"><a href="/admin/members">Add or find a member</a></li>
           <li class="list-item"><a href="/admin/sessions">Attendance history & CSV export</a></li>
           <li class="list-item"><a href="/admin/debriefs">Class debriefs & LAB pouch balance</a></li>
+          ${!isAdmin() && canEditTimeline() ? html`<li class="list-item"><a href="/admin/content/timeline">Edit the Our journey page</a></li>` : ''}
           ${isAdmin() ? html`
           <li class="list-item"><a href="/admin/content/home">Edit the website</a></li>
           <li class="list-item"><a href="/admin/instagram">Instagram gallery settings</a></li>
@@ -991,6 +995,7 @@ async function memberDetail(root, id) {
                 <option value="0" ${raw(!member.active ? 'selected' : '')}>Inactive</option>
               </select></label>
             </div>
+            <label class="checkbox" id="timeline-perm" ${raw(member.role === 'instructor' ? '' : 'hidden')}><input type="checkbox" name="canEditTimeline" ${raw(member.canEditTimeline ? 'checked' : '')}> Can edit the Our journey page (nothing else on the website)</label>
             <label class="checkbox"><input type="checkbox" name="under16" ${raw(member.under16 ? 'checked' : '')}> Under 16</label>
             <div class="form-row">
               <label class="field"><span>Parent or guardian's name</span><input name="guardianName" value="${member.guardianName}"></label>
@@ -1024,11 +1029,14 @@ async function memberDetail(root, id) {
   root.querySelector('#print').addEventListener('click', () => window.print());
   if (!isAdmin()) return;
   const form = root.querySelector('#member-form');
+  // The Our journey permission is only for teachers (admins can edit everything anyway).
+  form.role.addEventListener('change', () => { root.querySelector('#timeline-perm').hidden = form.role.value !== 'instructor'; });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const body = formData(form);
     body.active = body.active === '1';
     body.under16 = form.under16.checked;
+    body.canEditTimeline = form.canEditTimeline.checked;
     try {
       await api(`/api/admin/members/${member.id}`, { method: 'PATCH', body });
       toast('Member saved', 'success');
@@ -1357,7 +1365,7 @@ const SCHEMAS = {
 async function uploadImage(file) {
   const form = new FormData();
   form.append('file', file);
-  const { url } = await api('/api/admin/upload', { method: 'POST', form });
+  const { url } = await api(isAdmin() ? '/api/admin/upload' : '/api/staff/upload', { method: 'POST', form });
   return url;
 }
 
@@ -1511,7 +1519,9 @@ function saveBar(onSave, viewLink) {
 // Saves one section only, so an editor opened earlier (another tab, phone or
 // person) can't overwrite newer changes to other sections.
 async function saveSection(section, value) {
-  const saved = await api(`/api/admin/content/${section}`, { method: 'PUT', body: { value } });
+  // A teacher allowed to edit Our journey saves through their own, narrower route.
+  const base = isAdmin() ? '/api/admin' : '/api/staff';
+  const saved = await api(`${base}/content/${section}`, { method: 'PUT', body: { value } });
   state.content = saved;
   await reloadContent();
   return saved;
@@ -1563,7 +1573,7 @@ async function contentEditor(root, section) {
   } });
 
   root.replaceChildren(
-    el('div', { class: 'admin-head' }, el('h1', { text: schema.title }), el('div', { class: 'btn-row' }, resetBtn)),
+    el('div', { class: 'admin-head' }, el('h1', { text: schema.title }), el('div', { class: 'btn-row' }, isAdmin() ? resetBtn : '')),
     schema.note ? el('div', { class: 'notice', text: schema.note }) : '',
     el('div', { class: 'card form' }, schema.fields.map((f) => buildField(f, draft, onChange))),
     bar
