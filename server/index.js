@@ -8,12 +8,14 @@ const compression = require('compression');
 const multer = require('multer');
 const QRCode = require('qrcode');
 
-const { db, getSetting, setSetting, init: initDb, isUniqueViolation, DATA_DIR, DATABASE_URL } = require('./db');
+const { db, transaction, getSetting, setSetting, init: initDb, isUniqueViolation, DATA_DIR, DATABASE_URL } = require('./db');
 const storage = require('./storage');
 const auth = require('./auth');
 const content = require('./content');
 const visitors = require('./visitors');
 const payments = require('./payments');
+const twostep = require('./twostep');
+const mailer = require('./email');
 const instagram = require('./instagram');
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -28,8 +30,14 @@ app.set('trust proxy', process.env.TRUST_PROXY !== undefined ? Number(process.en
 
 const str = (v, max = 500) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const TIME_RE = /^(\d{2}:\d{2})?$/;
+// A real calendar date ("2026-02-30" is refused) and a real time of day, or blank.
+function isDate(value) {
+  const v = String(value ?? '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const d = new Date(`${v}T12:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+}
+const isTime = (value) => /^(([01]\d|2[0-3]):[0-5]\d)?$/.test(String(value ?? ''));
 
 class HttpError extends Error {
   constructor(status, message) {
@@ -57,12 +65,17 @@ function publicUser(u, { includeNotes = false } = {}) {
     notes: includeNotes ? u.notes || '' : undefined,
     createdAt: u.created_at,
     under16: Boolean(u.under_16),
+    // Under 16 and not yet approved by a teacher or admin: no pass until then.
+    needsApproval: Boolean(u.under_16 && !u.under16_approved_at),
     guardianName: u.guardian_name || '',
     guardianEmail: u.guardian_email || '',
     guardianPhone: u.guardian_phone || '',
     privacyVersion: u.privacy_version || '',
     privacyAcceptedAt: u.privacy_accepted_at || '',
     privacyRequired: u.privacy_version !== currentPrivacyVersion(),
+    mustChangePassword: Boolean(u.must_change_password),
+    twoStepEnabled: Boolean(u.totp_enabled),
+    twoStepSetupRequired: auth.needsTwoStep(u) && !u.totp_enabled,
   };
 }
 
@@ -85,17 +98,23 @@ function currentPrivacyVersion() {
 }
 
 // Reads the privacy agreement from a sign-up or consent form. Members under 16
-// need a parent or guardian's details and their explicit consent.
-function readConsent(body) {
+// need a parent or guardian's details and their explicit consent. Teachers and
+// admins aren't asked their age. Someone already marked as under 16 (by staff
+// or an earlier answer) can't answer "16 or over" to remove it: only staff can.
+function readConsent(body, user = null) {
   if (body.acceptPrivacy !== true) throw new HttpError(400, 'Please read and accept the Privacy Policy to continue.');
-  if (!['16plus', 'under16'].includes(body.ageGroup)) throw new HttpError(400, 'Please tell us whether the member is 16 or over, or under 16.');
-  const under16 = body.ageGroup === 'under16';
-  if (!under16) return { under16: false, guardianName: null, guardianEmail: null, guardianPhone: null };
-  const guardianName = str(body.guardianName, 120);
-  const guardianEmail = str(body.guardianEmail, 200);
-  const guardianPhone = str(body.guardianPhone, 40);
+  const none = { under16: false, guardianName: null, guardianEmail: null, guardianPhone: null };
+  if (user && user.role !== 'member') return none;
+  const known = Boolean(user?.under_16);
+  if (!known && !['16plus', 'under16'].includes(body.ageGroup)) throw new HttpError(400, 'Please tell us whether the member is 16 or over, or under 16.');
+  const under16 = known || body.ageGroup === 'under16';
+  if (!under16) return none;
+  const guardianName = str(body.guardianName, 120) || (known ? user.guardian_name || '' : '');
+  const guardianEmail = str(body.guardianEmail, 200) || (known ? user.guardian_email || '' : '');
+  const guardianPhone = str(body.guardianPhone, 40) || (known ? user.guardian_phone || '' : '');
   if (!guardianName) throw new HttpError(400, "Please enter the parent or guardian's name.");
   if (!EMAIL_RE.test(guardianEmail)) throw new HttpError(400, "Please enter the parent or guardian's email address.");
+  if (!guardianPhone) throw new HttpError(400, "Please enter the parent or guardian's mobile number, for emergencies.");
   if (body.guardianConsent !== true) throw new HttpError(400, 'A parent or guardian must give their consent for members under 16.');
   return { under16: true, guardianName, guardianEmail, guardianPhone: guardianPhone || null };
 }
@@ -178,6 +197,8 @@ async function qrSvg(memberId) {
 
 app.use(async (req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
+  // Browsers that have visited over HTTPS never try plain HTTP for a year.
+  if (req.secure) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
@@ -202,7 +223,10 @@ app.use(async (req, res, next) => {
 
 // Text (pages, code, styles, content) is sent compressed: about a quarter of the size.
 app.use(compression());
-app.use(express.json({ limit: '2mb' }));
+// A backup being restored can be large; everything else is small.
+const smallJson = express.json({ limit: '2mb' });
+const largeJson = express.json({ limit: '50mb' });
+app.use((req, res, next) => (req.path === '/api/admin/restore' ? largeJson : smallJson)(req, res, next));
 app.use(async (req, _res, next) => {
   // Static files (images, scripts) don't need the website content.
   if (!/\.\w+$/.test(req.path) || req.path.startsWith('/api/')) await content.refreshIfStale();
@@ -224,10 +248,34 @@ app.use('/api', async (req, res, next) => {
 // but are asked to accept it in the app too.
 const PRIVACY_EXEMPT = new Set([
   'GET /me', 'POST /me/privacy', 'GET /me/export', 'POST /me/delete',
-  'POST /auth/logout', 'POST /auth/login', 'POST /auth/register',
+  // A new password and two-step login come before accepting the policy.
+  'POST /me/password', 'POST /me/two-step/setup', 'GET /me/two-step/qr.svg', 'POST /me/two-step/enable',
+  'POST /auth/logout', 'POST /auth/login', 'POST /auth/register', 'POST /auth/two-step',
+  'POST /auth/verify', 'POST /auth/forgot', 'POST /auth/reset',
   'GET /content', 'GET /instagram', 'POST /contact',
   'POST /v', 'POST /v/time', 'POST /v/event',
 ]);
+// Anyone whose password must change (too weak, or set by someone else) does that first.
+const PASSWORD_EXEMPT = new Set([
+  'GET /me', 'POST /me/password', 'POST /auth/logout', 'POST /auth/login',
+  'GET /content', 'GET /instagram', 'POST /contact', 'POST /v', 'POST /v/time', 'POST /v/event',
+]);
+app.use('/api', (req, res, next) => {
+  if (!req.user?.must_change_password || PASSWORD_EXEMPT.has(`${req.method} ${req.path}`)) return next();
+  res.status(403).json({ error: 'Please choose a new password to continue.', code: 'PASSWORD_CHANGE' });
+});
+
+// Admins and teachers set up two-step login before using their account.
+const TWO_STEP_EXEMPT = new Set([
+  'GET /me', 'POST /me/password', 'POST /me/two-step/setup', 'GET /me/two-step/qr.svg', 'POST /me/two-step/enable',
+  'POST /auth/logout', 'POST /auth/login', 'POST /auth/two-step',
+  'GET /content', 'GET /instagram', 'POST /contact', 'POST /v', 'POST /v/time', 'POST /v/event',
+]);
+app.use('/api', (req, res, next) => {
+  if (!auth.needsTwoStep(req.user) || req.user.totp_enabled || TWO_STEP_EXEMPT.has(`${req.method} ${req.path}`)) return next();
+  res.status(403).json({ error: 'Please set up two-step login to continue.', code: 'TWO_STEP_SETUP' });
+});
+
 app.use('/api', async (req, res, next) => {
   if (!req.user || req.user.role === 'admin' || PRIVACY_EXEMPT.has(`${req.method} ${req.path}`)) return next();
   if (req.user.privacy_version === currentPrivacyVersion()) return next();
@@ -271,8 +319,6 @@ function rateLimiter(max, windowMs) {
     return true;
   };
 }
-const allowContact = rateLimiter(5, 3600_000);
-const allowRegister = rateLimiter(10, 3600_000);
 
 // Visitor statistics (see visitors.js). Always answers 204 so a failure never troubles the page.
 const allowStats = rateLimiter(600, 3600_000);
@@ -293,28 +339,132 @@ app.post('/api/contact', async (req, res) => {
   const body = str(req.body.message, 5000);
   if (str(req.body.website)) return res.json({ ok: true }); // honeypot field
   if (!name || !EMAIL_RE.test(email) || !body) throw new HttpError(400, 'Please give your name, a valid email and a message.');
-  if (!allowContact(req.ip)) throw new HttpError(429, 'Too many messages. Please try again later.');
+  if (!(await auth.allow(`contact:${req.ip}`, 5, 3600_000))) throw new HttpError(429, 'Too many messages. Please try again later.');
   (await db.run('INSERT INTO messages (name, email, phone, subject, body) VALUES (?, ?, ?, ?, ?)', name, email, phone, subject, body));
+  // A copy to the academy's inbox; pressing Reply answers the sender.
+  await mailer.send({
+    to: mailer.ACADEMY_EMAIL,
+    replyTo: email,
+    subject: `Website message: ${subject || `from ${name}`}`,
+    paragraphs: [`${name} sent a message through the website.`, `Email: ${email}${phone ? `\nPhone: ${phone}` : ''}`, body, 'Reply to this email to answer them. The message is also in Admin → Messages.'],
+  });
   res.json({ ok: true });
 });
 
 // ---------- auth ----------
 
+// Failed logins are capped per connection (whatever account is tried) and per
+// account (whatever connection tries it), for 15 minutes.
+const LOGIN_WINDOW = 15 * 60_000;
+const LOGIN_MAX_PER_IP = 20;
+const LOGIN_MAX_PER_ACCOUNT = 10;
+
 app.post('/api/auth/login', async (req, res) => {
   const identifier = str(req.body.identifier, 200);
   const password = typeof req.body.password === 'string' ? req.body.password : '';
-  const key = `${req.ip}|${identifier.toLowerCase()}`;
-  if (auth.tooManyAttempts(key)) throw new HttpError(429, 'Too many attempts. Please wait 15 minutes and try again.');
+  const ipKey = `login-ip:${req.ip}`;
+  const idKey = `login-id:${identifier.toLowerCase()}`;
+  if ((await auth.limitCount(ipKey)) >= LOGIN_MAX_PER_IP || (await auth.limitCount(idKey)) >= LOGIN_MAX_PER_ACCOUNT) {
+    throw new HttpError(429, 'Too many attempts. Please wait 15 minutes and try again.');
+  }
   const user = await findUserByIdentifier(identifier);
   // Always run a bcrypt comparison so response time does not reveal whether the account exists.
-  if (!auth.verifyPassword(password, user?.password_hash) || !user) {
-    auth.recordFailedAttempt(key);
+  if (!(await auth.verifyPassword(password, user?.password_hash)) || !user) {
+    await auth.limitHit(ipKey, LOGIN_WINDOW);
+    await auth.limitHit(idKey, LOGIN_WINDOW);
     throw new HttpError(401, 'Incorrect email/member ID or password.');
   }
   if (!user.active) throw new HttpError(403, 'This account has been deactivated. Please speak to a teacher.');
-  auth.clearAttempts(key);
+  // An account made online can't be used until its email address is confirmed.
+  if (user.email && !user.email_verified_at && mailer.enabled()) {
+    if (await auth.allow(`verify-send:${user.id}`, 3, 3600_000)) await sendVerifyEmail(req, user);
+    throw new HttpError(403, "Please confirm your email address first. We've sent you an email with a link (check your spam folder too).");
+  }
+  await auth.limitClear(idKey);
+  // A password that doesn't meet today's rules has to be changed before going any further.
+  if (auth.passwordProblem(password) && !user.must_change_password) {
+    await db.run('UPDATE users SET must_change_password = 1 WHERE id = ?', user.id);
+    user.must_change_password = 1;
+  }
+  // Admins and teachers then enter a code from their authenticator app.
+  if (auth.needsTwoStep(user) && user.totp_enabled) return res.json({ twoStep: true, ticket: await auth.createChallenge(user.id) });
   await auth.createSession(res, req, user.id);
   res.json({ user: publicUser(user) });
+});
+
+// The second step: a code from the authenticator app, or one of the backup codes.
+app.post('/api/auth/two-step', async (req, res) => {
+  const ticket = str(req.body.ticket, 100);
+  const code = str(req.body.code, 20);
+  const userId = await auth.useChallenge(ticket);
+  if (!userId) throw new HttpError(401, 'That took too long or had too many tries. Please log in again.');
+  const user = await db.get('SELECT * FROM users WHERE id = ?', userId);
+  if (!user?.active) throw new HttpError(401, 'Please log in again.');
+  const counter = twostep.check(user.totp_secret, code, Number(user.totp_last));
+  if (counter !== null) {
+    await db.run('UPDATE users SET totp_last = ? WHERE id = ?', counter, user.id);
+  } else {
+    const remaining = twostep.useBackupCode(user.totp_backup, code);
+    if (remaining === null) throw new HttpError(400, "That code didn't work. Check the app and try the newest code.");
+    await db.run('UPDATE users SET totp_backup = ? WHERE id = ?', remaining, user.id);
+  }
+  await auth.endChallenge(ticket);
+  await auth.createSession(res, req, user.id);
+  res.json({ user: publicUser(user) });
+});
+
+async function sendVerifyEmail(req, user) {
+  const token = await auth.createEmailToken(user.id, 'verify', 48);
+  await mailer.send({
+    to: user.email,
+    subject: 'Confirm your email for the London Academy of Bhangra',
+    paragraphs: [`Hi ${user.name.split(' ')[0]},`, 'Thanks for joining the LAB! Please confirm this is your email address to finish setting up your account. The link works for 48 hours.', "If you didn't sign up, you can ignore this email."],
+    button: { label: 'Confirm my email', url: `${siteOrigin(req)}/verify-email?token=${token}` },
+  });
+}
+
+// The link in the sign-up email: confirms the address and logs them in.
+app.post('/api/auth/verify', async (req, res) => {
+  const userId = await auth.useEmailToken(str(req.body.token, 100), 'verify');
+  if (!userId) throw new HttpError(400, 'That link has expired or has already been used. Log in to get a new one.');
+  await db.run(`UPDATE users SET email_verified_at = COALESCE(email_verified_at, ${db.NOW}) WHERE id = ?`, userId);
+  const user = await db.get('SELECT * FROM users WHERE id = ?', userId);
+  if (!user?.active) throw new HttpError(403, 'This account has been deactivated. Please speak to a teacher.');
+  if (auth.needsTwoStep(user) && user.totp_enabled) return res.json({ verified: true });
+  await auth.createSession(res, req, user.id);
+  res.json({ verified: true, user: publicUser(user) });
+});
+
+// Forgotten password: a one-time link by email. The answer is the same whether
+// or not there's an account, so nobody can use it to check who's a member.
+app.post('/api/auth/forgot', async (req, res) => {
+  if (!mailer.enabled()) throw new HttpError(503, 'Resetting a password by email is not available yet. Please ask a teacher or admin.');
+  const address = str(req.body.email, 200).toLowerCase();
+  if (!EMAIL_RE.test(address)) throw new HttpError(400, 'Please enter your email address.');
+  if (!(await auth.allow(`forgot-ip:${req.ip}`, 10, 3600_000))) throw new HttpError(429, 'Too many requests. Please try again later.');
+  const user = await db.get('SELECT * FROM users WHERE lower(email) = ? AND active = 1', address);
+  if (user && (await auth.allow(`forgot:${user.id}`, 3, 3600_000))) {
+    const token = await auth.createEmailToken(user.id, 'reset', 1);
+    await mailer.send({
+      to: user.email,
+      subject: 'Reset your London Academy of Bhangra password',
+      paragraphs: [`Hi ${user.name.split(' ')[0]},`, 'Someone (hopefully you) asked to reset the password for your LAB account. The link below works once, for the next hour.', "If it wasn't you, ignore this email: your password hasn't changed."],
+      button: { label: 'Choose a new password', url: `${siteOrigin(req)}/reset-password?token=${token}` },
+    });
+  }
+  res.json({ ok: true });
+});
+
+app.post('/api/auth/reset', async (req, res) => {
+  const password = typeof req.body.password === 'string' ? req.body.password : '';
+  const weak = auth.passwordProblem(password);
+  if (weak) throw new HttpError(400, weak);
+  const userId = await auth.useEmailToken(str(req.body.token, 100), 'reset');
+  if (!userId) throw new HttpError(400, 'That link has expired or has already been used. Please ask for a new one.');
+  // Following the link also proves the email address is theirs.
+  await db.run(`UPDATE users SET password_hash = ?, must_change_password = 0, email_verified_at = COALESCE(email_verified_at, ${db.NOW}) WHERE id = ?`, await auth.hashPassword(password), userId);
+  await auth.destroyAllSessionsFor(userId);
+  res.json({ ok: true });
 });
 
 app.post('/api/auth/register', async (req, res) => {
@@ -329,20 +479,41 @@ app.post('/api/auth/register', async (req, res) => {
   // Under-16s may leave their own email blank (e.g. a brother or sister already
   // uses the parent's email); they then log in with their member ID.
   if (email ? !EMAIL_RE.test(email) : !consent.under16) throw new HttpError(400, 'Please enter a valid email address.');
-  if (password.length < 8) throw new HttpError(400, 'Password must be at least 8 characters.');
-  if (!allowRegister(req.ip)) throw new HttpError(429, 'Too many sign-ups from this connection. Please try again later.');
-  if (email && (await db.get('SELECT 1 FROM users WHERE lower(email) = lower(?)', email))) throw new HttpError(409, 'An account with that email already exists. Try logging in, or leave the email blank for a child who shares a parent\'s email.');
+  const weak = auth.passwordProblem(password);
+  if (weak) throw new HttpError(400, weak);
+  if (!(await auth.allow(`register:${req.ip}`, 10, 3600_000))) throw new HttpError(429, 'Too many sign-ups from this connection. Please try again later.');
+  const checking = Boolean(email) && mailer.enabled();
+  const existing = email ? await db.get('SELECT id, name, email FROM users WHERE lower(email) = lower(?)', email) : null;
+  if (existing && checking) {
+    // Same answer as a new sign-up; the owner of the address hears about it instead.
+    if (await auth.allow(`exists-send:${existing.id}`, 2, 3600_000)) {
+      await mailer.send({
+        to: existing.email,
+        subject: 'You already have a London Academy of Bhangra account',
+        paragraphs: [`Hi ${existing.name.split(' ')[0]},`, 'Someone tried to sign up with this email address, but you already have an account. You can log in, or reset your password if you have forgotten it.', "If this wasn't you, you don't need to do anything."],
+        button: { label: 'Reset my password', url: `${siteOrigin(req)}/forgot-password` },
+      });
+    }
+    return res.status(202).json({ checkEmail: true });
+  }
+  if (existing) throw new HttpError(409, 'An account with that email already exists. Try logging in, or leave the email blank for a child who shares a parent\'s email.');
   const memberId = await auth.generateMemberId();
   let info;
   try {
-    info = (await db.run('INSERT INTO users (member_id, name, email, phone, password_hash, role, bio) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id', memberId, name, email || null, phone, auth.hashPassword(password), 'member', bio));
+    info = (await db.run('INSERT INTO users (member_id, name, email, phone, password_hash, role, bio) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id', memberId, name, email || null, phone, await auth.hashPassword(password), 'member', bio));
   } catch (err) {
     if (isUniqueViolation(err)) throw new HttpError(409, 'An account with that email already exists. Try logging in.');
     throw err;
   }
   const newId = info.rows[0].id;
   await recordConsent(newId, consent);
+  // Without email switched on (or without an email address), there's nothing to check.
+  if (!checking) await db.run(`UPDATE users SET email_verified_at = ${db.NOW} WHERE id = ?`, newId);
   const user = await db.get('SELECT * FROM users WHERE id = ?', newId);
+  if (checking) {
+    await sendVerifyEmail(req, user);
+    return res.status(202).json({ checkEmail: true });
+  }
   await auth.createSession(res, req, user.id);
   res.status(201).json({ user: publicUser(user) });
 });
@@ -355,12 +526,14 @@ app.post('/api/auth/logout', async (req, res) => {
 // ---------- member (self) ----------
 
 app.get('/api/me', async (req, res) => {
-  if (!req.user) return res.json({ user: null });
-  res.json({ user: { ...publicUser(req.user), canEditTimeline: await canEditTimeline(req.user) }, stats: await memberStats(req.user.id) });
+  // Whether the site can send email (password resets etc.), for the login page.
+  const emailEnabled = mailer.enabled();
+  if (!req.user) return res.json({ user: null, emailEnabled });
+  res.json({ user: { ...publicUser(req.user), canEditTimeline: await canEditTimeline(req.user) }, stats: await memberStats(req.user.id), emailEnabled });
 });
 
 app.post('/api/me/privacy', auth.requireRole('member'), async (req, res) => {
-  await recordConsent(req.user.id, readConsent(req.body));
+  await recordConsent(req.user.id, readConsent(req.body, req.user));
   res.json({ user: publicUser((await db.get('SELECT * FROM users WHERE id = ?', req.user.id))) });
 });
 
@@ -373,23 +546,66 @@ app.get('/api/me/export', auth.requireRole('member'), async (req, res) => {
     attendance: await memberAttendance(u.id, 100000),
     payments: await payments.forMember(u.id),
     privacyConsents: (await db.all('SELECT version, under_16 AS under16, guardian_name AS "guardianName", guardian_email AS "guardianEmail", accepted_at AS "acceptedAt" FROM privacy_consents WHERE user_id = ? ORDER BY id', u.id)),
-    messagesSent: u.email ? (await db.all('SELECT subject, body, created_at AS "sentAt" FROM messages WHERE lower(email) = lower(?) ORDER BY id', u.email)) : [],
+    // Notes staff have written about them are their personal data too. (Messages
+    // sent through the contact form aren't included: an email address alone
+    // doesn't prove who sent them. Members can ask the academy for those.)
+    staffNotes: u.notes || '',
   };
   res.setHeader('Content-Disposition', `attachment; filename="lab-my-data-${u.member_id}.json"`);
   res.setHeader('Cache-Control', 'no-store');
   res.type('application/json').send(JSON.stringify(data, null, 2));
 });
 
+// Deleting an account keeps its payment records (the academy's accounts need
+// them), with the name and member ID copied onto them.
+async function deleteAccount(userId) {
+  await db.run(`UPDATE class_payments p SET payer_name = u.name, payer_member_id = u.member_id
+                  FROM users u WHERE u.id = p.user_id AND p.user_id = ? AND p.status <> 'started'`, userId);
+  await db.run("DELETE FROM class_payments WHERE user_id = ? AND status = 'started'", userId);
+  await db.run('DELETE FROM users WHERE id = ?', userId);
+}
+
 // Right to erasure: members can delete their own account (password required).
 app.post('/api/me/delete', auth.requireRole('member'), async (req, res) => {
   const row = (await db.get('SELECT password_hash, role FROM users WHERE id = ?', req.user.id));
-  if (!auth.verifyPassword(req.body.password, row.password_hash)) throw new HttpError(400, 'Your password is incorrect.');
+  if (!(await auth.verifyPassword(req.body.password, row.password_hash))) throw new HttpError(400, 'Your password is incorrect.');
   if (row.role === 'admin' && (await db.get("SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND active = 1")).n <= 1) {
     throw new HttpError(400, 'You are the only admin. Make someone else an admin before deleting your account.');
   }
-  (await db.run('DELETE FROM users WHERE id = ?', req.user.id));
+  await deleteAccount(req.user.id);
   await auth.destroySession(req, res);
   res.json({ ok: true });
+});
+
+// ----- two-step login setup (admins and teachers) -----
+
+// Starts (or restarts) setting up: a new secret, shown as a QR code to scan.
+app.post('/api/me/two-step/setup', auth.requireRole('instructor'), async (req, res) => {
+  const user = await db.get('SELECT totp_enabled FROM users WHERE id = ?', req.user.id);
+  if (user.totp_enabled) throw new HttpError(400, 'Two-step login is already set up.');
+  const secret = twostep.newSecret();
+  await db.run('UPDATE users SET totp_secret = ? WHERE id = ?', secret, req.user.id);
+  res.json({ secret: secret.replace(/(.{4})/g, '$1 ').trim() });
+});
+
+app.get('/api/me/two-step/qr.svg', auth.requireRole('instructor'), async (req, res) => {
+  const user = await db.get('SELECT totp_secret, totp_enabled, email, member_id FROM users WHERE id = ?', req.user.id);
+  if (!user.totp_secret || user.totp_enabled) throw new HttpError(404, 'Nothing to set up.');
+  res.setHeader('Content-Type', 'image/svg+xml');
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(await qrSvg(twostep.setupUrl(user.totp_secret, user.email || user.member_id)));
+});
+
+// Confirms the app works by checking one code, then gives the backup codes (shown once).
+app.post('/api/me/two-step/enable', auth.requireRole('instructor'), async (req, res) => {
+  const user = await db.get('SELECT totp_secret, totp_enabled FROM users WHERE id = ?', req.user.id);
+  if (user.totp_enabled) throw new HttpError(400, 'Two-step login is already set up.');
+  if (!(await auth.allow(`two-step-setup:${req.user.id}`, 10, 15 * 60_000))) throw new HttpError(429, 'Too many tries. Please wait 15 minutes.');
+  const counter = twostep.check(user.totp_secret, str(req.body.code, 10));
+  if (counter === null) throw new HttpError(400, "That code didn't match. Check the app shows London Academy of Bhangra and try the newest code.");
+  const backup = twostep.newBackupCodes();
+  await db.run('UPDATE users SET totp_enabled = 1, totp_last = ?, totp_backup = ? WHERE id = ?', counter, backup.stored, req.user.id);
+  res.json({ backupCodes: backup.codes, user: publicUser(await db.get('SELECT * FROM users WHERE id = ?', req.user.id)) });
 });
 
 app.get('/api/me/attendance', auth.requireRole('member'), async (req, res) => {
@@ -397,6 +613,7 @@ app.get('/api/me/attendance', auth.requireRole('member'), async (req, res) => {
 });
 
 app.get('/api/me/qr.svg', auth.requireRole('member'), async (req, res) => {
+  if (req.user.under_16 && !req.user.under16_approved_at) throw new HttpError(403, 'Your pass will appear once a teacher has approved your account.');
   res.setHeader('Content-Type', 'image/svg+xml');
   res.setHeader('Cache-Control', 'private, max-age=86400');
   res.send(await qrSvg(req.user.member_id));
@@ -415,9 +632,11 @@ app.post('/api/me/password', auth.requireRole('member'), async (req, res) => {
   const current = typeof req.body.current === 'string' ? req.body.current : '';
   const next = typeof req.body.next === 'string' ? req.body.next : '';
   const row = (await db.get('SELECT password_hash FROM users WHERE id = ?', req.user.id));
-  if (!auth.verifyPassword(current, row.password_hash)) throw new HttpError(400, 'Your current password is incorrect.');
-  if (next.length < 8) throw new HttpError(400, 'New password must be at least 8 characters.');
-  (await db.run('UPDATE users SET password_hash = ? WHERE id = ?', auth.hashPassword(next), req.user.id));
+  if (!(await auth.verifyPassword(current, row.password_hash))) throw new HttpError(400, 'Your current password is incorrect.');
+  const weak = auth.passwordProblem(next);
+  if (weak) throw new HttpError(400, weak);
+  if (next === current) throw new HttpError(400, 'Please choose a different password from your current one.');
+  (await db.run('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?', await auth.hashPassword(next), req.user.id));
   await auth.destroyAllSessionsFor(req.user.id);
   await auth.createSession(res, req, req.user.id);
   res.json({ ok: true });
@@ -454,7 +673,8 @@ app.post('/api/me/payments', auth.requireRole('member'), async (req, res) => {
   const date = str(req.body.date, 10);
   if (!payments.upcomingDates(content.getContent().timetable.classes).includes(date)) throw new HttpError(400, 'Please choose one of the upcoming class dates.');
   const existing = await payments.find(req.user.id, date);
-  if (existing && existing.status !== 'started' && existing.status !== 'not_received') throw new HttpError(409, 'You have already paid for that class.');
+  if (existing?.status === 'not_received') throw new HttpError(409, "We couldn't find your payment for that class in Monzo. Please speak to a teacher, or pay at the door.");
+  if (existing && existing.status !== 'started') throw new HttpError(409, 'You have already paid for that class.');
   const ref = payments.reference(req.user, date);
   await db.run(
     `INSERT INTO class_payments (user_id, class_date, method, status, amount_pence, reference) VALUES (?, ?, 'online', 'started', ?, ?)
@@ -491,6 +711,7 @@ staff.get('/stats', async (_req, res) => {
     todayAttendance: (await db.get('SELECT COUNT(*) AS n FROM attendance a JOIN class_sessions s ON s.id = a.session_id WHERE s.date = ?', date)).n,
     last30Attendance: (await db.get("SELECT COUNT(*) AS n FROM attendance a JOIN class_sessions s ON s.id = a.session_id WHERE s.date >= to_char(?::date - 30, 'YYYY-MM-DD')", date)).n,
     unreadMessages: (await db.get('SELECT COUNT(*) AS n FROM messages WHERE is_read = 0')).n,
+    toApprove: (await db.get('SELECT COUNT(*) AS n FROM users WHERE active = 1 AND under_16 = 1 AND under16_approved_at IS NULL')).n,
     // Sessions from the last 14 days that still need a debrief.
     debriefsDue: (await db.get(`SELECT COUNT(*) AS n FROM class_sessions s WHERE s.date BETWEEN to_char(?::date - 14, 'YYYY-MM-DD') AND ?
            AND NOT EXISTS (SELECT 1 FROM class_debriefs d WHERE d.session_id = s.id)
@@ -509,8 +730,8 @@ staff.get('/today', async (_req, res) => {
 });
 
 staff.get('/sessions', async (req, res) => {
-  const from = DATE_RE.test(req.query.from || '') ? req.query.from : '0000-00-00';
-  const to = DATE_RE.test(req.query.to || '') ? req.query.to : '9999-12-31';
+  const from = isDate(req.query.from || '') ? req.query.from : '0000-00-00';
+  const to = isDate(req.query.to || '') ? req.query.to : '9999-12-31';
   const sessions = (await db.all(`SELECT s.*, (SELECT COUNT(*) FROM attendance a WHERE a.session_id = s.id) AS count
          FROM class_sessions s WHERE s.date BETWEEN ? AND ?
         ORDER BY s.date DESC, s.start_time DESC LIMIT 500`, from, to));
@@ -524,7 +745,7 @@ staff.post('/sessions', async (req, res) => {
   const end = str(req.body.end_time, 5);
   const location = str(req.body.location, 200);
   if (!title) throw new HttpError(400, 'Please give the session a name.');
-  if (!DATE_RE.test(date) || !TIME_RE.test(start) || !TIME_RE.test(end)) throw new HttpError(400, 'Invalid date or time.');
+  if (!isDate(date) || !isTime(start) || !isTime(end)) throw new HttpError(400, 'Invalid date or time.');
   (await db.run(`INSERT INTO class_sessions (title, date, start_time, end_time, location, created_by)
      VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (title, date, start_time) DO NOTHING`, title, date, start, end, location, req.user.id));
   const session = (await db.get('SELECT * FROM class_sessions WHERE title = ? AND date = ? AND start_time = ?', title, date, start));
@@ -538,7 +759,9 @@ async function loadSession(id) {
 }
 
 async function sessionAttendees(sessionId) {
-  return (await db.all(`SELECT u.id, u.member_id AS "memberId", u.name, a.method, a.created_at AS "scannedAt", sb.name AS "scannedBy"
+  return (await db.all(`SELECT u.id, u.member_id AS "memberId", u.name, a.method, a.created_at AS "scannedAt", sb.name AS "scannedBy",
+              u.under_16 = 1 AS "under16", u.guardian_name AS "guardianName", u.guardian_phone AS "guardianPhone",
+              (u.under_16 = 1 AND u.under16_approved_at IS NULL) AS "needsApproval"
          FROM attendance a JOIN users u ON u.id = a.user_id
          LEFT JOIN users sb ON sb.id = a.scanned_by
         WHERE a.session_id = ? ORDER BY a.created_at DESC`, sessionId));
@@ -556,7 +779,7 @@ staff.patch('/sessions/:id', async (req, res) => {
   const start = str(req.body.start_time ?? session.start_time, 5);
   const end = str(req.body.end_time ?? session.end_time, 5);
   const location = str(req.body.location ?? session.location, 200);
-  if (!title || !DATE_RE.test(date) || !TIME_RE.test(start) || !TIME_RE.test(end)) throw new HttpError(400, 'Invalid session details.');
+  if (!title || !isDate(date) || !isTime(start) || !isTime(end)) throw new HttpError(400, 'Invalid session details.');
   try {
     (await db.run('UPDATE class_sessions SET title = ?, date = ?, start_time = ?, end_time = ?, location = ? WHERE id = ?', title, date, start, end, location, session.id));
   } catch {
@@ -590,7 +813,12 @@ staff.post('/sessions/:id/attendance', async (req, res) => {
   const info = (await db.run('INSERT INTO attendance (session_id, user_id, scanned_by, method) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING', session.id, member.id, req.user.id, method));
   res.json({
     status: info.changes ? 'recorded' : 'already',
-    member: { id: member.id, memberId: member.member_id, name: member.name },
+    member: {
+      id: member.id, memberId: member.member_id, name: member.name,
+      // Under-16s: the parent or guardian stays on site, and their number is to hand in an emergency.
+      under16: Boolean(member.under_16), needsApproval: Boolean(member.under_16 && !member.under16_approved_at),
+      guardianName: member.under_16 ? member.guardian_name || '' : '', guardianPhone: member.under_16 ? member.guardian_phone || '' : '',
+    },
     stats: await memberStats(member.id),
     payment: (await payments.find(member.id, session.date)) || null,
     date: session.date,
@@ -606,13 +834,13 @@ staff.delete('/sessions/:id/attendance/:userId', async (req, res) => {
 
 staff.get('/sessions/:id/export.csv', async (req, res) => {
   const session = await loadSession(req.params.id);
-  const rows = await sessionAttendees(session.id).map((a) => [a.memberId, a.name, a.method, a.scannedAt, a.scannedBy || '']);
+  const rows = (await sessionAttendees(session.id)).map((a) => [a.memberId, a.name, a.method, a.scannedAt, a.scannedBy || '']);
   sendCsv(res, `attendance-${session.date}-${session.id}.csv`, ['Member ID', 'Name', 'Method', 'Recorded at (UTC)', 'Recorded by'], rows);
 });
 
 staff.get('/attendance.csv', async (req, res) => {
-  const from = DATE_RE.test(req.query.from || '') ? req.query.from : '0000-00-00';
-  const to = DATE_RE.test(req.query.to || '') ? req.query.to : '9999-12-31';
+  const from = isDate(req.query.from || '') ? req.query.from : '0000-00-00';
+  const to = isDate(req.query.to || '') ? req.query.to : '9999-12-31';
   const rows = (await db.all(`SELECT s.date, s.start_time, s.title, u.member_id, u.name, a.method, a.created_at
          FROM attendance a JOIN class_sessions s ON s.id = a.session_id JOIN users u ON u.id = a.user_id
         WHERE s.date BETWEEN ? AND ? ORDER BY s.date, s.start_time, u.name`, from, to))
@@ -620,15 +848,33 @@ staff.get('/attendance.csv', async (req, res) => {
   sendCsv(res, 'attendance.csv', ['Date', 'Start', 'Session', 'Member ID', 'Name', 'Method', 'Recorded at (UTC)'], rows);
 });
 
+// What staff see of a member. Admins see everything; teachers see what they need
+// at class: name, member ID, role and attendance, plus, for under-16s, the
+// parent or guardian's name and phone for emergencies. Not emails, phone
+// numbers, staff notes or bios.
+function staffView(row, viewer) {
+  const full = publicUser(row, { includeNotes: true });
+  if (viewer.role === 'admin') return full;
+  return {
+    id: full.id, memberId: full.memberId, name: full.name, role: full.role, active: full.active, createdAt: full.createdAt,
+    under16: full.under16, needsApproval: full.needsApproval,
+    guardianName: full.under16 ? full.guardianName : '', guardianPhone: full.under16 ? full.guardianPhone : '',
+    privacyVersion: full.privacyVersion, privacyAcceptedAt: full.privacyAcceptedAt, privacyRequired: full.privacyRequired,
+    email: '', phone: '', bio: '', notes: '', guardianEmail: '',
+  };
+}
+
 staff.get('/members', async (req, res) => {
   const q = str(req.query.q, 100);
   const like = `%${q.replace(/[%_\\]/g, (c) => '\\' + c)}%`;
+  // Teachers search by name or member ID only.
+  const byContact = req.user.role === 'admin' ? like : null;
   const rows = (await db.all(`SELECT u.*, (SELECT COUNT(*) FROM attendance a WHERE a.user_id = u.id) AS attended,
               (SELECT MAX(s.date) FROM attendance a JOIN class_sessions s ON s.id = a.session_id WHERE a.user_id = u.id) AS last_attended
          FROM users u
-        WHERE (? = '' OR u.name ILIKE ? ESCAPE '\\' OR u.email ILIKE ? ESCAPE '\\' OR u.member_id ILIKE ? ESCAPE '\\' OR u.phone ILIKE ? ESCAPE '\\')
-        ORDER BY u.active DESC, lower(u.name) LIMIT 1000`, q, like, like, like, like));
-  res.json({ members: rows.map((r) => ({ ...publicUser(r, { includeNotes: true }), attended: r.attended, lastAttended: r.last_attended })) });
+        WHERE (? = '' OR u.name ILIKE ? ESCAPE '\\' OR u.member_id ILIKE ? ESCAPE '\\' OR u.email ILIKE ? ESCAPE '\\' OR u.phone ILIKE ? ESCAPE '\\')
+        ORDER BY u.active DESC, lower(u.name) LIMIT 1000`, q, like, like, byContact, byContact));
+  res.json({ members: rows.map((r) => ({ ...staffView(r, req.user), attended: r.attended, lastAttended: r.last_attended })) });
 });
 
 staff.post('/members', async (req, res) => {
@@ -648,10 +894,15 @@ staff.post('/members', async (req, res) => {
   if (email && !EMAIL_RE.test(email)) throw new HttpError(400, 'That email address does not look right.');
   if (email && (await db.get('SELECT 1 FROM users WHERE lower(email) = lower(?)', email))) throw new HttpError(409, 'A member with that email already exists.');
   const password = str(req.body.password, 200) || auth.generatePassword();
-  if (password.length < 8) throw new HttpError(400, 'Password must be at least 8 characters.');
+  const weak = auth.passwordProblem(password);
+  if (weak) throw new HttpError(400, weak);
   const memberId = await auth.generateMemberId();
   const info = (await db.run(`INSERT INTO users (member_id, name, email, phone, password_hash, role, notes, bio, under_16, guardian_name, guardian_email, guardian_phone)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`, memberId, name, email || null, phone, auth.hashPassword(password), role, notes, bio, under16 ? 1 : 0, guardianName || null, guardianEmail || null, guardianPhone || null));
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`, memberId, name, email || null, phone, await auth.hashPassword(password), role, notes, bio, under16 ? 1 : 0, guardianName || null, guardianEmail || null, guardianPhone || null));
+  // Staff made the account, so its email address doesn't need checking.
+  await db.run(`UPDATE users SET email_verified_at = ${db.NOW} WHERE id = ?`, info.rows[0].id);
+  // Staff entered the parent's details themselves, so the account is approved by them.
+  if (under16) await db.run(`UPDATE users SET under16_approved_by = ?, under16_approved_at = ${db.NOW} WHERE id = ?`, req.user.id, info.rows[0].id);
   const user = await db.get('SELECT * FROM users WHERE id = ?', info.rows[0].id);
   res.status(201).json({ member: publicUser(user, { includeNotes: true }), password });
 });
@@ -664,7 +915,16 @@ async function loadMember(id) {
 
 staff.get('/members/:id', async (req, res) => {
   const member = await loadMember(req.params.id);
-  res.json({ member: { ...publicUser(member, { includeNotes: true }), canEditTimeline: await canEditTimeline(member) }, stats: await memberStats(member.id), attendance: await memberAttendance(member.id) });
+  res.json({ member: { ...staffView(member, req.user), canEditTimeline: await canEditTimeline(member) }, stats: await memberStats(member.id), attendance: await memberAttendance(member.id) });
+});
+
+// A teacher or admin approves an under-16's account once they've checked the parent's details.
+staff.post('/members/:id/approve', async (req, res) => {
+  const member = await loadMember(req.params.id);
+  if (!member.under_16) throw new HttpError(400, 'Only under-16 accounts need approving.');
+  if (!member.guardian_name || !member.guardian_phone) throw new HttpError(400, "Add the parent or guardian's name and phone number before approving.");
+  await db.run(`UPDATE users SET under16_approved_by = ?, under16_approved_at = ${db.NOW} WHERE id = ? AND under16_approved_at IS NULL`, req.user.id, member.id);
+  res.json({ member: staffView(await loadMember(member.id), req.user) });
 });
 
 staff.get('/members/:id/qr.svg', async (req, res) => {
@@ -717,7 +977,7 @@ function readDebrief(body) {
   const pence = parsePounds(body.pouchBalance);
   const feedback = str(body.feedback, 5000);
   if (!ranBy.length) throw new HttpError(400, 'Please say who ran the class.');
-  if (!DATE_RE.test(classDate)) throw new HttpError(400, 'Please enter the date of the class.');
+  if (!isDate(classDate)) throw new HttpError(400, 'Please enter the date of the class.');
   if (!Number.isInteger(attendeeCount) || attendeeCount < 0 || attendeeCount > 2000) throw new HttpError(400, 'Please enter the number of attendees as a whole number.');
   if (pence === null) throw new HttpError(400, 'Please enter the LAB pouch balance in pounds, e.g. 125.50');
   return { ranBy: [...new Set(ranBy)].join(', ').slice(0, 500), classDate, classTitle, attendeeCount, pence, feedback };
@@ -725,13 +985,13 @@ function readDebrief(body) {
 
 // Who has paid for a class date: online (and whether it's been checked in Monzo) and at the door.
 staff.get('/payments', async (req, res) => {
-  const date = DATE_RE.test(req.query.date || '') ? req.query.date : todayInfo().date;
+  const date = isDate(req.query.date || '') ? req.query.date : todayInfo().date;
   const dates = payments.upcomingDates(content.getContent().timetable.classes);
   res.json({ date, dates, payOnline: payOnline(), payments: await payments.forDate(date) });
 });
 
-// Check an online payment against Monzo.
-staff.patch('/payments/:id', async (req, res) => {
+// Check an online payment against Monzo: admins only, as only they can see the Monzo account.
+staff.patch('/payments/:id', auth.requireRole('admin'), async (req, res) => {
   const status = req.body.status;
   if (!['received', 'not_received', 'claimed'].includes(status)) throw new HttpError(400, 'Unknown payment status.');
   const r = await db.run(
@@ -746,7 +1006,7 @@ staff.patch('/payments/:id', async (req, res) => {
 staff.post('/payments', async (req, res) => {
   const date = str(req.body.date, 10);
   const method = req.body.method;
-  if (!DATE_RE.test(date) || !['cash', 'card'].includes(method)) throw new HttpError(400, 'Invalid payment.');
+  if (!isDate(date) || !['cash', 'card'].includes(method)) throw new HttpError(400, 'Invalid payment.');
   const member = await db.get('SELECT id FROM users WHERE id = ?', Number(req.body.userId));
   if (!member) throw new HttpError(404, 'Member not found.');
   await db.run(
@@ -758,9 +1018,10 @@ staff.post('/payments', async (req, res) => {
   res.json({ payment: await payments.find(member.id, date) });
 });
 
-// Undo a door payment recorded by mistake.
+// Undo a door payment recorded by mistake. Admins can also remove an online claim entirely.
 staff.delete('/payments/:id', async (req, res) => {
-  await db.run("DELETE FROM class_payments WHERE id = ? AND method IN ('cash', 'card')", Number(req.params.id));
+  const methods = req.user.role === 'admin' ? "('cash', 'card', 'online')" : "('cash', 'card')";
+  await db.run(`DELETE FROM class_payments WHERE id = ? AND method IN ${methods}`, Number(req.params.id));
   res.json({ ok: true });
 });
 
@@ -785,15 +1046,15 @@ staff.get('/debriefs/prefill', async (req, res) => {
 });
 
 staff.get('/debriefs', async (req, res) => {
-  const from = DATE_RE.test(req.query.from || '') ? req.query.from : '0000-00-00';
-  const to = DATE_RE.test(req.query.to || '') ? req.query.to : '9999-12-31';
+  const from = isDate(req.query.from || '') ? req.query.from : '0000-00-00';
+  const to = isDate(req.query.to || '') ? req.query.to : '9999-12-31';
   const rows = (await db.all(`${DEBRIEF_SELECT} WHERE d.class_date BETWEEN ? AND ? ORDER BY d.class_date DESC, d.id DESC LIMIT 500`, from, to));
   res.json({ debriefs: rows.map(publicDebrief) });
 });
 
 staff.get('/debriefs.csv', async (req, res) => {
-  const from = DATE_RE.test(req.query.from || '') ? req.query.from : '0000-00-00';
-  const to = DATE_RE.test(req.query.to || '') ? req.query.to : '9999-12-31';
+  const from = isDate(req.query.from || '') ? req.query.from : '0000-00-00';
+  const to = isDate(req.query.to || '') ? req.query.to : '9999-12-31';
   const rows = (await db.all(`${DEBRIEF_SELECT} WHERE d.class_date BETWEEN ? AND ? ORDER BY d.class_date, d.id`, from, to))
     .map((d) => [
       d.class_date, d.class_title, d.ran_by, d.attendee_count,
@@ -865,6 +1126,9 @@ admin.patch('/members/:id', async (req, res) => {
   if (email && (await db.get('SELECT 1 FROM users WHERE lower(email) = lower(?) AND id != ?', email, member.id))) throw new HttpError(409, 'Another member already uses that email.');
   (await db.run('UPDATE users SET name = ?, email = ?, phone = ?, notes = ?, bio = ?, role = ?, active = ? WHERE id = ?', name, email || null, phone, notes, bio, role, active, member.id));
   (await db.run('UPDATE users SET under_16 = ?, guardian_name = ?, guardian_email = ?, guardian_phone = ? WHERE id = ?', under16, guardianName || null, guardianEmail || null, guardianPhone || null, member.id));
+  // An admin marking someone under 16 approves the account; taking it off clears the approval.
+  if (under16 && !member.under_16) await db.run(`UPDATE users SET under16_approved_by = ?, under16_approved_at = ${db.NOW} WHERE id = ?`, req.user.id, member.id);
+  if (!under16) await db.run('UPDATE users SET under16_approved_by = NULL, under16_approved_at = NULL WHERE id = ?', member.id);
   if (!active) await auth.destroyAllSessionsFor(member.id);
   // Only teachers keep the Our journey permission; it goes if they become a member (or an admin, who has it anyway).
   const editors = await timelineEditors();
@@ -881,10 +1145,19 @@ admin.patch('/members/:id', async (req, res) => {
 admin.post('/members/:id/reset-password', async (req, res) => {
   const member = await loadMember(req.params.id);
   const password = str(req.body.password, 200) || auth.generatePassword();
-  if (password.length < 8) throw new HttpError(400, 'Password must be at least 8 characters.');
-  (await db.run('UPDATE users SET password_hash = ? WHERE id = ?', auth.hashPassword(password), member.id));
+  const weak = auth.passwordProblem(password);
+  if (weak) throw new HttpError(400, weak);
+  (await db.run('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?', await auth.hashPassword(password), member.id));
   await auth.destroyAllSessionsFor(member.id);
   res.json({ password });
+});
+
+// For a teacher (or admin) who has lost their phone and backup codes: they set it up again at next login.
+admin.post('/members/:id/reset-two-step', async (req, res) => {
+  const member = await loadMember(req.params.id);
+  await db.run('UPDATE users SET totp_secret = NULL, totp_enabled = 0, totp_last = -1, totp_backup = NULL WHERE id = ?', member.id);
+  await auth.destroyAllSessionsFor(member.id);
+  res.json({ ok: true });
 });
 
 admin.post('/members/:id/new-member-id', async (req, res) => {
@@ -897,16 +1170,46 @@ admin.post('/members/:id/new-member-id', async (req, res) => {
 admin.delete('/members/:id', async (req, res) => {
   const member = await loadMember(req.params.id);
   if (member.id === req.user.id) throw new HttpError(400, 'You cannot delete your own account.');
-  (await db.run('DELETE FROM users WHERE id = ?', member.id));
+  await deleteAccount(member.id);
   res.json({ ok: true });
+});
+
+// Everything in a backup, parents before the tables that refer to them.
+const BACKUP_TABLES = ['users', 'settings', 'class_sessions', 'attendance', 'class_debriefs', 'privacy_consents', 'messages', 'class_payments', 'page_views', 'site_events'];
+
+// Puts a backup back, replacing everything (all in one go: if anything fails,
+// nothing changes). Everyone is logged out, as the logins aren't in the backup.
+admin.post('/restore', async (req, res) => {
+  const backup = req.body;
+  if (backup?.app !== 'london-academy-of-bhangra' || !backup.tables || typeof backup.tables !== 'object') throw new HttpError(400, "That file isn't a backup from this website.");
+  const users = backup.tables.users;
+  if (!Array.isArray(users) || !users.some((u) => u.role === 'admin' && Number(u.active) === 1)) throw new HttpError(400, 'That backup has no active admin, so restoring it would lock everyone out.');
+  if (req.body.confirm !== 'RESTORE') throw new HttpError(400, 'Type RESTORE to confirm.');
+  const counts = {};
+  await transaction(async (tx) => {
+    await tx.run(`TRUNCATE ${BACKUP_TABLES.join(', ')}, auth_sessions, login_challenges CASCADE`);
+    for (const table of BACKUP_TABLES) {
+      const rows = Array.isArray(backup.tables[table]) ? backup.tables[table] : [];
+      const cols = new Set((await tx.all('SELECT column_name FROM information_schema.columns WHERE table_name = ?', table)).map((c) => c.column_name));
+      for (const row of rows) {
+        const keys = Object.keys(row || {}).filter((k) => cols.has(k));
+        if (!keys.length) continue;
+        await tx.run(`INSERT INTO ${table} (${keys.map((k) => `"${k}"`).join(', ')}) VALUES (${keys.map(() => '?').join(', ')})`, ...keys.map((k) => row[k]));
+      }
+      if (cols.has('id')) await tx.run(`SELECT setval(pg_get_serial_sequence('${table}', 'id'), COALESCE((SELECT MAX(id) FROM ${table}), 0) + 1, false)`);
+      counts[table] = rows.length;
+    }
+  });
+  await content.init();
+  res.clearCookie('lab_session', { path: '/' });
+  res.json({ ok: true, counts });
 });
 
 // Full backup of everything in the database (Supabase's free plan has no
 // restorable backups). Contains personal data and password hashes: keep it safe.
 admin.get('/backup.json', async (_req, res) => {
-  const tables = ['users', 'class_sessions', 'attendance', 'class_debriefs', 'privacy_consents', 'messages', 'settings'];
   const backup = { app: 'london-academy-of-bhangra', createdAt: new Date().toISOString(), tables: {} };
-  for (const t of tables) backup.tables[t] = await db.all(`SELECT * FROM ${t} ORDER BY 1`);
+  for (const t of BACKUP_TABLES) backup.tables[t] = await db.all(`SELECT * FROM ${t} ORDER BY 1`);
   res.setHeader('Content-Disposition', `attachment; filename="lab-backup-${todayInfo().date}.json"`);
   res.setHeader('Cache-Control', 'no-store');
   res.type('application/json').send(JSON.stringify(backup));
@@ -1057,13 +1360,54 @@ app.use(
 const indexTemplate = fs.readFileSync(path.join(PUBLIC_DIR, 'index.html'), 'utf8');
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
+// The site's own address, for links that must be absolute (sitemap, link previews).
+const siteOrigin = (req) => (process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
+
+// Each page's own title and description, so search results and WhatsApp link
+// previews show the right thing (they don't run the page's scripts).
+const PAGE_META = { '/about': 'about', '/timetable': 'timetable', '/pricing': 'pricing', '/gallery': 'gallery', '/faq': 'faq', '/timeline': 'timeline', '/performances': 'performances', '/workshops': 'workshops', '/contact': 'contact', '/privacy': 'privacy' };
+function pageMeta(c, pagePath) {
+  const key = PAGE_META[pagePath];
+  const section = key ? c[key] : null;
+  const plain = (t) => String(t || '').replace(/[*_#>`[\]()]/g, '').replace(/\s+/g, ' ').trim();
+  const intro = plain(section?.intro || section?.tagline || '');
+  return {
+    title: section?.title ? `${plain(section.title)} | ${c.site.name}` : c.site.name,
+    description: (intro || c.site.tagline).slice(0, 200),
+  };
+}
+
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain').send(`User-agent: *\nDisallow: /admin\nDisallow: /account\nDisallow: /api/\nSitemap: ${siteOrigin(req)}/sitemap.xml\n`);
+});
+
+app.get('/sitemap.xml', (req, res) => {
+  const c = content.getContent();
+  const visible = new Set(c.nav.filter((n) => n.visible).map((n) => n.id));
+  const pages = ['/', ...Object.keys(PAGE_META).filter((p) => p === '/privacy' || visible.has(PAGE_META[p])), ...c.customPages.filter((p) => visible.has(`page:${p.slug}`)).map((p) => `/p/${p.slug}`)];
+  const urls = pages.map((p) => `  <url><loc>${escapeHtml(siteOrigin(req) + p)}</loc></url>`).join('\n');
+  res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`);
+});
+
+// Browsers ask for /favicon.ico whatever the page says.
+app.get('/favicon.ico', (_req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.sendFile(path.join(PUBLIC_DIR, 'img', 'favicon-48.png'));
+});
+
 app.get('/{*path}', async (req, res) => {
   if (path.extname(req.path)) return res.status(404).send('Not found');
-  const site = content.getContent().site;
+  const c = content.getContent();
+  const site = c.site;
   const color = /^#[0-9a-f]{3,8}$/i.test(site.primaryColor) ? site.primaryColor : '#2f2f52';
+  const meta = pageMeta(c, req.path.replace(/\/+$/, '') || '/');
+  const origin = siteOrigin(req);
   const html = indexTemplate
+    .replace('<title>{{SITE_NAME}}</title>', `<title>${escapeHtml(meta.title)}</title>`)
+    .replace('<meta property="og:title" content="{{SITE_NAME}}">', `<meta property="og:title" content="${escapeHtml(meta.title)}">`)
+    .replace('content="/img/og-backdrop.jpg"', `content="${escapeHtml(origin)}/img/og-backdrop.jpg"`)
     .replaceAll('{{SITE_NAME}}', escapeHtml(site.name))
-    .replaceAll('{{SITE_DESCRIPTION}}', escapeHtml(site.tagline))
+    .replaceAll('{{SITE_DESCRIPTION}}', escapeHtml(meta.description))
     .replaceAll('{{THEME_COLOR}}', color);
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(html);
@@ -1088,8 +1432,8 @@ async function ensureAdmin() {
   const email = process.env.ADMIN_EMAIL || 'admin@londonacademyofbhangra.org';
   const password = process.env.ADMIN_PASSWORD || auth.generatePassword();
   await db.run(
-    'INSERT INTO users (member_id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)',
-    await auth.generateMemberId(), 'Academy Admin', email, auth.hashPassword(password), 'admin'
+    `INSERT INTO users (member_id, name, email, password_hash, role, email_verified_at) VALUES (?, ?, ?, ?, ?, ${db.NOW})`,
+    await auth.generateMemberId(), 'Academy Admin', email, await auth.hashPassword(password), 'admin'
   );
   console.log('\n================ First run ================');
   console.log(' Admin account created');
@@ -1111,6 +1455,17 @@ async function prepare() {
   await instagram.init();
   await storage.init();
   await ensureAdmin();
+  // Daily tidy-up of what the privacy policy says isn't kept.
+  await tidyUp().catch((err) => console.error('Tidy-up:', err.message));
+  setInterval(() => tidyUp().catch((err) => console.error('Tidy-up:', err.message)), 24 * 3600_000).unref();
+}
+
+// Contact messages go after 12 months; expired logins and login tickets go too.
+async function tidyUp() {
+  await db.run("DELETE FROM messages WHERE created_at < to_char((now() at time zone 'utc') - interval '12 months', 'YYYY-MM-DD HH24:MI:SS')");
+  await db.run('DELETE FROM auth_sessions WHERE expires_at < ?', Date.now());
+  await db.run('DELETE FROM login_challenges WHERE expires_at < ?', Date.now());
+  await db.run('DELETE FROM rate_limits WHERE reset_at < ?', Date.now());
 }
 
 if (require.main === module) {

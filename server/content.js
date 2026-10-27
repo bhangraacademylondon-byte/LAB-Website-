@@ -89,6 +89,8 @@ const RETIRED_DEFAULTS = [
   ...require('./retiredDefaults'),
 ];
 
+const PRIVACY_2026_10 = require('./privacyOld');
+
 const RETIRED_HOME_KEYS = ['heroEyebrow', 'heroImage', 'showHeroLogo', 'heroLayout', 'logoAnimation', 'heroButtons', 'showHighlights', 'highlights', 'showIntro', 'introEyebrow', 'introTitle', 'introText', 'introImage', 'introButtons', 'classesCardTitle', 'classesCardButton', 'instagramEyebrow', 'instagramTitle', 'instagramButton', 'showCta', 'ctaTitle', 'ctaText', 'ctaButtons'];
 
 function normalise(content) {
@@ -138,6 +140,13 @@ function normalise(content) {
   for (const [section, key, old] of RETIRED_DEFAULTS) {
     if (JSON.stringify(merged[section][key]) === JSON.stringify(old)) merged[section][key] = structuredClone(defaults[section][key]);
   }
+  // The policy was updated for launch (October 2026). A policy still on the old
+  // wording gets the new text and version together, so everyone is asked to
+  // accept it again; a policy edited in Admin is left alone.
+  if (merged.privacy.body === PRIVACY_2026_10 && merged.privacy.version === '2026-10') {
+    merged.privacy.body = defaults.privacy.body;
+    merged.privacy.version = defaults.privacy.version;
+  }
   // An empty version would let everyone skip the privacy policy, so never allow it.
   merged.privacy.version = String(merged.privacy.version || '').trim().slice(0, 40) || defaults.privacy.version;
   return merged;
@@ -156,6 +165,14 @@ let loadedAt = 0;
 const ADDITIONS = [
   { id: 'teachers-aman-simrit', apply: (c) => addTeachers(c, ['Aman', 'Simrit']) },
   { id: 'founder-bios', apply: (c) => { fillTeacher(c, 'Ravi'); fillTeacher(c, 'Gurdeep'); } },
+  // Thursday is one class for kids and adults together (confirmed October 2026).
+  { id: 'thursday-kids-and-adults', apply: (c) => {
+    for (const cls of c.timetable.classes) {
+      if (String(cls.ages || '').trim().toLowerCase() === 'adults') cls.ages = 'Kids & adults';
+      if (String(cls.name || '').trim() === 'Adults Bhangra') cls.name = 'Bhangra';
+      if (String(cls.level || '').trim() === 'All levels') cls.level = 'Mixed abilities';
+    }
+  } },
 ];
 
 // Gives a listed teacher the bio and photo from the defaults, where theirs is still blank or the original placeholder.

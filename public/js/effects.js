@@ -9,13 +9,14 @@ const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 export function blurFade(root) {
   if (still() || !('IntersectionObserver' in window)) return;
   const parts = root.querySelectorAll('[data-fade] > *');
+  // Starts just before a section scrolls into view, so it's already there when it arrives.
   const io = new IntersectionObserver((entries) => {
     for (const en of entries) {
       if (!en.isIntersecting) continue;
       en.target.classList.add('is-in');
       io.unobserve(en.target);
     }
-  }, { rootMargin: '0px 0px -10% 0px' });
+  }, { rootMargin: '0px 0px 15% 0px' });
   parts.forEach((el, i) => {
     if (el.getBoundingClientRect().top < innerHeight * 0.9) return;
     el.classList.add('fade');

@@ -27,3 +27,7 @@ services:
         sync: false
       - key: ADMIN_PASSWORD
         sync: false
+      - key: RESEND_API_KEY # Resend → API Keys (sending access). Switches on emails: contact alerts, password resets, email checks
+        sync: false
+      - key: DATABASE_CA_CERT # Optional: Supabase → Database settings → SSL certificate, to fully verify the database connection
+        sync: false

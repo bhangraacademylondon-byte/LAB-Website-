@@ -447,7 +447,7 @@ function classTile(c, k, site) {
   const plan = firstPlan(state.content.pricing);
   return html`
     <div class="tile t-deep tile-card class-tile">
-      <div class="big-num" style="color:var(--gold)" data-count="${clockFace(c.start)}">${clockFace(c.start)}</div>
+      <div class="big-num" style="color:var(--gold)">${clockFace(c.start)}</div>
       <div style="display:grid;gap:8px;min-width:0">
         <span class="tile-no">A${k + 1}${c.day ? ` · ${c.day}` : ''} · ${formatTime(c.start)}${c.end ? ` to ${formatTime(c.end)}` : ''}</span>
         <h3>${c.name}</h3>
@@ -511,7 +511,7 @@ function renderPricing() {
       ${plans.map((p, k) => html`
         <div class="tile ${TONES[k % 3]} tile-card">
           <span class="tile-no">A${k + 1} · ${p.name}${p.highlight && pricing.highlightBadge ? ` · ${pricing.highlightBadge}` : ''}</span>
-          <div class="big-num ${/\d/.test(p.price) ? '' : 'sm'}" ${raw(/^\D?\d+$/.test(p.price) ? `data-count="${p.price.replace(/\D/g, '')}"` : '')}>${p.price}</div>
+          <div class="big-num ${/\d/.test(p.price) ? '' : 'sm'}">${p.price}</div>
           ${p.period ? html`<p><b>${p.period}</b></p>` : ''}
           ${p.description ? html`<p>${p.description}</p>` : ''}
           ${(p.features || []).filter(Boolean).length ? html`<p>${(p.features || []).filter(Boolean).join(' · ')}</p>` : ''}
@@ -773,27 +773,38 @@ function renderPrivacy() {
 function consentFields(user = null) {
   const { members } = state.content;
   const under16 = Boolean(user?.under16);
-  return html`
-    <fieldset class="consent-box">
+  const agree = html`
+    <label class="checkbox consent-check"><input type="checkbox" name="acceptPrivacy" required>
+      <span>${members.privacyCheckboxText} <a href="/privacy" target="_blank" rel="noopener">Read the Privacy Policy</a></span></label>`;
+  // Teachers and admins aren't asked their age.
+  if (user && user.role !== 'member') return agree;
+  // Someone already marked as under 16 isn't asked again: a parent or guardian confirms instead.
+  const age = user && under16
+    ? html`<legend class="field-label">Parent or guardian</legend><input type="hidden" name="ageGroup" value="under16">`
+    : html`
       <legend class="field-label">Age of the member</legend>
       <label class="checkbox"><input type="radio" name="ageGroup" value="16plus" ${raw(user?.privacyVersion && !under16 ? 'checked' : '')} required> 16 or over</label>
-      <label class="checkbox"><input type="radio" name="ageGroup" value="under16" ${raw(under16 ? 'checked' : '')}> Under 16</label>
+      <label class="checkbox"><input type="radio" name="ageGroup" value="under16" ${raw(under16 ? 'checked' : '')}> Under 16</label>`;
+  return html`
+    <fieldset class="consent-box">
+      ${age}
       <div class="guardian-fields" ${raw(under16 ? '' : 'hidden')}>
         <p class="small" style="margin:4px 0 0">For members under 16, a <strong>parent or guardian</strong> must fill in this part.</p>
         <label class="field"><span>Parent or guardian's full name</span><input name="guardianName" value="${user?.guardianName || ''}" autocomplete="off"></label>
         <label class="field"><span>Parent or guardian's email</span><input name="guardianEmail" type="email" value="${user?.guardianEmail || ''}" autocomplete="off"></label>
-        <label class="field"><span>Parent or guardian's phone (optional)</span><input name="guardianPhone" type="tel" value="${user?.guardianPhone || ''}" autocomplete="off"></label>
+        <label class="field"><span>Parent or guardian's mobile (for emergencies)</span><input name="guardianPhone" type="tel" value="${user?.guardianPhone || ''}" autocomplete="off"></label>
+        <p class="small muted" style="margin:0">A parent or guardian stays on site during classes for under 16s. A teacher checks these details before the member's pass is switched on.</p>
         <label class="checkbox consent-check"><input type="checkbox" name="guardianConsent"> <span>${members.guardianConsentText}</span></label>
       </div>
     </fieldset>
-    <label class="checkbox consent-check"><input type="checkbox" name="acceptPrivacy" required>
-      <span>${members.privacyCheckboxText} <a href="/privacy" target="_blank" rel="noopener">Read the Privacy Policy</a></span></label>`;
+    ${agree}`;
 }
 
 function bindConsentFields(form, onAgeChange) {
   const update = () => {
-    const under16 = form.querySelector('input[name=ageGroup]:checked')?.value === 'under16';
-    form.querySelector('.guardian-fields').hidden = !under16;
+    const under16 = (form.querySelector('input[name=ageGroup][type=hidden]') || form.querySelector('input[name=ageGroup]:checked'))?.value === 'under16';
+    const fields = form.querySelector('.guardian-fields');
+    if (fields) fields.hidden = !under16;
     onAgeChange?.(under16);
   };
   form.querySelectorAll('input[name=ageGroup]').forEach((r) => r.addEventListener('change', update));
@@ -848,10 +859,49 @@ function renderConsent() {
   });
 }
 
-// Where to go after logging in: the consent page first if the policy needs accepting.
+// Where to go after logging in: a new password first if theirs is too weak, then
+// the consent page if the policy needs accepting.
 function afterLogin(user, next) {
+  if (user.mustChangePassword) return navigate(`/change-password?next=${encodeURIComponent(next)}`, { replace: true });
+  if (user.twoStepSetupRequired) return navigate(`/two-step-setup?next=${encodeURIComponent(next)}`, { replace: true });
   if (user.privacyRequired) return navigate(`/privacy-consent?next=${encodeURIComponent(next)}`, { replace: true });
   navigate(next, { replace: true });
+}
+
+// Someone whose password doesn't meet today's rules chooses a new one before going on.
+function renderChangePassword() {
+  if (!state.user) return navigate('/login', { replace: true });
+  setTitle('Choose a new password');
+  const next = nextPath();
+  if (!state.user.mustChangePassword) return afterLogin(state.user, next);
+  mount(main(), authShell('Choose a new password', html`
+    <p class="muted">To keep members' details safe, passwords now need to be at least 12 characters long and include a special character. Please choose a new one to continue.</p>
+    <form class="form" id="new-pw-form" novalidate>
+      <label class="field"><span>Current password</span><input name="current" type="password" required autocomplete="current-password"></label>
+      <label class="field"><span>New password</span><input name="next" type="password" required minlength="12" autocomplete="new-password"><small>At least 12 characters, including a special character such as ! ? # or -.</small></label>
+      <label class="field"><span>New password again</span><input name="again" type="password" required minlength="12" autocomplete="new-password"></label>
+      <div class="form-error" role="alert"></div>
+      <button class="cta-pill" type="submit" style="width:100%">Save and continue</button>
+    </form>
+    <p class="small" style="margin:16px 0 0"><button class="btn btn-ghost btn-sm" id="new-pw-logout">Log out instead</button></p>`));
+  document.getElementById('new-pw-logout').addEventListener('click', logout);
+  const form = document.getElementById('new-pw-form');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    formError(form, '');
+    const { current, next: pw, again } = formData(form);
+    if (pw !== again) return formError(form, 'The two new passwords are different.');
+    await withBusy(form.querySelector('button[type=submit]'), async () => {
+      try {
+        await api('/api/me/password', { method: 'POST', body: { current, next: pw } });
+        state.user.mustChangePassword = false;
+        toast('Password updated', 'success');
+        afterLogin(state.user, next);
+      } catch (err) {
+        formError(form, err.message);
+      }
+    });
+  });
 }
 
 // ---------- auth & member pages ----------
@@ -886,7 +936,7 @@ function renderLogin() {
       <div class="form-error" role="alert"></div>
       <button class="cta-pill" type="submit" style="width:100%">Log in</button>
     </form>
-    <p class="small muted" style="margin-top:16px">${members.forgotPasswordText}</p>
+    <p class="small muted" style="margin-top:16px">${state.emailEnabled ? html`<a href="/forgot-password"><b>Forgotten your password?</b></a>` : members.forgotPasswordText}</p>
     ${members.allowRegistration ? html`<p style="margin:0">New here? <a href="/register"><b>Create an account</b></a></p>` : ''}`));
 
   const form = document.getElementById('login-form');
@@ -895,9 +945,163 @@ function renderLogin() {
     formError(form, '');
     await withBusy(form.querySelector('button[type=submit]'), async () => {
       try {
-        const { user } = await api('/api/auth/login', { method: 'POST', body: formData(form) });
+        const r = await api('/api/auth/login', { method: 'POST', body: formData(form) });
+        if (r.twoStep) return askTwoStepCode(r.ticket);
+        state.user = r.user;
+        afterLogin(r.user, nextPath());
+      } catch (err) {
+        formError(form, err.message);
+      }
+    });
+  });
+}
+
+// Admins and teachers: after the password, a code from their authenticator app.
+function askTwoStepCode(ticket) {
+  const { members } = state.content;
+  mount(main(), authShell(members.loginTitle, html`
+    <p class="muted">Open your authenticator app and enter the 6-digit code for <b>London Academy of Bhangra</b>.</p>
+    <form class="form" id="code-form" novalidate>
+      <label class="field"><span>Code</span><input name="code" inputmode="numeric" autocomplete="one-time-code" autocapitalize="none" required maxlength="12" style="font-size:22px;letter-spacing:.2em"></label>
+      <div class="form-error" role="alert"></div>
+      <button class="cta-pill" type="submit" style="width:100%">Log in</button>
+    </form>
+    <p class="small muted" style="margin-top:16px">Lost your phone? Type one of your backup codes instead, or ask an admin to reset two-step login for you.</p>
+    <p class="small" style="margin:0"><a href="/login">Start again</a></p>`));
+  const form = document.getElementById('code-form');
+  form.code.focus();
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    formError(form, '');
+    await withBusy(form.querySelector('button[type=submit]'), async () => {
+      try {
+        const { user } = await api('/api/auth/two-step', { method: 'POST', body: { ticket, code: form.code.value } });
         state.user = user;
         afterLogin(user, nextPath());
+      } catch (err) {
+        formError(form, err.message);
+        form.code.select();
+      }
+    });
+  });
+}
+
+// Admins and teachers set up two-step login once: scan a QR code, type a code, save backup codes.
+async function renderTwoStepSetup() {
+  if (!state.user) return navigate('/login', { replace: true });
+  const next = nextPath();
+  if (!state.user.twoStepSetupRequired) return afterLogin(state.user, next);
+  setTitle('Set up two-step login');
+  const { secret } = await api('/api/me/two-step/setup', { method: 'POST' });
+  mount(main(), authShell('Set up two-step login', html`
+    <p class="muted">Because admins and teachers can see members' details, logging in needs a code from your phone as well as your password.</p>
+    <ol class="steps2">
+      <li>Install an authenticator app, such as <b>Google Authenticator</b> or <b>Microsoft Authenticator</b>.</li>
+      <li>In the app, add an account and scan this code:
+        <div class="qr-box" style="margin:12px 0;max-width:220px"><img src="/api/me/two-step/qr.svg?t=${Date.now()}" alt="Set-up QR code" width="220" height="220"></div>
+        <span class="small muted">Can't scan it? Choose "enter a key" in the app and type: <code style="user-select:all">${secret}</code></span></li>
+      <li>Type the 6-digit code the app shows:</li>
+    </ol>
+    <form class="form" id="setup-form" novalidate>
+      <label class="field"><span>Code</span><input name="code" inputmode="numeric" autocomplete="one-time-code" required maxlength="6" style="font-size:22px;letter-spacing:.2em"></label>
+      <div class="form-error" role="alert"></div>
+      <button class="cta-pill" type="submit" style="width:100%">Turn on two-step login</button>
+    </form>
+    <p class="small" style="margin:16px 0 0"><button class="btn btn-ghost btn-sm" id="setup-logout">Log out instead</button></p>`));
+  document.getElementById('setup-logout').addEventListener('click', logout);
+  const form = document.getElementById('setup-form');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    formError(form, '');
+    await withBusy(form.querySelector('button[type=submit]'), async () => {
+      try {
+        const { backupCodes, user } = await api('/api/me/two-step/enable', { method: 'POST', body: { code: form.code.value } });
+        state.user = { ...state.user, ...user };
+        mount(main(), authShell('Save your backup codes', html`
+          <p>Two-step login is on. If you ever lose your phone, each of these codes lets you log in once. <b>Write them down or screenshot them now</b>: they won't be shown again.</p>
+          <ul class="backup-codes">${backupCodes.map((c) => html`<li><code>${c}</code></li>`)}</ul>
+          <button class="cta-pill" type="button" id="codes-done" style="width:100%">I've saved them, continue</button>`));
+        document.getElementById('codes-done').addEventListener('click', () => afterLogin(state.user, next));
+      } catch (err) {
+        formError(form, err.message);
+      }
+    });
+  });
+}
+
+// After signing up online: the account works once the email link is clicked.
+function checkYourEmail(address) {
+  mount(main(), authShell('Check your email', html`
+    <p>We've sent a link to <b>${address}</b>. Click it to confirm your email address and finish creating your account.</p>
+    <p class="small muted">It can take a minute or two. Check your spam or junk folder if it doesn't arrive. The link works for 48 hours.</p>
+    <a class="cta-pill light" href="/login" style="width:100%">Back to login</a>`));
+}
+
+async function renderVerifyEmail() {
+  setTitle('Confirm your email');
+  const token = new URLSearchParams(location.search).get('token') || '';
+  try {
+    const r = await api('/api/auth/verify', { method: 'POST', body: { token } });
+    if (!r.user) {
+      toast('Email confirmed. Please log in.', 'success');
+      return navigate('/login', { replace: true });
+    }
+    state.user = r.user;
+    toast('Email confirmed. Welcome to the LAB!', 'success', 6000);
+    afterLogin(r.user, '/account');
+  } catch (err) {
+    mount(main(), authShell('Confirm your email', html`<p>${err.message}</p><a class="cta-pill" href="/login" style="width:100%">Log in</a>`));
+  }
+}
+
+function renderForgotPassword() {
+  setTitle('Forgotten your password?');
+  mount(main(), authShell('Forgotten your password?', html`
+    <p class="muted">Enter the email address you use to log in, and we'll email you a link to choose a new password.</p>
+    <form class="form" id="forgot-form" novalidate>
+      <label class="field"><span>Email</span><input name="email" type="email" required autocomplete="email" autocapitalize="none"></label>
+      <div class="form-error" role="alert"></div>
+      <button class="cta-pill" type="submit" style="width:100%">Send the link</button>
+    </form>
+    <p class="small muted" style="margin-top:16px">Children who log in with their member ID: please ask a teacher to reset your password.</p>`));
+  const form = document.getElementById('forgot-form');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    formError(form, '');
+    await withBusy(form.querySelector('button[type=submit]'), async () => {
+      try {
+        await api('/api/auth/forgot', { method: 'POST', body: formData(form) });
+        mount(main(), authShell('Check your email', html`
+          <p>If <b>${form.email.value}</b> belongs to an account, we've sent it a link to choose a new password. The link works once, for an hour.</p>
+          <p class="small muted">Check your spam or junk folder if it doesn't arrive in a few minutes.</p>
+          <a class="cta-pill light" href="/login" style="width:100%">Back to login</a>`));
+      } catch (err) {
+        formError(form, err.message);
+      }
+    });
+  });
+}
+
+function renderResetPassword() {
+  setTitle('Choose a new password');
+  const token = new URLSearchParams(location.search).get('token') || '';
+  mount(main(), authShell('Choose a new password', html`
+    <form class="form" id="reset-form" novalidate>
+      <label class="field"><span>New password</span><input name="password" type="password" required minlength="12" autocomplete="new-password"><small>At least 12 characters, including a special character such as ! ? # or -.</small></label>
+      <label class="field"><span>New password again</span><input name="again" type="password" required minlength="12" autocomplete="new-password"></label>
+      <div class="form-error" role="alert"></div>
+      <button class="cta-pill" type="submit" style="width:100%">Save new password</button>
+    </form>`));
+  const form = document.getElementById('reset-form');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    formError(form, '');
+    if (form.password.value !== form.again.value) return formError(form, 'The two passwords are different.');
+    await withBusy(form.querySelector('button[type=submit]'), async () => {
+      try {
+        await api('/api/auth/reset', { method: 'POST', body: { token, password: form.password.value } });
+        toast('Password changed. Please log in with your new password.', 'success', 6000);
+        navigate('/login', { replace: true });
       } catch (err) {
         formError(form, err.message);
       }
@@ -927,7 +1131,7 @@ function renderRegister() {
       <label class="field"><span>Email</span><input name="email" type="email" autocomplete="email"><small id="email-hint" hidden>For under 16s this can be a parent's email. Leave it blank if a brother or sister already uses that email; you will then log in with the member ID you are given.</small></label>
       <label class="field"><span>Phone (optional)</span><input name="phone" type="tel" autocomplete="tel"></label>
       <label class="field"><span>About you (optional)</span><textarea name="bio" rows="3" maxlength="1000" placeholder="${members.bioPrompt}"></textarea></label>
-      <label class="field"><span>Password</span><input name="password" type="password" required minlength="8" autocomplete="new-password"><small>At least 8 characters.</small></label>
+      <label class="field"><span>Password</span><input name="password" type="password" required minlength="12" autocomplete="new-password"><small>At least 12 characters, including a special character such as ! ? # or -.</small></label>
       ${consentFields()}
       <div class="form-error" role="alert"></div>
       <div><button class="cta-pill" type="submit">Create my account</button></div>
@@ -945,7 +1149,9 @@ function renderRegister() {
       try {
         const f = formData(form);
         const body = { name: f.name, email: f.email, phone: f.phone, bio: f.bio, password: f.password, ...readConsentForm(form) };
-        const { user } = await api('/api/auth/register', { method: 'POST', body });
+        const r = await api('/api/auth/register', { method: 'POST', body });
+        if (r.checkEmail) return checkYourEmail(body.email);
+        const { user } = r;
         state.user = user;
         confetti(button);
         toast(`${members.welcomeMessage} (${user.memberId})`, 'success', 6000);
@@ -977,7 +1183,7 @@ export function monthlyChart(monthly) {
 
 // ----- paying for a class online (Monzo payment link) -----
 
-const PAY_STATUS = { claimed: 'Paid online', received: 'Paid online ✓ checked', not_received: 'Not received', cash: 'Paid cash', card: 'Paid card' };
+const PAY_STATUS = { claimed: 'Paid online · being checked', received: 'Paid ✓ confirmed', not_received: 'Not found in Monzo · please pay at the door', cash: 'Paid cash', card: 'Paid card' };
 const payLabel = (p) => (p.method === 'online' ? PAY_STATUS[p.status] : PAY_STATUS[p.method]);
 const isPaid = (p) => p && p.status !== 'not_received' && p.status !== 'started';
 const classDate = (iso, opts = { weekday: 'long', day: 'numeric', month: 'long' }) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-GB', { ...opts, timeZone: 'UTC' });
@@ -1000,7 +1206,7 @@ async function payForClass(box) {
       <h3>Payment history</h3>
       <ul class="pay-list">${data.payments.map((p) => html`
         <li><span><b>${classDate(p.date, { weekday: 'short', day: 'numeric', month: 'long' })}</b><small>${p.method === 'online' ? p.reference : 'At the door'}</small></span>
-          <span class="pay-badge ${isPaid(p) ? '' : 'bad'}">${payLabel(p)}</span></li>`)}</ul>
+          <span class="pay-badge ${p.status === 'claimed' ? 'wait' : isPaid(p) ? '' : 'bad'}">${payLabel(p)}</span></li>`)}</ul>
     </div>` : '');
 
   const draw = () => {
@@ -1017,12 +1223,15 @@ async function payForClass(box) {
         </div>`;
     } else if (payOnline.enabled && dates.length) {
       const done = paidFor(chosen);
+      const refused = data.payments.find((p) => p.date === chosen && p.status === 'not_received');
       main = html`
         <div class="tile t-white tile-card pay-card">
           <h3>Pay for a class</h3>
           <label class="field"><span>Which class are you paying for?</span>
             <select id="pay-date">${dates.map((d, k) => html`<option value="${d}" ${raw(d === chosen ? 'selected' : '')}>${classDate(d)}${k === 0 ? ' (next class)' : ''}${paidFor(d) ? ' · paid ✓' : ''}</option>`)}</select></label>
-          ${done ? html`
+          ${refused ? html`
+            <p class="pay-done"><span class="pay-badge bad">Not found in Monzo</span> We couldn't find your payment for ${classDate(chosen, { weekday: 'long', day: 'numeric', month: 'long' })}. Please speak to a teacher, or pay at the door.</p>`
+          : done ? html`
             <p class="pay-done"><span class="pay-badge">✓ ${payLabel(done)}</span> You're all set for ${classDate(chosen, { weekday: 'long', day: 'numeric', month: 'long' })}. Just show your QR code at the door.</p>`
           : html`
             <div class="pay-ref"><small>Put this in the Monzo payment note</small><div><b id="pay-ref">…</b><button type="button" class="pay-copy" id="pay-copy">Copy</button></div></div>
@@ -1118,7 +1327,7 @@ async function renderAccount() {
   const next = classes[0] ? nextClass(classes[0]) : null;
   const since = u.createdAt ? formatDateTime(u.createdAt, { month: 'long', year: 'numeric' }) : '';
   mount(main(), html`
-    <section class="page-head">
+    <section class="page-head acct-head">
       <div>
         <p style="font-weight:700;color:var(--gold-text);margin:0 0 10px">Hello, ${u.name.split(' ')[0]}</p>
         <h1>Your <span>pass</span></h1>
@@ -1130,7 +1339,9 @@ async function renderAccount() {
       </div>
       <div class="tile t-cream tile-card pass-card member-card-print">
         <span class="tile-no">${site.name}</span>
-        <div class="qr-box"><img src="/api/me/qr.svg?v=${encodeURIComponent(u.memberId)}" alt="QR code for member ID ${u.memberId}" width="256" height="256"></div>
+        ${u.needsApproval ? html`
+        <div class="pass-wait"><b>Your pass is on its way</b>A teacher will check your parent or guardian's details, usually at your first class. Your QR code appears here once they've approved your account.</div>`
+        : html`<div class="qr-box"><img src="/api/me/qr.svg?v=${encodeURIComponent(u.memberId)}" alt="QR code for member ID ${u.memberId}" width="256" height="256"></div>`}
         <div class="pass-id">${u.memberId}</div>
         <p class="small muted">${u.name}${since ? ` · member since ${since}` : ''}</p>
       </div>
@@ -1168,7 +1379,7 @@ async function renderAccount() {
           <h3 style="margin:0 0 14px">Change password</h3>
           <form class="form" id="password-form">
             <label class="field"><span>Current password</span><input name="current" type="password" required autocomplete="current-password"></label>
-            <label class="field"><span>New password</span><input name="next" type="password" required minlength="8" autocomplete="new-password"></label>
+            <label class="field"><span>New password</span><input name="next" type="password" required minlength="12" autocomplete="new-password"><small>At least 12 characters, including a special character such as ! ? # or -.</small></label>
             <div class="form-error" role="alert"></div>
             <div><button class="cta-pill" type="submit">Update password</button></div>
           </form>
@@ -1295,6 +1506,8 @@ async function route() {
   closeMenu();
   closeCallChooser();
   const path = location.pathname.replace(/\/+$/, '') || '/';
+  // Admin and teacher screens drop the public site's banner and scrolling strip.
+  document.documentElement.classList.toggle('in-admin', path === '/admin' || path.startsWith('/admin/'));
   renderHeader();
   const navItem = (id) => state.content.nav.find((n) => n.id === id);
   const routes = {
@@ -1313,9 +1526,20 @@ async function route() {
     '/account': renderAccount,
     '/privacy': renderPrivacy,
     '/privacy-consent': renderConsent,
+    '/change-password': renderChangePassword,
+    '/two-step-setup': renderTwoStepSetup,
+    '/verify-email': renderVerifyEmail,
+    '/forgot-password': renderForgotPassword,
+    '/reset-password': renderResetPassword,
   };
   try {
     const gated = path === '/account' || path === '/admin' || path.startsWith('/admin/');
+    if (state.user?.mustChangePassword && path !== '/change-password' && (gated || path === '/privacy-consent')) {
+      return navigate(`/change-password?next=${encodeURIComponent(location.pathname + location.search)}`, { replace: true });
+    }
+    if (state.user?.twoStepSetupRequired && !state.user.mustChangePassword && path !== '/two-step-setup' && (gated || path === '/privacy-consent')) {
+      return navigate(`/two-step-setup?next=${encodeURIComponent(location.pathname + location.search)}`, { replace: true });
+    }
     if (gated && state.user?.privacyRequired && state.user.role !== 'admin') {
       return navigate(`/privacy-consent?next=${encodeURIComponent(location.pathname + location.search)}`, { replace: true });
     }
@@ -1341,6 +1565,14 @@ async function route() {
     if (err.status === 401) {
       state.user = null;
       return navigate(`/login?next=${encodeURIComponent(path)}`, { replace: true });
+    }
+    if (err.code === 'TWO_STEP_SETUP') {
+      if (state.user) state.user.twoStepSetupRequired = true;
+      return navigate(`/two-step-setup?next=${encodeURIComponent(path)}`, { replace: true });
+    }
+    if (err.code === 'PASSWORD_CHANGE') {
+      if (state.user) state.user.mustChangePassword = true;
+      return navigate(`/change-password?next=${encodeURIComponent(path)}`, { replace: true });
     }
     if (err.code === 'PRIVACY_REQUIRED') {
       if (state.user) state.user.privacyRequired = true;
@@ -1459,6 +1691,7 @@ async function start() {
     const [content, me] = await Promise.all([api('/api/content'), api('/api/me')]);
     state.content = content;
     state.user = me.user;
+    state.emailEnabled = Boolean(me.emailEnabled);
   } catch (err) {
     mount(main(), html`<div class="container empty"><h2>Could not load the site</h2><p>${err.message}</p></div>`);
     return;

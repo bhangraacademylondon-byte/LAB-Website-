@@ -10,6 +10,7 @@ process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-review-'));
 process.env.ADMIN_EMAIL = 'admin@test.local';
 process.env.ADMIN_PASSWORD = 'admin-password';
 process.env.PGLITE_DIR = 'memory';
+process.env.LAB_TEST_SKIP_TWO_STEP = '1';
 
 const { app, prepare } = require('../server/index.js');
 const { close: closeDb } = require('../server/db');
@@ -44,9 +45,9 @@ function client() {
 
 test('members whose email contains a member-ID-like string can still log in by email', async () => {
   const email = 'slab234567@test.local';
-  const reg = await client()('POST', '/api/auth/register', { name: 'Slab', email, password: 'password1', acceptPrivacy: true, ageGroup: '16plus' });
+  const reg = await client()('POST', '/api/auth/register', { name: 'Slab', email, password: 'Password-test-1!', acceptPrivacy: true, ageGroup: '16plus' });
   assert.equal(reg.status, 201);
-  const login = await client()('POST', '/api/auth/login', { identifier: email, password: 'password1' });
+  const login = await client()('POST', '/api/auth/login', { identifier: email, password: 'Password-test-1!' });
   assert.equal(login.status, 200);
 });
 
@@ -70,7 +71,7 @@ test('scripts and styles are revalidated so updates are never mixed with stale f
 test('sign-ups are rate limited per address', async () => {
   let last;
   for (let i = 0; i < 12; i++) {
-    last = await client()('POST', '/api/auth/register', { name: `Spam ${i}`, email: `spam${i}@test.local`, password: 'password1', acceptPrivacy: true, ageGroup: '16plus' });
+    last = await client()('POST', '/api/auth/register', { name: `Spam ${i}`, email: `spam${i}@test.local`, password: 'Password-test-1!', acceptPrivacy: true, ageGroup: '16plus' });
   }
   assert.equal(last.status, 429);
 });
@@ -108,4 +109,42 @@ test('a Behold feed is used even when a server token is set, and failures back o
     global.fetch = realFetch;
     delete process.env.INSTAGRAM_ACCESS_TOKEN;
   }
+});
+
+test('a session exports to CSV, and impossible dates or times are refused', async () => {
+  const admin = client();
+  await admin('POST', '/api/auth/login', { identifier: 'admin@test.local', password: 'admin-password' });
+  assert.equal((await admin('POST', '/api/staff/sessions', { title: 'Bad', date: '2026-02-30', start_time: '19:30' })).status, 400);
+  assert.equal((await admin('POST', '/api/staff/sessions', { title: 'Bad', date: '2026-13-45', start_time: '19:30' })).status, 400);
+  assert.equal((await admin('POST', '/api/staff/sessions', { title: 'Bad', date: '2026-10-29', start_time: '99:99' })).status, 400);
+  const { body: { session } } = await admin('POST', '/api/staff/sessions', { title: 'CSV class', date: '2026-10-29', start_time: '19:30' });
+  const csv = await admin('GET', `/api/staff/sessions/${session.id}/export.csv`);
+  assert.equal(csv.status, 200);
+  assert.match(csv.body, /"Member ID","Name","Method"/);
+});
+
+test('a full backup includes payments and can be restored', async () => {
+  const admin = client();
+  await admin('POST', '/api/auth/login', { identifier: 'admin@test.local', password: 'admin-password' });
+  const made = await admin('POST', '/api/staff/members', { name: 'Backed Up', email: 'backed@test.local', password: 'Password-test-1!' });
+  await admin('POST', '/api/staff/payments', { userId: made.body.member.id, date: '2026-10-29', method: 'cash' });
+  const backup = (await admin('GET', '/api/admin/backup.json')).body;
+  const parsed = typeof backup === 'string' ? JSON.parse(backup) : backup;
+  assert.ok(parsed.tables.class_payments.length >= 1, 'payments are in the backup');
+  assert.ok('page_views' in parsed.tables);
+
+  await admin('DELETE', `/api/admin/members/${made.body.member.id}`);
+  assert.equal((await admin('POST', '/api/admin/restore', { ...parsed })).status, 400, 'needs typing RESTORE');
+  assert.equal((await admin('POST', '/api/admin/restore', { app: 'something-else', tables: {}, confirm: 'RESTORE' })).status, 400);
+  const r = await admin('POST', '/api/admin/restore', { ...parsed, confirm: 'RESTORE' });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+
+  const again = client();
+  await again('POST', '/api/auth/login', { identifier: 'admin@test.local', password: 'admin-password' });
+  const back = (await again('GET', '/api/staff/members?q=Backed')).body.members;
+  assert.equal(back.length, 1, 'the deleted member is back');
+  const pay = (await again('GET', '/api/staff/payments?date=2026-10-29')).body.payments;
+  assert.ok(pay.some((p) => p.name === 'Backed Up' && p.method === 'cash'));
+  // New records still get fresh IDs after a restore.
+  assert.equal((await again('POST', '/api/staff/members', { name: 'After Restore', email: 'after@test.local', password: 'Password-test-1!' })).status, 201);
 });

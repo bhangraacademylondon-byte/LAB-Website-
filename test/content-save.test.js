@@ -10,6 +10,7 @@ process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-content-'));
 process.env.ADMIN_EMAIL = 'admin@test.local';
 process.env.ADMIN_PASSWORD = 'admin-password';
 process.env.PGLITE_DIR = 'memory';
+process.env.LAB_TEST_SKIP_TWO_STEP = '1';
 
 const { app, prepare } = require('../server/index.js');
 const { close: closeDb, setSetting } = require('../server/db');

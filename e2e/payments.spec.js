@@ -7,7 +7,7 @@ test('a member pays for a class with Monzo and a teacher sees it on the class pa
   await page.goto('/register');
   await page.fill('input[name=name]', 'Simran Kaur');
   await page.fill('input[name=email]', email);
-  await page.fill('input[name=password]', 'password123');
+  await page.fill('input[name=password]', 'Password-test-1!');
   await page.check('input[value="16plus"]', { force: true });
   await page.check('input[name=acceptPrivacy]', { force: true });
   await page.click('button[type=submit]');

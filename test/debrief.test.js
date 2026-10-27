@@ -10,6 +10,7 @@ process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-debrief-'));
 process.env.ADMIN_EMAIL = 'admin@test.local';
 process.env.ADMIN_PASSWORD = 'admin-password';
 process.env.PGLITE_DIR = 'memory';
+process.env.LAB_TEST_SKIP_TWO_STEP = '1';
 
 const { app, prepare } = require('../server/index.js');
 const { close: closeDb } = require('../server/db');
@@ -53,11 +54,11 @@ async function login(identifier, password) {
 
 test('teachers write a debrief after class; it is logged once per class with the pouch balance', async () => {
   const admin = await login('admin@test.local', 'admin-password');
-  await admin('POST', '/api/staff/members', { name: 'Teacher Tej', email: 'tej@test.local', password: 'password1', role: 'instructor' });
-  await admin('POST', '/api/staff/members', { name: 'Teacher Simi', email: 'simi@test.local', password: 'password1', role: 'instructor' });
-  const student = await admin('POST', '/api/staff/members', { name: 'Student', email: 'student@test.local', password: 'password1' });
+  await admin('POST', '/api/staff/members', { name: 'Teacher Tej', email: 'tej@test.local', password: 'Password-test-1!', role: 'instructor' });
+  await admin('POST', '/api/staff/members', { name: 'Teacher Simi', email: 'simi@test.local', password: 'Password-test-1!', role: 'instructor' });
+  const student = await admin('POST', '/api/staff/members', { name: 'Student', email: 'student@test.local', password: 'Password-test-1!' });
 
-  const tej = await login('tej@test.local', 'password1');
+  const tej = await login('tej@test.local', 'Password-test-1!');
   const { body: { session } } = await tej('POST', '/api/staff/sessions', { title: 'Adults Bhangra', date: '2026-10-08', start_time: '19:30' });
   await tej('POST', `/api/staff/sessions/${session.id}/attendance`, { code: student.body.member.memberId });
 
@@ -91,7 +92,7 @@ test('teachers write a debrief after class; it is logged once per class with the
   assert.equal(pre2.body.lastBalance.pence, 112550);
 
   // Another teacher cannot change it; the author and admins can.
-  const simi = await login('simi@test.local', 'password1');
+  const simi = await login('simi@test.local', 'Password-test-1!');
   assert.equal((await simi('PATCH', `/api/staff/debriefs/${d.id}`, { ...good, attendeeCount: 1 })).status, 403);
   const edited = await tej('PATCH', `/api/staff/debriefs/${d.id}`, { ...good, attendeeCount: 15 });
   assert.equal(edited.body.debrief.attendeeCount, 15);
@@ -99,7 +100,7 @@ test('teachers write a debrief after class; it is logged once per class with the
 
   // Only admins delete; members can't see debriefs at all.
   assert.equal((await tej('DELETE', `/api/staff/debriefs/${d.id}`)).status, 403);
-  const member = await login('student@test.local', 'password1');
+  const member = await login('student@test.local', 'Password-test-1!');
   assert.equal((await member('GET', '/api/staff/debriefs')).status, 403);
 
   const csv = await admin('GET', '/api/staff/debriefs.csv');

@@ -152,6 +152,85 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_attendance_user ON attendance(user_id);
   CREATE INDEX IF NOT EXISTS idx_sessions_date ON class_sessions(date);
   CREATE INDEX IF NOT EXISTS idx_consents_user ON privacy_consents(user_id);
+
+  -- An under-16 who signed themselves up needs a teacher or admin to approve
+  -- the account (and check the parent's details) before their pass works.
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS under16_approved_by INTEGER;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS under16_approved_at TEXT;
+
+  -- Set when someone logs in with a password that doesn't meet the current
+  -- rules: they must choose a new one before using the site.
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password INTEGER NOT NULL DEFAULT 0;
+
+  -- Two-step login for admins and teachers (see twostep.js).
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret TEXT;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_last BIGINT NOT NULL DEFAULT -1;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_backup TEXT;
+
+  -- Between the password and the code: a short-lived ticket for the second step.
+  CREATE TABLE IF NOT EXISTS login_challenges (
+    token_hash TEXT PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at BIGINT NOT NULL,
+    tries      INTEGER NOT NULL DEFAULT 0
+  );
+
+  -- Payment records are kept (for the accounts) when a member deletes their
+  -- account: the link to the account is cleared and their name kept on the record.
+  ALTER TABLE class_payments ADD COLUMN IF NOT EXISTS payer_name TEXT;
+  ALTER TABLE class_payments ADD COLUMN IF NOT EXISTS payer_member_id TEXT;
+  ALTER TABLE class_payments ALTER COLUMN user_id DROP NOT NULL;
+  DO $$
+  BEGIN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'class_payments_user_id_fkey' AND confdeltype = 'c') THEN
+      ALTER TABLE class_payments DROP CONSTRAINT class_payments_user_id_fkey;
+      ALTER TABLE class_payments ADD CONSTRAINT class_payments_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
+    END IF;
+  END $$;
+
+  -- Email addresses are checked with a link before an account made online can
+  -- be used. Accounts that existed before this count as checked.
+  DO $$
+  BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'email_verified_at') THEN
+      ALTER TABLE users ADD COLUMN email_verified_at TEXT;
+      UPDATE users SET email_verified_at = created_at;
+    END IF;
+  END $$;
+
+  -- One-time links sent by email: password resets and email checks.
+  CREATE TABLE IF NOT EXISTS email_tokens (
+    token_hash TEXT PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    purpose    TEXT NOT NULL CHECK (purpose IN ('reset', 'verify')),
+    expires_at BIGINT NOT NULL
+  );
+
+  -- Login, sign-up and contact limits, kept here so a restart doesn't reset them.
+  CREATE TABLE IF NOT EXISTS rate_limits (
+    key      TEXT PRIMARY KEY,
+    count    INTEGER NOT NULL,
+    reset_at BIGINT NOT NULL
+  );
+
+  -- Row-level security on every table, with no policies: Supabase's public data
+  -- API (should its key ever leak) can read nothing. The website itself connects
+  -- as the tables' owner, which these rules don't restrict.
+  ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE auth_sessions ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE class_sessions ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE attendance ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE class_debriefs ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE privacy_consents ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE class_payments ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE page_views ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE site_events ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE login_challenges ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE rate_limits ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE email_tokens ENABLE ROW LEVEL SECURITY;
 `;
 
 // "?" -> "$1", "$2", ... (none of our SQL contains a literal question mark).
@@ -169,12 +248,14 @@ async function connectPostgres() {
   const url = new URL(DATABASE_URL);
   const local = ['localhost', '127.0.0.1'].includes(url.hostname);
   // Hosted Postgres such as Supabase needs TLS. Its certificates are signed by
-  // the provider's own authority, so the connection is encrypted without
-  // checking the chain against Node's built-in list.
+  // the provider's own authority: with that certificate in DATABASE_CA_CERT
+  // (Supabase → Database settings → SSL → download), the server is fully
+  // verified; without it the connection is still encrypted but not verified.
   url.searchParams.delete('sslmode');
+  const ca = (process.env.DATABASE_CA_CERT || '').replace(/\\n/g, '\n').trim();
   const pool = new pg.Pool({
     connectionString: url.toString(),
-    ssl: local ? false : { rejectUnauthorized: false },
+    ssl: local ? false : ca ? { ca, rejectUnauthorized: true } : { rejectUnauthorized: false },
     max: Number(process.env.DATABASE_POOL_SIZE) || 5,
     idleTimeoutMillis: 30_000,
   });

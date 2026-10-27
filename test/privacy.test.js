@@ -10,6 +10,7 @@ process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-privacy-'));
 process.env.ADMIN_EMAIL = 'admin@test.local';
 process.env.ADMIN_PASSWORD = 'admin-password';
 process.env.PGLITE_DIR = 'memory';
+process.env.LAB_TEST_SKIP_TWO_STEP = '1';
 
 const { app, prepare } = require('../server/index.js');
 const { close: closeDb } = require('../server/db');
@@ -43,10 +44,10 @@ function client() {
 }
 
 const adult = { acceptPrivacy: true, ageGroup: '16plus' };
-const child = { acceptPrivacy: true, ageGroup: 'under16', guardianName: 'Parminder Kaur', guardianEmail: 'parent@test.local', guardianConsent: true };
+const child = { acceptPrivacy: true, ageGroup: 'under16', guardianName: 'Parminder Kaur', guardianEmail: 'parent@test.local', guardianPhone: '07700 900123', guardianConsent: true };
 
 test('sign-up requires accepting the privacy policy and saying whether the member is under 16', async () => {
-  const base = { name: 'Adult', email: 'adult@test.local', password: 'password1' };
+  const base = { name: 'Adult', email: 'adult@test.local', password: 'Password-test-1!' };
   assert.match((await client()('POST', '/api/auth/register', base)).body.error, /Privacy Policy/);
   assert.match((await client()('POST', '/api/auth/register', { ...base, acceptPrivacy: 'yes', ageGroup: '16plus' })).body.error, /Privacy Policy/);
   assert.match((await client()('POST', '/api/auth/register', { ...base, acceptPrivacy: true })).body.error, /16 or over/);
@@ -54,11 +55,11 @@ test('sign-up requires accepting the privacy policy and saying whether the membe
   assert.equal(ok.status, 201);
   assert.equal(ok.body.user.privacyRequired, false);
   assert.equal(ok.body.user.under16, false);
-  assert.equal(ok.body.user.privacyVersion, '2026-10');
+  assert.equal(ok.body.user.privacyVersion, '2026-10-27');
 });
 
 test('children under 16 need a parent or guardian, who can sign up siblings with one email', async () => {
-  const kid = { name: 'Kid One', email: '', password: 'password1' };
+  const kid = { name: 'Kid One', email: '', password: 'Password-test-1!' };
   for (const [patch, message] of [
     [{ guardianName: '' }, /guardian's name/],
     [{ guardianEmail: 'nope' }, /guardian's email/],
@@ -79,17 +80,17 @@ test('children under 16 need a parent or guardian, who can sign up siblings with
   assert.equal(second.status, 201, 'a sibling can sign up with the same parent details');
 
   // Children without their own email log in with their member ID.
-  const login = await client()('POST', '/api/auth/login', { identifier: first.body.user.memberId, password: 'password1' });
+  const login = await client()('POST', '/api/auth/login', { identifier: first.body.user.memberId, password: 'Password-test-1!' });
   assert.equal(login.status, 200);
 });
 
 test('people added by staff must accept the policy at first login before using their account', async () => {
   const admin = client();
   await admin('POST', '/api/auth/login', { identifier: 'admin@test.local', password: 'admin-password' });
-  await admin('POST', '/api/staff/members', { name: 'New Teacher', email: 'teach@test.local', password: 'password1', role: 'instructor' });
+  await admin('POST', '/api/staff/members', { name: 'New Teacher', email: 'teach@test.local', password: 'Password-test-1!', role: 'instructor' });
 
   const teacher = client();
-  const login = await teacher('POST', '/api/auth/login', { identifier: 'teach@test.local', password: 'password1' });
+  const login = await teacher('POST', '/api/auth/login', { identifier: 'teach@test.local', password: 'Password-test-1!' });
   assert.equal(login.body.user.privacyRequired, true);
   for (const url of ['/api/me/attendance', '/api/staff/today', '/api/staff/debriefs']) {
     const r = await teacher('GET', url);
@@ -103,7 +104,7 @@ test('people added by staff must accept the policy at first login before using t
 
 test('changing the policy version asks everyone to accept again; admins are never locked out', async () => {
   const member = client();
-  await member('POST', '/api/auth/register', { name: 'Reaccept', email: 'reaccept@test.local', password: 'password1', ...adult });
+  await member('POST', '/api/auth/register', { name: 'Reaccept', email: 'reaccept@test.local', password: 'Password-test-1!', ...adult });
   assert.equal((await member('GET', '/api/me/attendance')).status, 200);
 
   const admin = client();
@@ -112,7 +113,7 @@ test('changing the policy version asks everyone to accept again; admins are neve
   const saved = await admin('PUT', '/api/admin/content', { ...content, privacy: { ...content.privacy, version: '2027-01' } });
   assert.equal(saved.status, 200, 'admin can edit content without having accepted');
   const blank = await admin('PUT', '/api/admin/content', { ...content, privacy: { ...content.privacy, version: '   ' } });
-  assert.equal(blank.body.privacy.version, '2026-10', 'the version can never be blank');
+  assert.equal(blank.body.privacy.version, '2026-10-27', 'the version can never be blank');
   await admin('PUT', '/api/admin/content', { ...content, privacy: { ...content.privacy, version: '2027-01' } });
 
   assert.equal((await member('GET', '/api/me/attendance')).body.code, 'PRIVACY_REQUIRED');
@@ -123,7 +124,7 @@ test('changing the policy version asks everyone to accept again; admins are neve
 
 test('members can download their data and delete their account', async () => {
   const member = client();
-  const reg = await member('POST', '/api/auth/register', { name: 'Leaver', email: 'leaver@test.local', password: 'password1', bio: 'hi', ...adult });
+  const reg = await member('POST', '/api/auth/register', { name: 'Leaver', email: 'leaver@test.local', password: 'Password-test-1!', bio: 'hi', ...adult });
   await client()('POST', '/api/contact', { name: 'Leaver', email: 'leaver@test.local', message: 'Question about classes' });
 
   const exp = await member('GET', '/api/me/export');
@@ -132,14 +133,56 @@ test('members can download their data and delete their account', async () => {
   assert.equal(data.account.memberId, reg.body.user.memberId);
   assert.equal(data.account.bio, 'hi');
   assert.equal(data.privacyConsents.length, 1);
-  assert.equal(data.messagesSent[0].body, 'Question about classes');
+  assert.equal(JSON.stringify(data).includes('Question about classes'), false, 'contact messages are never in the download: anyone could sign up with that email');
+  assert.equal(data.staffNotes, '');
   assert.equal(JSON.stringify(data).includes('password'), false, 'no password hash in the export');
 
   assert.equal((await member('POST', '/api/me/delete', { password: 'wrong' })).status, 400);
-  assert.equal((await member('POST', '/api/me/delete', { password: 'password1' })).status, 200);
-  assert.equal((await client()('POST', '/api/auth/login', { identifier: 'leaver@test.local', password: 'password1' })).status, 401);
+  assert.equal((await member('POST', '/api/me/delete', { password: 'Password-test-1!' })).status, 200);
+  assert.equal((await client()('POST', '/api/auth/login', { identifier: 'leaver@test.local', password: 'Password-test-1!' })).status, 401);
 
   const admin = client();
   await admin('POST', '/api/auth/login', { identifier: 'admin@test.local', password: 'admin-password' });
   assert.match((await admin('POST', '/api/me/delete', { password: 'admin-password' })).body.error, /only admin/);
+});
+
+test('an under-16 who signs up needs a teacher to approve them before their pass works', async () => {
+  const kid = client();
+  const reg = await kid('POST', '/api/auth/register', { name: 'Kid Approve', email: '', password: 'Dhol-practice-2026!', ...child });
+  assert.equal(reg.status, 201);
+  assert.equal(reg.body.user.needsApproval, true);
+  assert.equal((await kid('GET', '/api/me/qr.svg')).status, 403, 'no pass until approved');
+
+  const admin = client();
+  await admin('POST', '/api/auth/login', { identifier: 'admin@test.local', password: 'admin-password' });
+  await admin('POST', '/api/staff/members', { name: 'Teacher Aman', email: 'aman@test.local', password: 'Teacher-pass-2026!', role: 'instructor' });
+  const teacher = client();
+  await teacher('POST', '/api/auth/login', { identifier: 'aman@test.local', password: 'Teacher-pass-2026!' });
+  // Teachers accept the policy without being asked their age.
+  const pv = await teacher('POST', '/api/me/privacy', { acceptPrivacy: true });
+  assert.equal(pv.status, 200, JSON.stringify(pv.body));
+
+  const st = await teacher('GET', '/api/staff/stats');
+  assert.equal(st.status, 200, JSON.stringify(st.body));
+  assert.ok(st.body.toApprove >= 1);
+  const ok = await teacher('POST', `/api/staff/members/${reg.body.user.id}/approve`);
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.member.needsApproval, false);
+  assert.equal((await kid('GET', '/api/me/qr.svg')).status, 200);
+});
+
+test('a child marked under 16 by staff cannot remove it by answering "16 or over"', async () => {
+  const admin = client();
+  await admin('POST', '/api/auth/login', { identifier: 'admin@test.local', password: 'admin-password' });
+  const made = await admin('POST', '/api/staff/members', { name: 'Kid Staff', email: 'kidstaff@test.local', password: 'Dhol-practice-2026!', under16: true, guardianName: 'Jas Kaur', guardianEmail: 'jas@test.local', guardianPhone: '07700 900456' });
+  assert.equal(made.body.member.needsApproval, false, 'staff entered the details, so it is approved');
+  const kid = client();
+  await kid('POST', '/api/auth/login', { identifier: 'kidstaff@test.local', password: 'Dhol-practice-2026!' });
+  const r = await kid('POST', '/api/me/privacy', { acceptPrivacy: true, ageGroup: '16plus', guardianConsent: true });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.user.under16, true);
+  assert.equal(r.body.user.guardianName, 'Jas Kaur');
+  assert.equal(r.body.user.guardianPhone, '07700 900456');
+  // Without the parent's consent tick it's refused.
+  assert.equal((await kid('POST', '/api/me/privacy', { acceptPrivacy: true, ageGroup: '16plus' })).status, 400);
 });

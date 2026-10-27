@@ -1,9 +1,10 @@
 'use strict';
 
 // Paying for a class. Members pay online through the academy's Monzo payment
-// link for a particular class date; the website can't see into Monzo, so a
-// payment counts once the member confirms it went through ("claimed"), and
-// whoever checks Monzo can mark it "received" or "not received". Teachers
+// link for a particular class date. The website can't see into Monzo, so when
+// a member says it went through it only "says paid" ("claimed"); an admin who
+// checks Monzo marks it "received" or "not received", and only received money
+// counts. A payment marked not received can't be started again online. Teachers
 // record cash and card payments at the door. A payment stays on its class date
 // even if the member misses the class.
 
@@ -63,12 +64,13 @@ async function find(userId, date) {
 
 async function forDate(date) {
   return db.all(
-    `SELECT ${PUBLIC_FIELDS}, u.id AS "userId", u.name, u.member_id AS "memberId", cb.name AS "checkedBy",
+    `SELECT ${PUBLIC_FIELDS}, u.id AS "userId", COALESCE(u.name, p.payer_name || ' (account deleted)') AS name,
+            COALESCE(u.member_id, p.payer_member_id) AS "memberId", cb.name AS "checkedBy",
             EXISTS (SELECT 1 FROM attendance a JOIN class_sessions s ON s.id = a.session_id WHERE a.user_id = u.id AND s.date = p.class_date) AS attended
-       FROM class_payments p JOIN users u ON u.id = p.user_id
+       FROM class_payments p LEFT JOIN users u ON u.id = p.user_id
        LEFT JOIN users cb ON cb.id = p.checked_by
       WHERE p.class_date = ? AND p.status <> 'started'
-      ORDER BY u.name`,
+      ORDER BY lower(COALESCE(u.name, p.payer_name))`,
     date
   );
 }

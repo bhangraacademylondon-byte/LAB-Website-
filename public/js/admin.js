@@ -13,6 +13,31 @@ const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
 
 // ---------- layout ----------
 
+// The page editors, grouped on one "Edit website" page rather than listed in the menu.
+const EDITORS = [
+  { group: 'The whole site', items: [
+    { path: 'content/site', label: 'Site & branding', icon: '🎨', note: 'Name, logo, colours, phone numbers' },
+    { path: 'content/nav', label: 'Menu tabs', icon: '🧭', note: 'Which pages are in the menu' },
+  ] },
+  { group: 'Pages', items: [
+    { path: 'content/home', label: 'Home page', icon: '🏡' },
+    { path: 'content/about', label: 'About page', icon: '📖', note: 'Story and team' },
+    { path: 'content/timetable', label: 'Timetable', icon: '🕒', note: 'Classes, times and place' },
+    { path: 'content/pricing', label: 'Pricing', icon: '💷', note: 'Prices and Monzo link' },
+    { path: 'content/faq', label: 'FAQs', icon: '❓' },
+    { path: 'content/gallery', label: 'Gallery', icon: '🖼️' },
+    { path: 'content/timeline', label: 'Our journey', icon: '🛤️', note: 'Milestones' },
+    { path: 'content/performances', label: 'Performances', icon: '🎉' },
+    { path: 'content/workshops', label: 'Workshops', icon: '💃' },
+    { path: 'content/contact', label: 'Contact page', icon: '✉️' },
+    { path: 'content/customPages', label: 'Extra pages', icon: '📄' },
+  ] },
+  { group: 'Members', items: [
+    { path: 'content/members', label: 'Member pages', icon: '🔑', note: 'Sign-up and login wording' },
+    { path: 'content/privacy', label: 'Privacy policy', icon: '🔒' },
+  ] },
+];
+
 const NAV = [
   { heading: 'Attendance' },
   { path: '', label: 'Dashboard', icon: '🏠' },
@@ -22,41 +47,41 @@ const NAV = [
   { path: 'members', label: 'Members', icon: '👥' },
   { path: 'debriefs', label: 'Class debriefs', icon: '📝' },
   { heading: 'Website', admin: true, timeline: true },
+  { path: 'website', label: 'Edit website', icon: '✏️', admin: true },
+  // Teachers allowed to edit Our journey see just that.
+  { path: 'content/timeline', label: 'Our journey', icon: '🛤️', timelineOnly: true },
   { path: 'visitors', label: 'Visitors', icon: '📈', admin: true },
-  { path: 'content/site', label: 'Site & branding', icon: '🎨', admin: true },
-  { path: 'content/nav', label: 'Menu tabs', icon: '🧭', admin: true },
-  { path: 'content/home', label: 'Home page', icon: '🏡', admin: true },
-  { path: 'content/about', label: 'About page', icon: '📖', admin: true },
-  { path: 'content/timetable', label: 'Timetable', icon: '🕒', admin: true },
-  { path: 'content/pricing', label: 'Pricing', icon: '💷', admin: true },
-  { path: 'content/faq', label: 'FAQs', icon: '❓', admin: true },
-  { path: 'content/gallery', label: 'Gallery', icon: '🖼️', admin: true },
-  { path: 'content/performances', label: 'Performances', icon: '🎉', admin: true },
-  { path: 'content/workshops', label: 'Workshops', icon: '💃', admin: true },
-  { path: 'content/timeline', label: 'Our journey', icon: '🛤️', admin: true, timeline: true },
-  { path: 'content/contact', label: 'Contact page', icon: '✉️', admin: true },
-  { path: 'content/members', label: 'Member pages', icon: '🔑', admin: true },
-  { path: 'content/privacy', label: 'Privacy policy', icon: '🔒', admin: true },
-  { path: 'content/customPages', label: 'Extra pages', icon: '📄', admin: true },
   { path: 'instagram', label: 'Instagram', icon: '📸', admin: true },
   { path: 'messages', label: 'Messages', icon: '💬', admin: true },
   { path: 'content/json', label: 'Advanced', icon: '⚙️', admin: true },
 ];
 
 function layout(active) {
-  const items = NAV.filter((n) => !n.admin || isAdmin() || (n.timeline && canEditTimeline()));
+  const items = NAV.filter((n) => (n.timelineOnly ? !isAdmin() && canEditTimeline() : !n.admin || isAdmin() || (n.timeline && canEditTimeline())));
+  // Any page editor counts as "Edit website" in the menu.
+  const current = isAdmin() && active.startsWith('content/') && active !== 'content/json' ? 'website' : active;
   mount('#main', html`
     <div class="container admin-layout">
       <nav class="admin-nav" aria-label="Admin">
         ${items.map((n) => n.heading
           ? html`<div class="nav-heading">${n.heading}</div>`
-          : html`<a href="/admin${n.path ? '/' + n.path : ''}" class="${n.path === active ? 'active' : ''}"><span aria-hidden="true">${n.icon}</span>${n.label}</a>`)}
+          : html`<a href="/admin${n.path ? '/' + n.path : ''}" class="${n.path === current ? 'active' : ''}"><span aria-hidden="true">${n.icon}</span>${n.label}</a>`)}
       </nav>
       <div class="admin-main" id="admin-main"><div class="page-loading"><div class="spinner"></div></div></div>
     </div>`);
   const activeLink = document.querySelector('.admin-nav a.active');
   activeLink?.scrollIntoView({ block: 'nearest', inline: 'center' });
   return document.getElementById('admin-main');
+}
+
+function websiteIndex(root) {
+  mount(root, html`
+    ${head('Edit website')}
+    ${EDITORS.map((g) => html`
+      <h3 style="margin:18px 0 10px">${g.group}</h3>
+      <div class="editor-grid">${g.items.map((e) => html`
+        <a class="card editor-tile" href="/admin/${e.path}"><span class="et-icon" aria-hidden="true">${e.icon}</span><span><b>${e.label}</b>${e.note ? html`<small>${e.note}</small>` : ''}</span></a>`)}
+      </div>`)}`);
 }
 
 function head(title, actions = '') {
@@ -66,7 +91,7 @@ function head(title, actions = '') {
 export async function render(parts) {
   const [section = '', sub, id] = parts;
   document.title = `Admin | ${state.content.site.name}`;
-  const adminOnly = ['content', 'instagram', 'messages', 'visitors'];
+  const adminOnly = ['content', 'website', 'instagram', 'messages', 'visitors'];
   const timelineOnly = section === 'content' && sub === 'timeline' && canEditTimeline();
   if (adminOnly.includes(section) && !isAdmin() && !timelineOnly) return navigate('/admin', { replace: true });
 
@@ -82,6 +107,7 @@ export async function render(parts) {
     if (sub) return debriefView(root, sub);
     return debriefsList(root);
   }
+  if (section === 'website') return websiteIndex(layout('website'));
   if (section === 'content') return contentEditor(layout(`content/${sub}`), sub, id);
   if (section === 'instagram') return instagramPage(layout('instagram'));
   if (section === 'messages') return messagesPage(layout('messages'));
@@ -102,6 +128,7 @@ async function dashboard(root) {
       <div class="stat"><div class="stat-value">${stats.last30Attendance}</div><div class="stat-label">Check-ins (30 days)</div></div>
       <a class="stat" href="/admin/debriefs" style="text-decoration:none"><div class="stat-value">${stats.debriefsDue}</div><div class="stat-label">Debriefs to write</div></a>
       ${isAdmin() ? html`<a class="stat" href="/admin/messages" style="text-decoration:none"><div class="stat-value">${stats.unreadMessages}</div><div class="stat-label">Unread messages</div></a>` : ''}
+      ${stats.toApprove ? html`<a class="stat" href="/admin/members?approve=1" style="text-decoration:none;background:#f6ecd8"><div class="stat-value">${stats.toApprove}</div><div class="stat-label">Under-16 accounts to approve</div></a>` : ''}
     </div>
     <div class="grid grid-2" style="margin-top:24px">
       <div class="card">
@@ -120,7 +147,7 @@ async function dashboard(root) {
           <li class="list-item"><a href="/admin/debriefs">Class debriefs & LAB pouch balance</a></li>
           ${!isAdmin() && canEditTimeline() ? html`<li class="list-item"><a href="/admin/content/timeline">Edit the Our journey page</a></li>` : ''}
           ${isAdmin() ? html`
-          <li class="list-item"><a href="/admin/content/home">Edit the website</a></li>
+          <li class="list-item"><a href="/admin/website">Edit the website</a></li>
           <li class="list-item"><a href="/admin/instagram">Instagram gallery settings</a></li>
           <li class="list-item"><a href="/api/admin/backup.json" download>Download a full backup</a><span class="meta">Do this regularly and keep the file somewhere safe and private.</span></li>` : ''}
           <li class="list-item"><a href="/account">My member card</a></li>
@@ -342,12 +369,13 @@ async function scanner(root) {
         const r = await api(`/api/staff/sessions/${session.id}/attendance`, { method: 'POST', body });
         if (r.status === 'recorded') {
           beep(true);
-          showResult('ok', '✅', html`<strong>${r.member.name}</strong> checked in<br><span class="small">${r.member.memberId} · ${r.stats.total} ${r.stats.total === 1 ? 'class' : 'classes'} total</span>${paymentLine(r.payment, r.member.id, r.date)}`);
+          showResult('ok', '✅', html`<strong>${r.member.name}</strong> checked in<br><span class="small">${r.member.memberId} · ${r.stats.total} ${r.stats.total === 1 ? 'class' : 'classes'} total</span>${under16Line(r.member)}${paymentLine(r.payment, r.member.id, r.date)}`);
         } else {
           beep(true);
-          showResult('warn', 'ℹ️', html`<strong>${r.member.name}</strong> is already checked in${paymentLine(r.payment, r.member.id, r.date)}`);
+          showResult('warn', 'ℹ️', html`<strong>${r.member.name}</strong> is already checked in${under16Line(r.member)}${paymentLine(r.payment, r.member.id, r.date)}`);
         }
         wireDoorPay(resultBox, () => checkIn(body));
+        wireApprove(resultBox, () => checkIn(body));
         refresh();
       } catch (err) {
         beep(false);
@@ -521,7 +549,7 @@ async function sessionDetail(root, id) {
         <h3>Present (${attendees.length})</h3>
         ${attendees.length ? html`<ul class="list">${attendees.map((a) => html`
           <li class="list-item">
-            <div><a href="/admin/members/${a.id}"><strong>${a.name}</strong></a><div class="meta">${a.memberId} · ${formatDateTime(a.scannedAt)} · ${a.method}${a.scannedBy ? ` by ${a.scannedBy}` : ''}</div></div>
+            <div><a href="/admin/members/${a.id}"><strong>${a.name}</strong></a><div class="meta">${a.memberId} · ${formatDateTime(a.scannedAt)} · ${a.method}${a.scannedBy ? ` by ${a.scannedBy}` : ''}</div>${under16Line(a)}</div>
             <button class="icon-btn danger" data-remove="${a.id}" aria-label="Remove">✕</button>
           </li>`)}</ul>` : html`<p class="muted">No one has been checked in yet.</p>`}
       </div>
@@ -547,6 +575,7 @@ async function sessionDetail(root, id) {
       </div>
     </div>`);
   sessionPayments(root.querySelector('#session-pay'), session, attendees);
+  wireApprove(root, () => sessionDetail(root, id));
   root.querySelector('.grid').addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-remove]');
     if (!btn) return;
@@ -575,13 +604,37 @@ async function sessionDetail(root, id) {
 
 // ---------- payments ----------
 
-const PAY_LABELS = { claimed: 'Paid online', received: 'Paid online ✓', not_received: 'Not received' };
+// An online payment only "says paid" until an admin finds it in Monzo; only received money counts.
+const PAY_LABELS = { claimed: 'Says paid online', received: 'Received ✓', not_received: 'Not received' };
 const payPaid = (p) => p && p.status !== 'not_received' && p.status !== 'started';
 const payText = (p) => (p.method === 'online' ? PAY_LABELS[p.status] : p.method === 'cash' ? 'Paid cash' : 'Paid card');
 const classDay = (iso, opts = { weekday: 'long', day: 'numeric', month: 'long' }) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-GB', { ...opts, timeZone: 'UTC' });
 
+// Under 16: the parent or guardian stays on site, and their number is to hand. An
+// account the member made themselves needs a teacher to approve it.
+function under16Line(m) {
+  if (!m?.under16) return '';
+  const tel = m.guardianPhone ? html` · <a href="tel:${m.guardianPhone.replace(/[^\d+]/g, '')}">${m.guardianPhone}</a>` : '';
+  return html`<div class="u16-line"><span class="pay-badge wait">Under 16 · parent or guardian stays on site</span>
+    <span class="small">Emergency contact: ${m.guardianName || 'not given'}${tel}</span>
+    ${m.needsApproval ? html`<span class="u16-approve"><span class="small">New account: check the parent is here and these details are right.</span><button type="button" class="btn btn-sm btn-accent" data-approve="${m.id}">Approve account</button></span>` : ''}</div>`;
+}
+
+function wireApprove(box, after) {
+  box.querySelectorAll('[data-approve]').forEach((b) => b.addEventListener('click', async () => {
+    try {
+      await api(`/api/staff/members/${b.dataset.approve}/approve`, { method: 'POST', body: {} });
+      toast('Account approved. Their pass is now switched on.', 'success');
+      after?.();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  }));
+}
+
 // Under a scan: whether they've paid for this class, or buttons to record cash or card.
 function paymentLine(p, userId, date) {
+  if (p?.status === 'claimed') return html`<div style="margin-top:8px"><span class="pay-badge wait">Says paid online for tonight · not yet checked</span></div>`;
   if (payPaid(p)) return html`<div style="margin-top:8px"><span class="pay-badge">✓ ${payText(p)}${p.method === 'online' ? ' for tonight' : ''}</span></div>`;
   return html`<div style="margin-top:8px"><span class="pay-badge bad">${p?.status === 'not_received' ? 'Online payment not received · ' : ''}Pay at the door</span>
     <span class="pay-acts" style="margin-top:6px;display:flex;justify-content:flex-start"><button type="button" data-door="cash" data-user="${userId}" data-date="${date}">Paid cash</button><button type="button" data-door="card" data-user="${userId}" data-date="${date}">Paid card</button></span></div>`;
@@ -600,15 +653,16 @@ function wireDoorPay(box, after) {
 }
 
 function paySummary(list) {
-  const online = list.filter((p) => p.method === 'online' && payPaid(p));
+  const says = list.filter((p) => p.status === 'claimed');
+  const received = list.filter((p) => p.method === 'online' && p.status === 'received');
   const door = list.filter((p) => p.method !== 'online');
   const notRec = list.filter((p) => p.status === 'not_received');
-  const expected = online.reduce((a, p) => a + (p.amountPence || 0), 0);
+  const gbp = (rows) => (rows.reduce((a, p) => a + (p.amountPence || 0), 0) / 100).toLocaleString('en-GB', { style: 'currency', currency: 'GBP' });
   return html`<div class="pay-sum">
-    <div><b>${online.length}</b>Paid online</div>
-    <div><b>${online.filter((p) => p.status === 'received').length}</b>Checked in Monzo</div>
+    <div><b>${says.length}</b>Say they paid online, not yet checked</div>
+    <div><b>${received.length}</b>Received in Monzo</div>
     <div><b>${door.length}</b>Cash or card at the door</div>
-    <div><b>${(expected / 100).toLocaleString('en-GB', { style: 'currency', currency: 'GBP' })}</b>Expected in Monzo${notRec.length ? ` · ${notRec.length} not received` : ''}</div>
+    <div><b>${gbp([...received, ...door])}</b>Received in total${notRec.length ? ` · ${notRec.length} not received` : ''}</div>
   </div>`;
 }
 
@@ -617,21 +671,26 @@ function payRows(list) {
   return html`<ul class="pay-list">${list.map((p) => html`
     <li>
       <span><b>${p.name}</b><small>${p.method === 'online' ? p.reference : `${p.method === 'cash' ? 'Cash' : 'Card'} at the door`} · ${p.attended ? 'checked in' : 'not checked in'}${p.checkedBy ? ` · ${p.method === 'online' ? 'checked' : 'recorded'} by ${p.checkedBy}` : ''}</small></span>
-      ${p.method === 'online' ? html`
-        <span class="pay-acts" role="group" aria-label="Checked in Monzo?">
+      ${p.method === 'online' && isAdmin() ? html`
+        <span class="pay-acts" role="group" aria-label="Found in Monzo?">
           <button type="button" data-pay="${p.id}" data-status="received" aria-pressed="${String(p.status === 'received')}">Received</button>
           <button type="button" class="no" data-pay="${p.id}" data-status="not_received" aria-pressed="${String(p.status === 'not_received')}">Not received</button>
+          <button type="button" data-remove="${p.id}" aria-label="Remove ${p.name}'s payment record">Remove</button>
         </span>`
+      : p.method === 'online' ? html`<span class="pay-badge ${p.status === 'received' ? '' : p.status === 'claimed' ? 'wait' : 'bad'}">${payText(p)}</span>`
       : html`<span class="pay-acts"><span class="pay-badge">${payText(p)}</span><button type="button" data-undo="${p.id}" aria-label="Undo ${p.name}'s payment">Undo</button></span>`}
     </li>`)}</ul>`;
 }
 
 function wirePayRows(box, reload) {
   box.addEventListener('click', async (e) => {
-    const b = e.target.closest('[data-pay], [data-undo]');
+    const b = e.target.closest('[data-pay], [data-undo], [data-remove]');
     if (!b) return;
     try {
-      if (b.dataset.undo) {
+      if (b.dataset.remove) {
+        if (!(await confirmDialog('Remove this payment record completely? Use this for test or mistaken claims.', { confirmLabel: 'Remove', danger: true }))) return;
+        await api(`/api/staff/payments/${b.dataset.remove}`, { method: 'DELETE' });
+      } else if (b.dataset.undo) {
         if (!(await confirmDialog('Undo this door payment?', { confirmLabel: 'Undo', danger: true }))) return;
         await api(`/api/staff/payments/${b.dataset.undo}`, { method: 'DELETE' });
       } else {
@@ -653,7 +712,7 @@ async function paymentsPage(root, date = new URLSearchParams(location.search).ge
   const options = [...new Set([...data.dates, day])].sort();
   mount(root, html`
     ${head('Payments')}
-    <p class="muted" style="margin-top:-12px">Who has paid for each class. Online payments are marked paid when the member confirms in their account${data.payOnline.enabled ? '' : ' (online payment is switched off in Admin → Pricing)'}; whoever checks Monzo can tick them off.</p>
+    <p class="muted" style="margin-top:-12px">Who has paid for each class. When a member says they've paid online it shows as "Says paid"${data.payOnline.enabled ? '' : ' (online payment is switched off in Admin → Pricing)'}. ${isAdmin() ? 'Check Monzo and mark each one Received or Not received; only received money counts.' : 'An admin checks these in Monzo; only received money counts.'}</p>
     <div class="card" style="margin-bottom:16px">
       <label class="field" style="max-width:340px"><span>Class date</span>
         <select id="pay-day">${options.map((d) => html`<option value="${d}" ${raw(d === day ? 'selected' : '')}>${classDay(d)}</option>`)}</select></label>
@@ -846,14 +905,17 @@ function rolePill(m) {
 }
 
 async function membersList(root) {
-  const q = new URLSearchParams(location.search).get('q') || '';
-  const { members } = await api(`/api/staff/members?q=${encodeURIComponent(q)}`);
+  const params = new URLSearchParams(location.search);
+  const q = params.get('q') || '';
+  const approve = params.get('approve') === '1';
+  const all = (await api(`/api/staff/members?q=${encodeURIComponent(q)}`)).members;
+  const members = approve ? all.filter((m) => m.needsApproval) : all;
   mount(root, html`
     ${head('Members', html`<button class="btn btn-accent" id="add-member">+ Add member</button>`)}
     <form id="member-search" style="margin-bottom:16px">
       <input type="search" name="q" value="${q}" placeholder="Search by name, email, phone or member ID" aria-label="Search members">
     </form>
-    <p class="muted small">${members.length} ${members.length === 1 ? 'person' : 'people'}</p>
+    <p class="muted small">${approve ? html`Under-16 accounts waiting for approval · <a href="/admin/members">Show everyone</a>` : `${members.length} ${members.length === 1 ? 'person' : 'people'}`}</p>
     ${members.length ? html`
     <div class="table-wrap"><table>
       <thead><tr><th>Name</th><th>Member ID</th><th>Role</th><th>Classes</th><th>Last class</th></tr></thead>
@@ -861,7 +923,7 @@ async function membersList(root) {
         <tr class="clickable" data-href="/admin/members/${m.id}">
           <td><a href="/admin/members/${m.id}"><strong>${m.name}</strong></a><div class="muted small">${m.email}</div></td>
           <td><code>${m.memberId}</code></td>
-          <td>${rolePill(m)}${m.under16 ? html` <span class="pill pill-u16">Under 16</span>` : ''}</td>
+          <td>${rolePill(m)}${m.under16 ? html` <span class="pill pill-u16">Under 16${m.needsApproval ? ' · to approve' : ''}</span>` : ''}</td>
           <td>${m.attended}</td>
           <td>${m.lastAttended ? formatDate(m.lastAttended, { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}</td>
         </tr>`)}</tbody>
@@ -960,6 +1022,7 @@ async function memberDetail(root, id) {
         </div>
       </div>
       <div class="no-print">
+        ${member.under16 ? html`<div class="card" style="margin-bottom:20px">${under16Line(member)}</div>` : ''}
         <div class="stat-grid">
           <div class="stat"><div class="stat-value">${stats.total}</div><div class="stat-label">Classes attended</div></div>
           <div class="stat"><div class="stat-value">${stats.thisMonth}</div><div class="stat-label">This month</div></div>
@@ -1013,6 +1076,7 @@ async function memberDetail(root, id) {
           <div class="btn-row">
             <button class="btn btn-sm btn-outline" id="reset-pw">Reset password</button>
             <button class="btn btn-sm btn-outline" id="new-id">Issue new member ID</button>
+            ${member.role !== 'member' ? html`<button class="btn btn-sm btn-outline" id="reset-2fa">Reset two-step login</button>` : ''}
             <button class="btn btn-sm btn-danger" id="delete-member">Delete member</button>
           </div>
           <p class="small muted" style="margin-top:10px">Issuing a new ID makes the old QR code stop working (e.g. if a card is lost). Deleting removes all of their attendance history.</p>
@@ -1027,6 +1091,7 @@ async function memberDetail(root, id) {
     </div>`);
 
   root.querySelector('#print').addEventListener('click', () => window.print());
+  wireApprove(root, () => memberDetail(root, id));
   if (!isAdmin()) return;
   const form = root.querySelector('#member-form');
   // The Our journey permission is only for teachers (admins can edit everything anyway).
@@ -1049,6 +1114,11 @@ async function memberDetail(root, id) {
     if (!(await confirmDialog(`Generate a new password for ${member.name}? They will be logged out everywhere.`, { confirmLabel: 'Reset password' }))) return;
     const { password } = await api(`/api/admin/members/${member.id}/reset-password`, { method: 'POST', body: {} });
     credentialsDialog(member, password, 'Password reset');
+  });
+  root.querySelector('#reset-2fa')?.addEventListener('click', async () => {
+    if (!(await confirmDialog(`Reset ${member.name}'s two-step login? Use this if they've lost their phone and backup codes. They'll be logged out and set it up again next time they log in.`, { confirmLabel: 'Reset' }))) return;
+    await api(`/api/admin/members/${member.id}/reset-two-step`, { method: 'POST', body: {} });
+    toast('Two-step login reset', 'success');
   });
   root.querySelector('#new-id').addEventListener('click', async () => {
     if (!(await confirmDialog('Issue a new member ID? The old QR code will stop working.', { confirmLabel: 'Issue new ID' }))) return;
@@ -1564,7 +1634,7 @@ async function contentEditor(root, section) {
 
   const onChange = () => setDirty(true);
   const resetBtn = el('button', { class: 'btn btn-sm btn-ghost', text: 'Restore defaults', onclick: async () => {
-    if (!(await confirmDialog(`Replace everything in "${schema.title}" with the original starter content?`, { confirmLabel: 'Restore', danger: true }))) return;
+    if (!(await confirmDialog(`Replace everything in "${schema.title}" with the original starter content? All your changes to this page will be lost and can't be undone.`, { confirmLabel: 'Restore defaults', danger: true }))) return;
     state.content = await api('/api/admin/content/reset', { method: 'POST', body: { section } });
     await reloadContent();
     setDirty(false);
@@ -1625,6 +1695,8 @@ function jsonEditor(root) {
     } catch (err) {
       return toast(`That is not valid JSON: ${err.message}`, 'error', 6000);
     }
+    // One bad paste here changes every page at once, so it always asks first.
+    if (!(await confirmDialog('Replace ALL of the website\'s wording, pages and settings with what is in this box? Every page will change at once.', { confirmLabel: 'Replace everything', danger: true }))) return;
     await withBusy(btn, async () => {
       try {
         await saveContent(parsed);
@@ -1637,19 +1709,50 @@ function jsonEditor(root) {
     });
   });
   area.addEventListener('input', () => setDirty(true));
-  const download = el('a', { class: 'btn btn-sm btn-outline', text: 'Download backup', href: '#', onclick: (e) => {
+  const download = el('a', { class: 'btn btn-sm btn-outline', text: 'Download content only', href: '#', onclick: (e) => {
     e.preventDefault();
     const blob = new Blob([JSON.stringify(state.content, null, 2)], { type: 'application/json' });
     const a = el('a', { href: URL.createObjectURL(blob), download: `lab-website-content-${todayLondon()}.json` });
     a.click();
     URL.revokeObjectURL(a.href);
   } });
-  root.replaceChildren(
-    el('div', { class: 'admin-head' }, el('h1', { text: 'Advanced: all content' }), el('div', { class: 'btn-row' }, download)),
-    el('div', { class: 'notice warn', text: 'This shows all of the website content as JSON. You can download it as a backup, or paste in a backup to restore it. Most changes are easier in the other editors.' }),
-    area,
-    bar
-  );
+
+  // The whole database: download, and put a backup back.
+  const file = el('input', { type: 'file', accept: '.json,application/json' });
+  const confirmBox = el('input', { placeholder: 'Type RESTORE', autocomplete: 'off' });
+  const restore = el('button', { class: 'btn btn-sm btn-danger', type: 'button', text: 'Restore this backup', onclick: async () => {
+    const f = file.files[0];
+    if (!f) return toast('Choose a backup file first', 'error');
+    let backup;
+    try {
+      backup = JSON.parse(await f.text());
+    } catch {
+      return toast("That file isn't a backup from this website.", 'error');
+    }
+    await withBusy(restore, async () => {
+      try {
+        const r = await api('/api/admin/restore', { method: 'POST', body: { ...backup, confirm: confirmBox.value.trim() } });
+        alert(`Restored: ${r.counts.users} people, ${r.counts.class_sessions} sessions, ${r.counts.class_payments} payments. Everyone has been logged out, so please log in again.`);
+        location.href = '/login';
+      } catch (err) {
+        toast(err.message, 'error', 6000);
+      }
+    });
+  } });
+  const backupCard = el('div', { class: 'card form', style: 'margin-bottom:20px' },
+    el('h3', { text: 'Database backup', style: 'margin:0' }),
+    el('p', { class: 'small', text: 'A backup holds everything: members, attendance, payments, debriefs, messages, visitor figures and all website content. Download one regularly and keep it somewhere safe and private.' }),
+    el('div', { class: 'btn-row' }, el('a', { class: 'btn btn-sm btn-primary', href: '/api/admin/backup.json', download: '', text: 'Download a full backup' })),
+    el('h4', { text: 'Restore from a backup', style: 'margin:12px 0 0' }),
+    el('p', { class: 'small', text: 'This replaces EVERYTHING in the database with the backup, and logs everyone out. Only use it if something has gone badly wrong.' }),
+    file, confirmBox, el('div', { class: 'btn-row' }, restore));
+
+  const details = el('details', { class: 'card' },
+    el('summary', { text: 'Edit all website content as JSON (experts only)', style: 'cursor:pointer;font-weight:700' }),
+    el('div', { class: 'notice warn', style: 'margin-top:12px', text: 'This is all of the website content as JSON. A mistake here changes every page at once, so it asks before saving. Most changes are easier and safer in the other editors.' }),
+    el('div', { class: 'btn-row', style: 'margin-bottom:10px' }, download),
+    area, bar);
+  root.replaceChildren(el('div', { class: 'admin-head' }, el('h1', { text: 'Advanced' })), backupCard, details);
 }
 
 // ---------- instagram ----------

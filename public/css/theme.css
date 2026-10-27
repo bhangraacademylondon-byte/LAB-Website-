@@ -219,7 +219,7 @@ dialog { border-radius: var(--r); }
 @keyframes shimmer { 0% { transform: translateX(-120%); } 38%, 100% { transform: translateX(120%); } }
 .ripple { position: absolute; border-radius: 50%; pointer-events: none; background: currentColor; opacity: .22; transform: scale(0); animation: ripple 560ms var(--ease-out) forwards; }
 @keyframes ripple { to { transform: scale(1); opacity: 0; } }
-.fade { opacity: 0; filter: blur(8px); transform: translateY(14px); transition: opacity 600ms ease, filter 600ms ease, transform 700ms var(--ease-out); transition-delay: var(--d, 0ms); }
+.fade { opacity: 0; filter: blur(6px); transform: translateY(12px); transition: opacity 380ms ease, filter 380ms ease, transform 480ms var(--ease-out); transition-delay: var(--d, 0ms); }
 .fade.is-in { opacity: 1; filter: none; transform: none; }
 .confetti { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 200; }
 [data-count] { font-variant-numeric: tabular-nums; }
@@ -402,9 +402,10 @@ button.call-btn { border: 0; padding: 0; cursor: pointer; }
 .pay-acts button { border: 1.5px solid #d9d7cf; background: #fff; border-radius: 10px; padding: 7px 11px; font: 700 13px var(--sans); color: var(--ink); cursor: pointer; }
 .pay-acts button[aria-pressed=true] { background: #22562d; border-color: #22562d; color: #fff; }
 .pay-acts button.no[aria-pressed=true] { background: #8a2f20; border-color: #8a2f20; }
-.pay-sum { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0 0 16px; }
+/* As many tiles across as fit, so they don't squash inside a narrow card. */
+.pay-sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 0 0 16px; }
 .pay-sum div { background: #fff; border-radius: 16px; padding: 14px; box-shadow: 0 0 0 1px var(--line); font: 600 13px var(--sans); color: #5d5c66; }
-.pay-sum b { display: block; font: 900 28px/1 var(--display); color: var(--ink); margin-bottom: 4px; }
+.pay-sum b { display: block; font: 900 clamp(22px, 2.4vw, 28px)/1 var(--display); color: var(--ink); margin-bottom: 4px; overflow-wrap: anywhere; }
 @media (max-width: 620px) { .pay-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pay-list li { flex-wrap: wrap; } }
 .pay-terms { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 14px; border: 1.5px solid #d9d7cf; font: 400 14px/1.45 var(--sans); color: #3a3a4a; cursor: pointer; }
 .pay-terms input { flex: none; width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--ink); }
@@ -516,3 +517,30 @@ button.call-btn { border: 0; padding: 0; cursor: pointer; }
 @media (max-width: 760px) { .tl-reveal .tl-item.right .tl-card { transform: translateX(-36px); } .tl-reveal .tl-item.tl-in .tl-card { transform: none; } }
 @media (prefers-reduced-motion: reduce) { .tl { --p: 1 !important; } }
 @media print { .tl::after { transform: none; } }
+
+/* ---------- member pass ---------- */
+.pass-wait { display: grid; gap: 8px; padding: 22px; border-radius: 16px; background: #f6ecd8; color: #4a3610; font-size: 15px; line-height: 1.45; }
+.pass-wait b { font: 800 18px/1.2 var(--display); text-transform: uppercase; letter-spacing: -.01em; }
+/* At the door on a phone, the code comes first. */
+@media (max-width: 760px) { .acct-head .pass-card { order: -1; } }
+.u16-line { display: grid; gap: 6px; justify-items: start; margin-top: 8px; }
+.u16-approve { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* ---------- two-step login ---------- */
+.steps2 { margin: 0 0 14px; padding-left: 20px; display: grid; gap: 10px; }
+.backup-codes { list-style: none; margin: 14px 0 18px; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.backup-codes code { display: block; padding: 10px; border-radius: 10px; background: var(--paper, #f4f3ee); font-size: 17px; text-align: center; letter-spacing: .06em; }
+
+/* ---------- admin and teacher screens ---------- */
+.in-admin .announcement, .in-admin .ticker { display: none !important; }
+/* On a phone the header scrolls away, and the admin tabs stick to the top instead of sitting over the page. */
+@media (max-width: 800px) {
+  .in-admin .hdr { position: relative; }
+  .in-admin .admin-nav { top: 0; }
+}
+.editor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.editor-tile { display: flex; gap: 12px; align-items: center; padding: 14px 16px; text-decoration: none; color: var(--ink); }
+.editor-tile:hover { box-shadow: 0 0 0 2px var(--gold); }
+.editor-tile .et-icon { font-size: 22px; }
+.editor-tile b { display: block; }
+.editor-tile small { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }

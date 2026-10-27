@@ -276,12 +276,12 @@ module.exports = {
     title: 'Privacy policy',
     // Change the version whenever the policy changes in a way people should
     // agree to again. Everyone is then asked to accept it at their next login.
-    version: '2026-10',
+    version: '2026-10-27',
     lastUpdated: '12 October 2026',
     intro: 'How the London Academy of Bhangra collects, uses and protects your information, including information about children.',
     body: `## Who we are
 
-The London Academy of Bhangra ("LAB", "we", "us") runs Bhangra dance classes in East London. We are responsible for the personal information described in this policy. If you have any questions, contact us using the details on our [Contact page](/contact) or speak to a teacher at class.
+The London Academy of Bhangra ("LAB", "we", "us") runs Bhangra dance classes in East London. The London Academy of Bhangra is responsible for (the "controller" of) the personal information described in this policy. If you have any questions about it, email us at **bhangraacademy.london@gmail.com** or speak to a teacher at class.
 
 ## What information we collect
 
@@ -290,8 +290,9 @@ When you create an account or attend classes we collect:
 - **Account details:** your name, email address, phone number (optional), password (stored in encrypted form so nobody can read it) and the short bio you choose to write.
 - **Your member ID and QR code**, which we use to register you at classes.
 - **Attendance records:** which classes you attended and when, and which teacher checked you in.
-- **Payment records:** which classes you paid for, how (online, cash or card), the payment reference, and whether an online payment was received. We never see or store your card or bank details: online payments are made on Monzo's own secure page.
-- **For members under 16:** the name, email address and phone number of a parent or guardian, and a record of their consent.
+- **Payment records:** which classes you paid for, how (online, cash or card), the Monzo payment reference (your member ID, the class date and your name), and whether an online payment was received. We never see or store your card or bank details: online payments are made on Monzo's own secure page.
+- **For members under 16:** the name, email address and phone number of a parent or guardian, a record of their consent, and which teacher approved the account.
+- **For teachers and administrators:** the settings for two-step login (a code from an authenticator app).
 - **Your privacy choices:** which version of this policy you accepted and when.
 - **Messages** you send us through the contact form.
 
@@ -325,7 +326,9 @@ Under UK data protection law (the UK GDPR and the Data Protection Act 2018) we r
 
 We welcome dancers of all ages, and we take extra care with children's information.
 
-- A child under 16 can only have an account if a **parent or guardian** creates it or gives their consent during sign-up. We ask for the parent or guardian's name and contact details.
+- A child under 16 can only have an account if a **parent or guardian** creates it or gives their consent during sign-up. We ask for the parent or guardian's name and contact details, including a phone number for emergencies.
+- A teacher checks the parent or guardian's details and approves the account before the child's pass works.
+- A parent or guardian must stay on site while a child under 16 is at class.
 - We only collect the information we need to run classes and keep children safe. We use it only for that purpose.
 - We contact the parent or guardian about anything important to do with the child's membership.
 - Children's information is only seen by LAB teachers and administrators. It is never published on our website or social media.
@@ -336,9 +339,10 @@ If we find that a child under 16 has created an account without a parent or guar
 
 ## Who can see your information
 
-- **LAB teachers** can see members' names, member IDs, contact details, bios and attendance so they can run classes.
+- **LAB teachers** can see members' names, member IDs and attendance so they can run classes and, for members under 16, the parent or guardian's name and phone number in case of an emergency.
 - **LAB administrators** can see and manage all account information.
 - **Our website and database providers** (Render and Supabase) store the information on secure servers in the UK or European Economic Area. They are only allowed to use it to provide their service to us.
+- **Our email provider** (Resend) sends the website's emails, such as password resets, email address checks and new contact form messages to the academy. It only receives what is needed to send each email.
 
 We will only share information with anyone else if the law requires it (for example, with the police or a court), or to protect someone's safety.
 
@@ -346,10 +350,11 @@ We will only share information with anyone else if the law requires it (for exam
 
 - **Instagram:** our Gallery page shows posts from the academy's own Instagram account. We do not send any member information to Instagram.
 - **Google Maps:** our Timetable and Contact pages show a map from Google. Google will receive your device's IP address when the map loads, under Google's own privacy policy.
+- **Fonts** are stored on our own website, so loading a page doesn't send anything to Google or other font services.
 
 ## Cookies
 
-We use one essential cookie to keep you logged in. It does not track you and is not used for advertising. We do not use analytics or advertising cookies.
+We use one essential cookie to keep you logged in. It does not track you and is not used for advertising. We do not use advertising cookies, and our visitor statistics (below) use no cookies at all.
 
 ## Visitor statistics
 
@@ -359,7 +364,7 @@ To see how the website is used, we count page visits: which pages are viewed, fo
 
 - **Account and attendance records:** while you are a member. If an account has not been used for two years, we will delete it or remove the personal details.
 - **Parent or guardian consent records:** for as long as the child's account exists.
-- **Class debriefs and financial records:** up to six years, to meet record-keeping requirements.
+- **Class debriefs and financial records (including payment records):** up to six years, to meet record-keeping requirements. If you delete your account, your payment records are kept for this time with your name and member ID, and nothing else.
 - **Contact form messages:** up to 12 months.
 
 You can delete your account yourself at any time from **My account**.
@@ -380,7 +385,7 @@ If you are unhappy with how we have handled your information, please tell us fir
 
 ## Keeping your information safe
 
-Passwords are encrypted, the website uses a secure (https) connection, and only teachers and administrators can see member information. Please keep your password private.
+Passwords are encrypted, the website uses a secure (https) connection, teachers and administrators need a code from their phone as well as their password to log in, and only they can see member information. Please keep your password private.
 
 ## Changes to this policy
 

@@ -10,6 +10,7 @@ process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-test-'));
 process.env.ADMIN_EMAIL = 'admin@test.local';
 process.env.ADMIN_PASSWORD = 'admin-password';
 process.env.PGLITE_DIR = 'memory';
+process.env.LAB_TEST_SKIP_TWO_STEP = '1';
 
 const { app, prepare, extractMemberId } = require('../server/index.js');
 const { close: closeDb } = require('../server/db');
@@ -57,7 +58,7 @@ test('mutating requests without the CSRF header are rejected', async () => {
 
 test('member registers, gets an ID, and is scanned into a session', async () => {
   const member = client();
-  const reg = await member('POST', '/api/auth/register', { name: 'Simran', email: 'simran@test.local', password: 'password1', acceptPrivacy: true, ageGroup: '16plus' });
+  const reg = await member('POST', '/api/auth/register', { name: 'Simran', email: 'simran@test.local', password: 'Password-test-1!', acceptPrivacy: true, ageGroup: '16plus' });
   assert.equal(reg.status, 201);
   assert.match(reg.body.user.memberId, /^LAB-[2-9A-HJ-NP-Z]{6}$/);
 
@@ -84,22 +85,22 @@ test('member registers, gets an ID, and is scanned into a session', async () => 
 test('deactivated members cannot be checked in or log in', async () => {
   const admin = client();
   await admin('POST', '/api/auth/login', { identifier: 'admin@test.local', password: 'admin-password' });
-  const { body } = await admin('POST', '/api/staff/members', { name: 'Old Member', email: 'old@test.local', password: 'password1' });
+  const { body } = await admin('POST', '/api/staff/members', { name: 'Old Member', email: 'old@test.local', password: 'Password-test-1!' });
   await admin('PATCH', `/api/admin/members/${body.member.id}`, { active: false });
   const { body: { session } } = await admin('POST', '/api/staff/sessions', { title: 'Kids', date: '2026-01-08' });
   const scan = await admin('POST', `/api/staff/sessions/${session.id}/attendance`, { code: body.member.memberId });
   assert.equal(scan.status, 403);
-  const login = await client()('POST', '/api/auth/login', { identifier: 'old@test.local', password: 'password1' });
+  const login = await client()('POST', '/api/auth/login', { identifier: 'old@test.local', password: 'Password-test-1!' });
   assert.equal(login.status, 403);
 });
 
 test('instructors cannot edit content or create admins', async () => {
   const admin = client();
   await admin('POST', '/api/auth/login', { identifier: 'admin@test.local', password: 'admin-password' });
-  await admin('POST', '/api/staff/members', { name: 'Teacher', email: 'teacher@test.local', password: 'password1', role: 'instructor' });
+  await admin('POST', '/api/staff/members', { name: 'Teacher', email: 'teacher@test.local', password: 'Password-test-1!', role: 'instructor' });
 
   const teacher = client();
-  await teacher('POST', '/api/auth/login', { identifier: 'teacher@test.local', password: 'password1' });
+  await teacher('POST', '/api/auth/login', { identifier: 'teacher@test.local', password: 'Password-test-1!' });
   await teacher('POST', '/api/me/privacy', { acceptPrivacy: true, ageGroup: '16plus' });
   assert.equal((await teacher('PUT', '/api/admin/content', {})).status, 403);
   const created = await teacher('POST', '/api/staff/members', { name: 'Sneaky', role: 'admin' });
@@ -132,22 +133,22 @@ test('admins can download a full backup; others cannot', async () => {
   assert.ok(Array.isArray(backup.body.tables.attendance));
   assert.equal('auth_sessions' in backup.body.tables, false, 'login sessions are never exported');
   const member = client();
-  await member('POST', '/api/auth/register', { name: 'Nosy', email: 'nosy@test.local', password: 'password1', acceptPrivacy: true, ageGroup: '16plus' });
+  await member('POST', '/api/auth/register', { name: 'Nosy', email: 'nosy@test.local', password: 'Password-test-1!', acceptPrivacy: true, ageGroup: '16plus' });
   assert.equal((await member('GET', '/api/admin/backup.json')).status, 403);
 });
 
 test('member responses never include staff notes', async () => {
   const admin = client();
   await admin('POST', '/api/auth/login', { identifier: 'admin@test.local', password: 'admin-password' });
-  await admin('POST', '/api/staff/members', { name: 'Noted', email: 'noted@test.local', password: 'password1', notes: 'secret' });
+  await admin('POST', '/api/staff/members', { name: 'Noted', email: 'noted@test.local', password: 'Password-test-1!', notes: 'secret' });
   const member = client();
-  const login = await member('POST', '/api/auth/login', { identifier: 'noted@test.local', password: 'password1' });
+  const login = await member('POST', '/api/auth/login', { identifier: 'noted@test.local', password: 'Password-test-1!' });
   assert.equal(login.body.user.notes, undefined);
 });
 
 test('members can add a bio at sign-up and edit it later; monthly stats are returned', async () => {
   const member = client();
-  const reg = await member('POST', '/api/auth/register', { name: 'Bio Person', email: 'bio@test.local', password: 'password1', acceptPrivacy: true, ageGroup: '16plus', bio: 'Danced giddha for 3 years' });
+  const reg = await member('POST', '/api/auth/register', { name: 'Bio Person', email: 'bio@test.local', password: 'Password-test-1!', acceptPrivacy: true, ageGroup: '16plus', bio: 'Danced giddha for 3 years' });
   assert.equal(reg.body.user.bio, 'Danced giddha for 3 years');
   const upd = await member('PATCH', '/api/me', { name: 'Bio Person', phone: '', bio: 'Now learning dhol too' });
   assert.equal(upd.body.user.bio, 'Now learning dhol too');
@@ -167,7 +168,7 @@ test('online registration can be switched off from the member pages content', as
   const { body: content } = await admin('GET', '/api/content');
   content.members.allowRegistration = false;
   await admin('PUT', '/api/admin/content', content);
-  const res = await client()('POST', '/api/auth/register', { name: 'Late', email: 'late@test.local', password: 'password1', acceptPrivacy: true, ageGroup: '16plus' });
+  const res = await client()('POST', '/api/auth/register', { name: 'Late', email: 'late@test.local', password: 'Password-test-1!', acceptPrivacy: true, ageGroup: '16plus' });
   assert.equal(res.status, 403);
   content.members.allowRegistration = true;
   await admin('PUT', '/api/admin/content', content);

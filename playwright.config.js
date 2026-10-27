@@ -32,6 +32,7 @@ module.exports = defineConfig({
     env: {
       PORT: String(PORT),
       PGLITE_DIR: 'memory',
+      LAB_TEST_SKIP_TWO_STEP: '1',
       DATA_DIR: path.join(os.tmpdir(), 'lab-e2e'),
       ADMIN_PASSWORD: 'e2e-admin-password',
       DATABASE_URL: '',

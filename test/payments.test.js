@@ -10,6 +10,7 @@ process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-pay-'));
 process.env.ADMIN_EMAIL = 'admin@test.local';
 process.env.ADMIN_PASSWORD = 'admin-password';
 process.env.PGLITE_DIR = 'memory';
+process.env.LAB_TEST_SKIP_TWO_STEP = '1';
 
 const { app, prepare } = require('../server/index.js');
 const { close: closeDb } = require('../server/db');
@@ -47,7 +48,7 @@ function client() {
 
 async function member(name, email) {
   const c = client();
-  const reg = await c('POST', '/api/auth/register', { name, email, password: 'password1', acceptPrivacy: true, ageGroup: '16plus' });
+  const reg = await c('POST', '/api/auth/register', { name, email, password: 'Password-test-1!', acceptPrivacy: true, ageGroup: '16plus' });
   assert.equal(reg.status, 201);
   return { c, user: reg.body.user };
 }
@@ -56,9 +57,9 @@ async function staff(role) {
   const admin = client();
   await admin('POST', '/api/auth/login', { identifier: 'admin@test.local', password: 'admin-password' });
   if (role === 'admin') return admin;
-  await admin('POST', '/api/staff/members', { name: 'Teacher Gurdeep', email: 'gurdeep@test.local', password: 'password1', role: 'instructor' });
+  await admin('POST', '/api/staff/members', { name: 'Teacher Gurdeep', email: 'gurdeep@test.local', password: 'Password-test-1!', role: 'instructor' });
   const teacher = client();
-  await teacher('POST', '/api/auth/login', { identifier: 'gurdeep@test.local', password: 'password1' });
+  await teacher('POST', '/api/auth/login', { identifier: 'gurdeep@test.local', password: 'Password-test-1!' });
   await teacher('POST', '/api/me/privacy', { acceptPrivacy: true, ageGroup: '16plus' });
   return teacher;
 }
@@ -110,12 +111,16 @@ test('a member pays for a chosen class date, confirms, and it shows as paid to t
   assert.equal(list.body.payments[0].memberId, user.memberId);
   assert.equal(list.body.payments[0].attended, false);
 
-  // A teacher checks Monzo and marks it received.
+  // Only an admin, who can see Monzo, marks it received; a teacher can't.
   const id = list.body.payments[0].id;
-  assert.equal((await teacher('PATCH', `/api/staff/payments/${id}`, { status: 'received' })).status, 200);
+  assert.equal((await teacher('PATCH', `/api/staff/payments/${id}`, { status: 'received' })).status, 403);
+  assert.equal((await teacher('DELETE', `/api/staff/payments/${id}`)).status, 200);
+  assert.equal((await teacher('GET', `/api/staff/payments?date=${date}`)).body.payments.length, 1, 'a teacher cannot remove an online claim');
+  const admin = await staff('admin');
+  assert.equal((await admin('PATCH', `/api/staff/payments/${id}`, { status: 'received' })).status, 200);
   const checked = (await teacher('GET', `/api/staff/payments?date=${date}`)).body.payments[0];
   assert.equal(checked.status, 'received');
-  assert.equal(checked.checkedBy, 'Teacher Gurdeep');
+  assert.equal(checked.checkedBy, 'Academy Admin');
 
   // Scanning them in on the night shows they've paid; the payment stays on its date.
   const { body: { session } } = await teacher('POST', '/api/staff/sessions', { title: 'Bhangra', date, start_time: '19:30' });
@@ -127,13 +132,15 @@ test('a member pays for a chosen class date, confirms, and it shows as paid to t
   assert.equal(exported.body.payments[0].date, date);
 });
 
-test('"not received" lets the member pay again, and a teacher can record cash at the door', async () => {
+test('"not received" stops the member claiming again online; they pay at the door instead', async () => {
   const { c, user } = await member('Arjun Singh', 'arjun@test.local');
   const admin = await staff('admin');
   const date = (await c('GET', '/api/me/payments')).body.dates[0];
   const start = await c('POST', '/api/me/payments', { date });
   await c('POST', `/api/me/payments/${start.body.payment.id}/confirm`);
   await admin('PATCH', `/api/staff/payments/${start.body.payment.id}`, { status: 'not_received' });
+  assert.equal((await c('GET', '/api/me/payments')).body.payments[0].status, 'not_received');
+  assert.equal((await c('POST', '/api/me/payments', { date })).status, 409, 'cannot restart and wipe the "not received" mark');
   assert.equal((await c('GET', '/api/me/payments')).body.payments[0].status, 'not_received');
 
   const { body: { session } } = await admin('POST', '/api/staff/sessions', { title: 'Bhangra', date, start_time: '19:30' });
@@ -167,4 +174,16 @@ test('the attendance list shows each member ID', async () => {
   await admin('POST', `/api/staff/sessions/${session.id}/attendance`, { code: user.memberId });
   const { body } = await admin('GET', `/api/staff/sessions/${session.id}`);
   assert.equal(body.attendees[0].memberId, user.memberId);
+});
+
+test('deleting an account keeps its payment records, with the name kept on them', async () => {
+  const { c, user } = await member('Leaving Member', 'leaving@test.local');
+  const admin = await staff('admin');
+  const date = (await c('GET', '/api/me/payments')).body.dates[3];
+  await admin('POST', '/api/staff/payments', { userId: user.id, date, method: 'cash' });
+  assert.equal((await c('POST', '/api/me/delete', { password: 'Password-test-1!' })).status, 200);
+  const kept = (await admin('GET', `/api/staff/payments?date=${date}`)).body.payments.find((p) => p.memberId === user.memberId);
+  assert.ok(kept, 'the payment is still on record');
+  assert.equal(kept.name, 'Leaving Member (account deleted)');
+  assert.equal(kept.method, 'cash');
 });
